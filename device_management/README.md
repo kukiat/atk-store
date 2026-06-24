@@ -12,7 +12,7 @@ device_management/
 ├── internal/                    # feature modules (vertical slices)
 │   ├── health/
 │   ├── mqttconnection/          # Step 3 ✅
-│   └── device/                  # Step 4 (ถัดไป)
+│   └── device/                  # Step 4 ✅
 ├── domain/model/                # GORM entities (Step 2 ✅)
 │   ├── mqtt_connection.go
 │   ├── device.go

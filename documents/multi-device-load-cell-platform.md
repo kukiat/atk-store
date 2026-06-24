@@ -1841,21 +1841,38 @@ curl -X POST http://localhost:8081/api/v1/mqtt-connections \
 
 ---
 
-## Step 4: Device API
+## Step 4: Device API ✅
 
-**เป้าหมาย:** CRUD Device + ผูก MQTT Connection
-
-**Route:** `/api/v1/devices`
+**Route:** `/api/v1/devices` (ใช้ `device_id` เช่น `SCALE-001` เป็น path param)
 
 ```http
-POST   /api/v1/devices
 GET    /api/v1/devices
 GET    /api/v1/devices/:deviceId
+POST   /api/v1/devices
 PUT    /api/v1/devices/:deviceId
 DELETE /api/v1/devices/:deviceId
 ```
 
-**Module:** `internal/device/`
+**Module:** `internal/device/`  
+**DTO:** `pkg/dto/device.go`
+
+**พฤติกรรม:**
+- สร้าง device แล้ว auto-generate MQTT topics ตาม `loadcell/{deviceId}/...` ถ้าไม่ส่งมา
+- ผูก `mqtt_connection_id` (UUID) กับ broker ที่มีอยู่
+- List filter: `search`, `enabled`, `status`, `mqtt_connection_id`
+
+**ตัวอย่าง:**
+
+```bash
+curl -X POST http://localhost:8081/api/v1/devices \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "device_id": "SCALE-001",
+    "device_name": "Packing Scale 1",
+    "location": "Warehouse A",
+    "mqtt_connection_id": "<broker-uuid>"
+  }'
+```
 
 ---
 
@@ -1984,7 +2001,7 @@ POST /api/v1/devices/:deviceId/commands/factory-reset
 | `health` | — | 1 ✅ |
 | `domain/model` | §3, §4, §12, §18 | 2 ✅ |
 | `mqttconnection` | §3, §20 | 3 ✅ |
-| `device` | §4, §21 | 4 |
+| `device` | §4, §21 | 4 ✅ |
 | `mqtt/` | §3, §5, §9 | 5, 8 |
 | `parser` | §7 | 6 |
 | `telemetry` | §6, §8 | 6, 7 |

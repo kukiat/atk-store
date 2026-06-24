@@ -3,6 +3,7 @@ package external
 import (
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/kukiat/atk-store/device_management/internal/device"
 	"github.com/kukiat/atk-store/device_management/internal/health"
 	"github.com/kukiat/atk-store/device_management/internal/mqttconnection"
 )
@@ -14,4 +15,5 @@ func Register(app *fiber.App) {
 
 	v1 := app.Group("/api/v1")
 	mqttconnection.Router(v1)
+	device.Router(v1)
 }

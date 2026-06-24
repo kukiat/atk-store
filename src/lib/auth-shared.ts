@@ -10,6 +10,18 @@ export const GOOGLE_OAUTH_STATE_COOKIE = "atk_google_oauth_state";
 export const GOOGLE_OAUTH_PKCE_COOKIE = "atk_google_oauth_pkce";
 export const GOOGLE_OAUTH_NONCE_COOKIE = "atk_google_oauth_nonce";
 
+/**
+ * Short-lived cookie holding the verified Google ID token. It is the input to
+ * the Cognito credential bridge for face enrollment. Path-scoped to the face
+ * API so it is never sent on ordinary page or shelf requests, and it naturally
+ * expires roughly when the Google ID token does (~1 hour).
+ */
+export const GOOGLE_ID_TOKEN_COOKIE = "atk_g_idt";
+export const GOOGLE_ID_TOKEN_COOKIE_PATH = "/api/face";
+
+/** Approximate lifetime of a Google ID token (1 hour). */
+const GOOGLE_ID_TOKEN_MAX_AGE = 60 * 60;
+
 /** Where unauthenticated users are sent. */
 export const SIGN_IN_PATH = "/signin";
 
@@ -35,5 +47,19 @@ export function oauthCookieOptions() {
     sameSite: "lax" as const,
     path: "/",
     maxAge: 60 * 10,
+  };
+}
+
+/**
+ * Options for the path-scoped, httpOnly Google ID token cookie consumed by the
+ * credential bridge. Never readable by client JS.
+ */
+export function googleIdTokenCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: GOOGLE_ID_TOKEN_COOKIE_PATH,
+    maxAge: GOOGLE_ID_TOKEN_MAX_AGE,
   };
 }

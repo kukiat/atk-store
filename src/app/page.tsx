@@ -2,6 +2,7 @@ import { LogOut, QrCode, ScanLine } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { FaceEnrollmentPrompt } from "@/components/face-enrollment-prompt";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 
@@ -24,6 +25,10 @@ export default async function HomePage() {
             ออกจากระบบ
           </Button>
         </form>
+      </div>
+
+      <div className="w-full">
+        <FaceEnrollmentPrompt />
       </div>
 
       <div className="bg-primary text-primary-foreground flex size-20 items-center justify-center rounded-2xl">

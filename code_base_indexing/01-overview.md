@@ -70,6 +70,31 @@ yet (that's the `TODO(order)` extension point).
 
 - `DATABASE_URL` — Postgres connection string (`.env`, copied from `.env.example`).
   Local default targets the Docker Compose Postgres (`atk_store`, user/pass `postgres`).
+- Face Liveness (server): `AWS_PROFILE` (backend Rekognition Create/Get creds),
+  `AWS_LIVENESS_REGION`, `AWS_LIVENESS_OUTPUT_BUCKET`, `AWS_LIVENESS_OUTPUT_PREFIX`,
+  `AWS_LIVENESS_SCORE_THRESHOLD`, `AWS_LIVENESS_AUDIT_IMAGES_LIMIT`.
+- Face Liveness (browser): `NEXT_PUBLIC_AWS_LIVENESS_REGION`,
+  `NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID` (Identity Pool federates Google for
+  `StartFaceLivenessSession`-scoped temporary credentials).
+
+## Face Liveness enrollment
+
+- **Goal:** prove a signed-in customer is a real person via Amazon Rekognition
+  Face Liveness, then mark them `registered`. No Face Collection / recognition yet.
+- **Minimal calls:** a normal attempt makes exactly 3 Rekognition calls
+  (backend `CreateFaceLivenessSession`, browser `StartFaceLivenessSession`,
+  backend `GetFaceLivenessSessionResults`). The app never polls; a transient
+  not-ready result allows at most one delayed retry (4 calls). One active attempt
+  per user (partial unique index + idempotent reuse).
+- **Credential bridge:** the OAuth callback stashes the verified Google ID token
+  in a path-scoped (`/api/face`) httpOnly cookie; `GET /api/face/credentials`
+  exchanges it through the Cognito Identity Pool for short-lived, detector-scoped
+  credentials. The browser never receives an IAM key or the backend AWS profile.
+- **UX:** `FaceEnrollmentPrompt` shows a quiet nudge for `not_registered`/`pending`
+  users; `/register-face` requires an explicit start and never auto-launches the
+  camera or creates an AWS session.
+- **Data:** `users.face_enrollment_status` is the server-authoritative flag the UI
+  reads; `face_liveness_attempts` holds per-attempt metadata (no raw biometrics).
 
 ## Authentication
 

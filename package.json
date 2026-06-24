@@ -17,7 +17,12 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@aws-amplify/ui-react": "^6.15.4",
+    "@aws-amplify/ui-react-liveness": "^3.6.7",
+    "@aws-sdk/client-cognito-identity": "^3.1075.0",
+    "@aws-sdk/client-rekognition": "^3.1075.0",
     "@base-ui/react": "^1.6.0",
+    "aws-amplify": "^6.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.45.2",

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import {
+  GOOGLE_ID_TOKEN_COOKIE,
   GOOGLE_OAUTH_NONCE_COOKIE,
   GOOGLE_OAUTH_PKCE_COOKIE,
   GOOGLE_OAUTH_STATE_COOKIE,
+  googleIdTokenCookieOptions,
   sessionCookieOptions,
   SESSION_COOKIE,
 } from "@/lib/auth-shared";
@@ -107,6 +109,13 @@ export async function GET(request: NextRequest) {
       SESSION_COOKIE,
       token,
       sessionCookieOptions(expiresAt),
+    );
+    // Stash the verified Google ID token for the face-enrollment credential
+    // bridge. It is path-scoped to /api/face and expires with the token.
+    response.cookies.set(
+      GOOGLE_ID_TOKEN_COOKIE,
+      tokenData.id_token,
+      googleIdTokenCookieOptions(),
     );
     return clearOAuthCookies(response);
   } catch (cause) {

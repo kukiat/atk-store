@@ -63,6 +63,9 @@ var schemaTables = []string{
 	"device_calibrations",
 	"weight_readings",
 	"weight_events",
+	"data_destinations",
+	"device_destinations",
+	"delivery_logs",
 }
 
 // SchemaReady reports whether Step 2 MVP tables exist.

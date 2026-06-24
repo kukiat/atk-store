@@ -12,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/kukiat/atk-store/device_management/domain/model"
+	destrouter "github.com/kukiat/atk-store/device_management/internal/destination/router"
 	"github.com/kukiat/atk-store/device_management/internal/telemetry"
 )
 
@@ -24,12 +25,12 @@ type Manager struct {
 	telemetry telemetry.TelemetryService
 }
 
-func NewManager(db *gorm.DB) *Manager {
+func NewManager(db *gorm.DB, destRouter *destrouter.Router) *Manager {
 	m := &Manager{
 		db:        db,
 		sessions:  make(map[uuid.UUID]*managedSession),
 		cmd:       NewCommandManager(),
-		telemetry: telemetry.NewTelemetryService(db),
+		telemetry: telemetry.NewTelemetryService(db, destRouter),
 	}
 	m.pub = NewPublisherService(m)
 	return m

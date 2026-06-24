@@ -1732,11 +1732,17 @@ flowchart LR
     subgraph STEP9["✅ Step 9"]
         S9A["Calibration<br/>session + history"]
     end
-    subgraph STEP10["Step 10+"]
-        S10["Destinations · WebSocket · Auth"]
+    subgraph STEP10["✅ Step 10"]
+        S10A["Destinations<br/>+ field mapping"]
+    end
+    subgraph STEP11["✅ Step 11"]
+        S11A["Delivery router<br/>+ retry queue"]
+    end
+    subgraph STEP12["Step 12+"]
+        S12["WebSocket · Auth"]
     end
 
-    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7 --> STEP8 --> STEP9 --> STEP10
+    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7 --> STEP8 --> STEP9 --> STEP10 --> STEP11 --> STEP12
 ```
 
 ## Step 1: Project Scaffold ✅
@@ -2073,23 +2079,69 @@ GET  /api/v1/devices/:deviceId/calibrations/:calibrationId
 
 ---
 
-## Step 10: Data Destinations & Field Mapping
+## Step 10: Data Destinations & Field Mapping ✅
 
 **ตาราง:** `data_destinations`, `device_destinations` (§13, §17)
 
-**Route:** `/api/v1/data-destinations`, `/api/v1/devices/:deviceId/destinations`
+**Module:** `internal/destination/`, `internal/devicedestination/`, `internal/mapping/`
 
-**Module:** `internal/destination/`, `internal/mapping/`
+**Migration:** `007_data_destinations.sql`
+
+```http
+POST   /api/v1/data-destinations
+GET    /api/v1/data-destinations
+GET    /api/v1/data-destinations/:id
+PUT    /api/v1/data-destinations/:id
+DELETE /api/v1/data-destinations/:id
+POST   /api/v1/data-destinations/:id/test
+POST   /api/v1/data-destinations/:id/load-schemas
+POST   /api/v1/data-destinations/:id/load-tables
+POST   /api/v1/data-destinations/:id/load-columns
+
+POST   /api/v1/devices/:deviceId/destinations
+GET    /api/v1/devices/:deviceId/destinations
+GET    /api/v1/devices/:deviceId/destinations/:mappingId
+PUT    /api/v1/devices/:deviceId/destinations/:mappingId
+DELETE /api/v1/devices/:deviceId/destinations/:mappingId
+POST   /api/v1/devices/:deviceId/destinations/:mappingId/test
+POST   /api/v1/devices/:deviceId/destinations/:mappingId/send-sample
+```
+
+**พฤติกรรม:**
+
+- CRUD ปลายทาง (REST API, PostgreSQL, internal_database, …) + encrypt `auth`
+- ผูก device → destination พร้อม `trigger_type` + `mapping_config`
+- `internal/mapping` แปลง standard payload → รูปแบบปลายทาง
+- `test` / `send-sample` ทดสอบ mapping (ส่งจริงใน Step 11)
+- PostgreSQL destination รองรับ `load-schemas/tables/columns`
 
 ---
 
-## Step 11: Destination Router + Retry Queue
+## Step 11: Destination Router + Retry Queue ✅
 
-**ตาราง:** `delivery_logs` (§19)
+**ตาราง:** `delivery_logs` (§19) — migration `008_delivery_logs.sql`
 
-**Module:** `internal/destination/router/`, `internal/retry/`
+**Module:** `internal/destination/router/`, `internal/retry/`, `internal/destination/deliver.go`
 
-**Trigger types:** `stable_weight`, `interval`, `weight_changed`, … (§17)
+```http
+GET /api/v1/delivery-logs?device_id=&destination_id=&status=
+```
+
+**Flow:**
+
+```text
+MQTT → telemetry → destination router
+  → trigger check (stable_weight, every_message, weight_changed, …)
+  → field mapping → deliver (REST / PostgreSQL / internal_database)
+  → delivery_logs (success | retrying | dead_letter)
+  → retry worker (ทุก 15s) ส่งซ้ำตาม max_retries
+```
+
+**พฤติกรรม:**
+
+- `send-sample` ส่งจริง + บันทึก log
+- debounce / min-max weight / only_stable ตาม device_destination config
+- retry → `dead_letter` เมื่อเกิน `max_retries`
 
 ---
 
@@ -2124,9 +2176,11 @@ GET  /api/v1/devices/:deviceId/calibrations/:calibrationId
 | `parser` | §7 | 6 ✅ |
 | `telemetry` | §6, §8 | 6 ✅, 7 ✅ |
 | `calibration` | §11, §12, §22 | 9 ✅ |
-| `destination/` | §13–§17, §23–§24 | 10, 11 |
-| `mapping` | §15, §16 | 10 |
-| `retry` | §19 | 11 |
+| `destination/` | §13–§17, §23–§24 | 10 ✅ |
+| `mapping` | §15, §16 | 10 ✅ |
+| `devicedestination/` | §17, §24 | 10 ✅ |
+| `destination/router/` | §19, §31 | 11 ✅ |
+| `retry` | §19 | 11 ✅ |
 | `websocket` | §31 | 12 |
 | `auth` | §29 | 13 |
 

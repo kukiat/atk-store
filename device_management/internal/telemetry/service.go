@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/kukiat/atk-store/device_management/domain/model"
+	"github.com/kukiat/atk-store/device_management/internal/destination/router"
 	"github.com/kukiat/atk-store/device_management/internal/parser"
 	"github.com/kukiat/atk-store/device_management/pkg/dto"
 )
@@ -23,14 +24,16 @@ type TelemetryService interface {
 }
 
 type telemetryService struct {
-	repo  TelemetryRepository
-	cache WeightCache
+	repo   TelemetryRepository
+	cache  WeightCache
+	router *router.Router
 }
 
-func NewTelemetryService(db *gorm.DB) TelemetryService {
+func NewTelemetryService(db *gorm.DB, destRouter *router.Router) TelemetryService {
 	return telemetryService{
-		repo:  NewTelemetryRepository(db),
-		cache: NewWeightCache(),
+		repo:   NewTelemetryRepository(db),
+		cache:  NewWeightCache(),
+		router: destRouter,
 	}
 }
 
@@ -73,6 +76,9 @@ func (s telemetryService) ProcessTelemetry(device model.Device, rawPayload []byt
 	latest := toLatestResponse(standard, "mqtt-cache")
 	if err := s.cache.Set(context.Background(), device.DeviceID, latest); err != nil {
 		log.Printf("[telemetry] cache latest weight device=%s: %v", device.DeviceID, err)
+	}
+	if s.router != nil {
+		s.router.HandleTelemetry(device, standard)
 	}
 	return nil
 }

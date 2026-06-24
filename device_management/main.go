@@ -13,7 +13,9 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"github.com/kukiat/atk-store/device_management/external"
+	destrouter "github.com/kukiat/atk-store/device_management/internal/destination/router"
 	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
+	"github.com/kukiat/atk-store/device_management/internal/retry"
 	"github.com/kukiat/atk-store/device_management/pkg/config"
 	"github.com/kukiat/atk-store/device_management/pkg/database"
 	redisclient "github.com/kukiat/atk-store/device_management/pkg/redis"
@@ -24,8 +26,13 @@ func main() {
 	database.Connect()
 	redisclient.Connect()
 
-	mqttManager := mqttruntime.NewManager(database.DB)
+	destRouter := destrouter.New(database.DB)
+
+	mqttManager := mqttruntime.NewManager(database.DB, destRouter)
 	go mqttManager.Start(context.Background())
+
+	retryWorker := retry.NewWorker(database.DB)
+	go retryWorker.Start(context.Background())
 
 	app := fiber.New(fiber.Config{
 		AppName: "Load Cell Gateway API",
@@ -53,7 +60,7 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	external.Register(app, mqttManager)
+	external.Register(app, mqttManager, destRouter)
 
 	addr := ":" + cfg.AppPort
 	log.Printf("[server] listening on %s", addr)

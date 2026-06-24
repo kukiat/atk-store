@@ -3,18 +3,17 @@ package device
 import (
 	"github.com/gofiber/fiber/v2"
 
-	"github.com/kukiat/atk-store/device_management/internal/telemetry"
+	destrouter "github.com/kukiat/atk-store/device_management/internal/destination/router"
 	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
+	"github.com/kukiat/atk-store/device_management/internal/telemetry"
 	"github.com/kukiat/atk-store/device_management/pkg/database"
 )
 
 // Router register device routes
-//
-// Wire dependencies: db -> repository -> service -> handler -> routes
-func Router(v1 fiber.Router, runtime mqttruntime.ConnectionRuntime) {
+func Router(v1 fiber.Router, runtime mqttruntime.ConnectionRuntime, destRouter *destrouter.Router) {
 	repo := NewDeviceRepository(database.DB)
 	service := NewDeviceService(repo, runtime)
-	telemetrySvc := telemetry.NewTelemetryService(database.DB)
+	telemetrySvc := telemetry.NewTelemetryService(database.DB, destRouter)
 	handler := NewDeviceHandler(service, telemetrySvc)
 
 	g := v1.Group("/devices")

@@ -17,7 +17,12 @@ device_management/
 │   ├── parser/                    # Step 6 ✅
 │   ├── telemetry/                 # Step 6–7 ✅
 │   ├── command/                   # Step 8 ✅
-│   └── calibration/               # Step 9 ✅
+│   ├── calibration/               # Step 9 ✅
+│   ├── destination/               # Step 10 ✅
+│   ├── devicedestination/         # Step 10 ✅
+│   ├── mapping/                   # Step 10 ✅
+│   ├── destination/router/        # Step 11 ✅
+│   └── retry/                     # Step 11 ✅
 ├── domain/model/                # GORM entities (Step 2 ✅)
 │   ├── mqtt_connection.go
 │   ├── device.go
@@ -56,12 +61,12 @@ make health
 curl http://localhost:8081/health
 ```
 
-**Response ตัวอย่าง (Step 9):**
+**Response ตัวอย่าง (Step 11):**
 
 ```json
 {
   "status": "degraded",
-  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 9 },
+  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 11 },
   "dependencies": { "postgres": true, "schema": true, "redis": false },
   "time": "2026-06-24T10:00:00+07:00"
 }

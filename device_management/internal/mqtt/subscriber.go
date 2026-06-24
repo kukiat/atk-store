@@ -13,6 +13,17 @@ import (
 	"github.com/kukiat/atk-store/device_management/domain/model"
 )
 
+func calibrationResponseTopic(calibrationTopic *string) string {
+	if calibrationTopic == nil {
+		return ""
+	}
+	topic := strings.TrimSpace(*calibrationTopic)
+	if topic == "" {
+		return ""
+	}
+	return topic + "/response"
+}
+
 func subscribeDevices(db *gorm.DB, client mqtt.Client, connectionID uuid.UUID, handler mqtt.MessageHandler) error {
 	var devices []model.Device
 	if err := db.Where("mqtt_connection_id = ? AND enabled = ?", connectionID, true).Find(&devices).Error; err != nil {
@@ -27,6 +38,9 @@ func subscribeDevices(db *gorm.DB, client mqtt.Client, connectionID uuid.UUID, h
 		}
 		if device.ResponseTopic != nil {
 			topics = append(topics, *device.ResponseTopic)
+		}
+		if resp := calibrationResponseTopic(device.CalibrationTopic); resp != "" {
+			topics = append(topics, resp)
 		}
 		for _, topic := range topics {
 			topic = strings.TrimSpace(topic)
@@ -54,8 +68,8 @@ func (m *Manager) handleMessage(_ mqtt.Client, msg mqtt.Message) {
 
 	var device model.Device
 	err := m.db.Where(
-		"telemetry_topic = ? OR status_topic = ? OR response_topic = ?",
-		topic, topic, topic,
+		"telemetry_topic = ? OR status_topic = ? OR response_topic = ? OR (calibration_topic IS NOT NULL AND TRIM(calibration_topic) || '/response' = ?)",
+		topic, topic, topic, topic,
 	).First(&device).Error
 	if err != nil {
 		return
@@ -67,6 +81,15 @@ func (m *Manager) handleMessage(_ mqtt.Client, msg mqtt.Message) {
 		"status":       "online",
 	}
 	_ = m.db.Model(&model.Device{}).Where("id = ?", device.ID).Updates(updates).Error
+
+	calRespTopic := calibrationResponseTopic(device.CalibrationTopic)
+	if calRespTopic != "" && topic == calRespTopic {
+		requestID := strings.TrimSpace(gjson.GetBytes(payload, "requestId").String())
+		if requestID != "" {
+			m.completeCommandResponse(requestID, payload)
+		}
+		return
+	}
 
 	if device.ResponseTopic != nil && topic == strings.TrimSpace(*device.ResponseTopic) {
 		requestID := strings.TrimSpace(gjson.GetBytes(payload, "requestId").String())

@@ -3,6 +3,7 @@ package external
 import (
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/kukiat/atk-store/device_management/internal/calibration"
 	"github.com/kukiat/atk-store/device_management/internal/command"
 	"github.com/kukiat/atk-store/device_management/internal/device"
 	"github.com/kukiat/atk-store/device_management/internal/health"
@@ -17,5 +18,7 @@ func Register(app *fiber.App, mgr *mqttruntime.Manager) {
 	v1 := app.Group("/api/v1")
 	mqttconnection.Router(v1, mgr)
 	device.Router(v1, mgr)
-	command.Router(v1.Group("/devices"), mgr, mgr)
+	devices := v1.Group("/devices")
+	command.Router(devices, mgr, mgr)
+	calibration.Router(devices, mgr, mgr)
 }

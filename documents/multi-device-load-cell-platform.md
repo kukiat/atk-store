@@ -1729,11 +1729,14 @@ flowchart LR
     subgraph STEP8["✅ Step 8"]
         S8A["Device Commands<br/>MQTT publish + response"]
     end
-    subgraph STEP9["Step 9+"]
-        S9["Calibration · Destinations · WebSocket"]
+    subgraph STEP9["✅ Step 9"]
+        S9A["Calibration<br/>session + history"]
+    end
+    subgraph STEP10["Step 10+"]
+        S10["Destinations · WebSocket · Auth"]
     end
 
-    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7 --> STEP8 --> STEP9
+    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7 --> STEP8 --> STEP9 --> STEP10
 ```
 
 ## Step 1: Project Scaffold ✅
@@ -2038,11 +2041,35 @@ POST /api/v1/devices/:deviceId/commands/factory-reset
 
 ---
 
-## Step 9: Calibration Service
+## Step 9: Calibration Service ✅
 
 **Route:** `/api/v1/devices/:deviceId/calibration/*` (§22)
 
 **Module:** `internal/calibration/`
+
+```http
+POST /api/v1/devices/:deviceId/calibration/start
+POST /api/v1/devices/:deviceId/calibration/capture-zero
+POST /api/v1/devices/:deviceId/calibration/capture-known-weight
+POST /api/v1/devices/:deviceId/calibration/verify
+POST /api/v1/devices/:deviceId/calibration/save
+
+GET  /api/v1/devices/:deviceId/calibrations
+GET  /api/v1/devices/:deviceId/calibrations/:calibrationId
+```
+
+**MQTT flow:**
+
+- Publish → `{calibration_topic}` payload `{ requestId, action, ... }`
+- Response ← `{calibration_topic}/response` จับคู่ด้วย `requestId`
+
+**Actions:** `start_calibration`, `capture_zero`, `capture_known_weight`, `verify`, `save_calibration`
+
+**พฤติกรรม:**
+
+- In-memory calibration session ต่อ device ระหว่าง wizard
+- `save` บันทึก `device_calibrations` + ส่งค่าไป ESP32 NVS
+- ประวัติ calibration อ่านจาก DB ได้แม้ session หมดอายุ
 
 ---
 
@@ -2096,7 +2123,7 @@ POST /api/v1/devices/:deviceId/commands/factory-reset
 | `mqtt/` | §3, §5, §9 | 5 ✅, 8 ✅ |
 | `parser` | §7 | 6 ✅ |
 | `telemetry` | §6, §8 | 6 ✅, 7 ✅ |
-| `calibration` | §11, §12, §22 | 9 |
+| `calibration` | §11, §12, §22 | 9 ✅ |
 | `destination/` | §13–§17, §23–§24 | 10, 11 |
 | `mapping` | §15, §16 | 10 |
 | `retry` | §19 | 11 |

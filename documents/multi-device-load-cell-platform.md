@@ -1720,11 +1720,14 @@ flowchart LR
     subgraph STEP5["✅ Step 5"]
         S5["MQTT Manager<br/>multi-broker runtime"]
     end
-    subgraph STEP6["Step 6+"]
-        S6["Telemetry · Commands · Calibration · Destinations"]
+    subgraph STEP6["✅ Step 6"]
+        S6A["Telemetry Parser<br/>normalize + weight_readings"]
+    end
+    subgraph STEP7["Step 7+"]
+        S7["Redis cache · Commands · Calibration"]
     end
 
-    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6
+    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7
 ```
 
 ## Step 1: Project Scaffold ✅
@@ -1910,11 +1913,21 @@ POST /api/v1/mqtt-connections/:id/disconnect
 
 ---
 
-## Step 6: Telemetry & Payload Parser
+## Step 6: Telemetry & Payload Parser ✅
 
-**เป้าหมาย:** รับ MQTT → แปลงเป็น Standard Payload
+**เป้าหมาย:** รับ MQTT → แปลงเป็น Standard Payload → บันทึก `weight_readings`
 
 **Module:** `internal/telemetry/`, `internal/parser/`
+
+```text
+internal/parser/
+├── config.go     # ParserConfig + default ESP32 paths
+└── parser.go     # JSON path extraction (gjson)
+
+internal/telemetry/
+├── service.go    # ProcessTelemetry → weight_readings
+└── repository.go
+```
 
 **Standard Payload:**
 
@@ -1928,6 +1941,27 @@ POST /api/v1/mqtt-connections/:id/disconnect
   "timestamp": "2026-06-24T10:30:00Z"
 }
 ```
+
+**Parser Config** (เก็บใน `devices.parser_config`):
+
+```json
+{
+  "deviceIdPath": "$.id",
+  "weightPath": "$.value",
+  "unitPath": "$.u",
+  "stablePath": "$.stable",
+  "rawValuePath": "$.raw",
+  "timestampPath": "$.timestamp",
+  "defaultUnit": "kg"
+}
+```
+
+**พฤติกรรม:**
+
+- MQTT `handleMessage` เรียก `telemetry.ProcessTelemetry` เฉพาะ `telemetry_topic`
+- ไม่มี `parser_config` → ใช้ default path แบบ ESP32 standard
+- บันทึกทุก message ที่ parse ได้ลง `weight_readings`
+- `status_topic` อัปเดต `last_seen_at` เท่านั้น (Step 7 จะ cache ล่าสุดใน Redis)
 
 ---
 
@@ -2015,8 +2049,8 @@ POST /api/v1/devices/:deviceId/commands/factory-reset
 | `mqttconnection` | §3, §20 | 3 ✅ |
 | `device` | §4, §21 | 4 ✅ |
 | `mqtt/` | §3, §5, §9 | 5, 8 |
-| `parser` | §7 | 6 |
-| `telemetry` | §6, §8 | 6, 7 |
+| `parser` | §7 | 6 ✅ |
+| `telemetry` | §6, §8 | 6 ✅, 7 |
 | `calibration` | §11, §12, §22 | 9 |
 | `destination/` | §13–§17, §23–§24 | 10, 11 |
 | `mapping` | §15, §16 | 10 |

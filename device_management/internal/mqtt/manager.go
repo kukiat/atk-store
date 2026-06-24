@@ -12,21 +12,24 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/kukiat/atk-store/device_management/domain/model"
+	"github.com/kukiat/atk-store/device_management/internal/telemetry"
 )
 
 type Manager struct {
-	db       *gorm.DB
-	mu       sync.RWMutex
-	sessions map[uuid.UUID]*managedSession
-	pub      *PublisherService
-	cmd      *CommandManager
+	db        *gorm.DB
+	mu        sync.RWMutex
+	sessions  map[uuid.UUID]*managedSession
+	pub       *PublisherService
+	cmd       *CommandManager
+	telemetry telemetry.TelemetryService
 }
 
 func NewManager(db *gorm.DB) *Manager {
 	m := &Manager{
-		db:       db,
-		sessions: make(map[uuid.UUID]*managedSession),
-		cmd:      NewCommandManager(),
+		db:        db,
+		sessions:  make(map[uuid.UUID]*managedSession),
+		cmd:       NewCommandManager(),
+		telemetry: telemetry.NewTelemetryService(db),
 	}
 	m.pub = NewPublisherService(m)
 	return m

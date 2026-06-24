@@ -64,6 +64,9 @@ func (m *Manager) handleMessage(_ mqtt.Client, msg mqtt.Message) {
 	}
 	_ = m.db.Model(&model.Device{}).Where("id = ?", device.ID).Updates(updates).Error
 
-	// Step 6 will parse telemetry payload here.
-	_ = device.DeviceID
+	if topic == device.TelemetryTopic {
+		if err := m.telemetry.ProcessTelemetry(device, payload); err != nil {
+			log.Printf("[telemetry] device=%s parse/store failed: %v", device.DeviceID, err)
+		}
+	}
 }

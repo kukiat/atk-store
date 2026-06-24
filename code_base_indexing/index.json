@@ -21,6 +21,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "format": "prettier --write .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -29,53 +31,353 @@
     "db:studio": "drizzle-kit studio"
   },
   "files": [
-    { "path": "src/app/layout.tsx", "kind": "server-component", "exports": ["default RootLayout", "metadata", "viewport"], "purpose": "Root layout, Thai font, metadata/viewport" },
-    { "path": "src/app/page.tsx", "kind": "server-component", "exports": ["default HomePage"], "purpose": "Landing page with shelf demo links" },
-    { "path": "src/app/shelf/[id]/page.tsx", "kind": "server-component", "exports": ["default ShelfPage"], "purpose": "Shelf products page via shelfService", "deps": ["@/services/shelf.service", "@/components/product-card", "@/components/cart-bar"] },
-    { "path": "src/app/cart/page.tsx", "kind": "client-component", "exports": ["default CartPage"], "purpose": "Cart review and checkout (disabled)", "deps": ["@/store/cart", "@/lib/format", "@/lib/use-hydrated", "@/components/quantity-stepper"] },
-    { "path": "src/app/signin/page.tsx", "kind": "server-component", "exports": ["default SignInPage"], "purpose": "Google sign-in page with error display", "deps": ["@/components/ui/button"] },
-    { "path": "src/app/api/shelf/[id]/route.ts", "kind": "route-handler", "exports": ["GET"], "purpose": "GET shelf+products JSON", "deps": ["@/services/shelf.service"] },
-    { "path": "src/app/api/auth/signin/google/route.ts", "kind": "route-handler", "exports": ["GET"], "purpose": "Start Google OAuth (redirect to consent)" },
-    { "path": "src/app/api/auth/callback/google/route.ts", "kind": "route-handler", "exports": ["GET"], "purpose": "OAuth callback: exchange code, upsert user, open session", "deps": ["@/lib/auth-shared", "@/services/user.service"] },
-    { "path": "src/app/api/auth/signout/route.ts", "kind": "route-handler", "exports": ["GET", "POST"], "purpose": "Delete session + clear cookie", "deps": ["@/lib/auth-shared", "@/services/user.service"] },
-    { "path": "src/app/globals.css", "kind": "css", "exports": [], "purpose": "Tailwind v4 + theme tokens" },
-    { "path": "src/components/cart-bar.tsx", "kind": "client-component", "exports": ["CartBar"], "purpose": "Floating cart summary bar", "deps": ["@/store/cart", "@/lib/format", "@/lib/use-hydrated"] },
-    { "path": "src/components/product-card.tsx", "kind": "client-component", "exports": ["ProductCard"], "purpose": "Product card with add-to-cart", "deps": ["@/store/cart", "@/lib/format", "@/components/ui/*"] },
-    { "path": "src/components/quantity-stepper.tsx", "kind": "client-component", "exports": ["QuantityStepper"], "purpose": "+/- quantity control" },
-    { "path": "src/components/ui/badge.tsx", "kind": "ui", "exports": ["Badge", "badgeVariants"], "purpose": "shadcn badge" },
-    { "path": "src/components/ui/button.tsx", "kind": "ui", "exports": ["Button", "buttonVariants"], "purpose": "shadcn button" },
-    { "path": "src/components/ui/card.tsx", "kind": "ui", "exports": ["Card", "CardHeader", "CardTitle", "CardContent", "CardFooter"], "purpose": "shadcn card" },
-    { "path": "src/components/ui/separator.tsx", "kind": "ui", "exports": ["Separator"], "purpose": "shadcn separator" },
-    { "path": "src/components/ui/sheet.tsx", "kind": "ui", "exports": ["Sheet", "SheetContent", "SheetTrigger"], "purpose": "shadcn sheet" },
-    { "path": "src/db/schema.ts", "kind": "db-schema", "exports": ["shelves", "products", "shelfProducts", "users", "sessions", "authMethodEnum", "shelvesRelations", "productsRelations", "shelfProductsRelations", "usersRelations", "sessionsRelations", "Shelf", "Product", "ShelfProduct", "User", "NewUser", "Session", "AuthMethod"], "purpose": "Drizzle tables, enum, relations, types" },
-    { "path": "src/db/index.ts", "kind": "server-only", "exports": ["db"], "purpose": "Drizzle Postgres client", "deps": ["./schema"] },
-    { "path": "src/db/seed.ts", "kind": "script", "exports": [], "purpose": "Seed shelves/products (tsx)", "deps": ["./schema"] },
-    { "path": "src/services/shelf.service.ts", "kind": "server-only", "exports": ["shelfService"], "purpose": "Shelf business logic + data access", "deps": ["@/db", "@/db/schema", "@/types"] },
-    { "path": "src/services/product.service.ts", "kind": "server-only", "exports": ["productService"], "purpose": "Product business logic + data access", "deps": ["@/db", "@/db/schema", "@/types"] },
-    { "path": "src/services/user.service.ts", "kind": "server-only", "exports": ["userService", "Session"], "purpose": "User upsert + session create/lookup/delete", "deps": ["@/db", "@/db/schema", "node:crypto"] },
-    { "path": "src/store/cart.ts", "kind": "client-store", "exports": ["useCartStore", "selectTotalCount", "selectTotalCents"], "purpose": "Zustand cart store (persist localStorage atk-cart)", "deps": ["@/types"] },
-    { "path": "src/lib/format.ts", "kind": "util", "exports": ["formatPrice"], "purpose": "Satang -> THB currency string" },
-    { "path": "src/lib/use-hydrated.ts", "kind": "client-hook", "exports": ["useHydrated"], "purpose": "SSR-safe hydration flag" },
-    { "path": "src/lib/utils.ts", "kind": "util", "exports": ["cn"], "purpose": "clsx + tailwind-merge class helper" },
-    { "path": "src/lib/auth.ts", "kind": "server-only", "exports": ["getCurrentUser"], "purpose": "Secure DB-backed current-user DAL (React-cached)", "deps": ["next/headers", "react", "@/services/user.service", "@/lib/auth-shared"] },
-    { "path": "src/lib/auth-shared.ts", "kind": "shared", "exports": ["SESSION_COOKIE", "SIGN_IN_PATH", "PUBLIC_PATHS", "sessionCookieOptions"], "purpose": "Edge-safe auth constants/helpers for proxy + DAL" },
-    { "path": "src/proxy.ts", "kind": "proxy", "exports": ["proxy", "config"], "purpose": "Next 16 route guard: optimistic cookie-based auth redirects", "deps": ["@/lib/auth-shared"] },
-    { "path": "src/types/index.ts", "kind": "types", "exports": ["Product", "Shelf", "ShelfWithProducts", "CartItem"], "purpose": "Shared types", "deps": ["@/db/schema"] }
+    {
+      "path": "src/app/layout.tsx",
+      "kind": "server-component",
+      "exports": ["default RootLayout", "metadata", "viewport"],
+      "purpose": "Root layout, Thai font, metadata/viewport"
+    },
+    {
+      "path": "src/app/page.tsx",
+      "kind": "server-component",
+      "exports": ["default HomePage"],
+      "purpose": "Landing page with shelf demo links"
+    },
+    {
+      "path": "src/app/shelf/[id]/page.tsx",
+      "kind": "server-component",
+      "exports": ["default ShelfPage"],
+      "purpose": "Shelf products page via shelfService",
+      "deps": [
+        "@/services/shelf.service",
+        "@/components/product-card",
+        "@/components/cart-bar"
+      ]
+    },
+    {
+      "path": "src/app/cart/page.tsx",
+      "kind": "client-component",
+      "exports": ["default CartPage"],
+      "purpose": "Cart review and checkout (disabled)",
+      "deps": [
+        "@/store/cart",
+        "@/lib/format",
+        "@/lib/use-hydrated",
+        "@/components/quantity-stepper"
+      ]
+    },
+    {
+      "path": "src/app/signin/page.tsx",
+      "kind": "server-component",
+      "exports": ["default SignInPage"],
+      "purpose": "Google sign-in page with error display",
+      "deps": ["@/components/ui/button"]
+    },
+    {
+      "path": "src/app/api/shelf/[id]/route.ts",
+      "kind": "route-handler",
+      "exports": ["GET"],
+      "purpose": "GET shelf+products JSON",
+      "deps": ["@/services/shelf.service"]
+    },
+    {
+      "path": "src/app/api/auth/signin/google/route.ts",
+      "kind": "route-handler",
+      "exports": ["GET"],
+      "purpose": "Start Google OAuth with state, PKCE, and nonce correlation cookies"
+    },
+    {
+      "path": "src/app/api/auth/callback/google/route.ts",
+      "kind": "route-handler",
+      "exports": ["GET"],
+      "purpose": "Validate OAuth correlation and Google ID token, then open a hashed app session",
+      "deps": [
+        "@/lib/auth-shared",
+        "@/lib/google-id-token",
+        "@/services/user.service"
+      ]
+    },
+    {
+      "path": "src/app/api/auth/signout/route.ts",
+      "kind": "route-handler",
+      "exports": ["POST"],
+      "purpose": "Same-origin session deletion + cookie clear",
+      "deps": ["@/lib/auth", "@/lib/auth-shared", "@/services/user.service"]
+    },
+    {
+      "path": "src/app/globals.css",
+      "kind": "css",
+      "exports": [],
+      "purpose": "Tailwind v4 + theme tokens"
+    },
+    {
+      "path": "src/components/cart-bar.tsx",
+      "kind": "client-component",
+      "exports": ["CartBar"],
+      "purpose": "Floating cart summary bar",
+      "deps": ["@/store/cart", "@/lib/format", "@/lib/use-hydrated"]
+    },
+    {
+      "path": "src/components/product-card.tsx",
+      "kind": "client-component",
+      "exports": ["ProductCard"],
+      "purpose": "Product card with add-to-cart",
+      "deps": ["@/store/cart", "@/lib/format", "@/components/ui/*"]
+    },
+    {
+      "path": "src/components/quantity-stepper.tsx",
+      "kind": "client-component",
+      "exports": ["QuantityStepper"],
+      "purpose": "+/- quantity control"
+    },
+    {
+      "path": "src/components/ui/badge.tsx",
+      "kind": "ui",
+      "exports": ["Badge", "badgeVariants"],
+      "purpose": "shadcn badge"
+    },
+    {
+      "path": "src/components/ui/button.tsx",
+      "kind": "ui",
+      "exports": ["Button", "buttonVariants"],
+      "purpose": "shadcn button"
+    },
+    {
+      "path": "src/components/ui/card.tsx",
+      "kind": "ui",
+      "exports": [
+        "Card",
+        "CardHeader",
+        "CardTitle",
+        "CardContent",
+        "CardFooter"
+      ],
+      "purpose": "shadcn card"
+    },
+    {
+      "path": "src/components/ui/separator.tsx",
+      "kind": "ui",
+      "exports": ["Separator"],
+      "purpose": "shadcn separator"
+    },
+    {
+      "path": "src/components/ui/sheet.tsx",
+      "kind": "ui",
+      "exports": ["Sheet", "SheetContent", "SheetTrigger"],
+      "purpose": "shadcn sheet"
+    },
+    {
+      "path": "src/db/schema.ts",
+      "kind": "db-schema",
+      "exports": [
+        "shelves",
+        "products",
+        "shelfProducts",
+        "users",
+        "sessions",
+        "authMethodEnum",
+        "shelvesRelations",
+        "productsRelations",
+        "shelfProductsRelations",
+        "usersRelations",
+        "sessionsRelations",
+        "Shelf",
+        "Product",
+        "ShelfProduct",
+        "User",
+        "NewUser",
+        "Session",
+        "AuthMethod"
+      ],
+      "purpose": "Drizzle tables, enum, relations, types"
+    },
+    {
+      "path": "src/db/index.ts",
+      "kind": "server-only",
+      "exports": ["db"],
+      "purpose": "Drizzle Postgres client",
+      "deps": ["./schema"]
+    },
+    {
+      "path": "src/db/seed.ts",
+      "kind": "script",
+      "exports": [],
+      "purpose": "Seed shelves/products (tsx)",
+      "deps": ["./schema"]
+    },
+    {
+      "path": "src/services/shelf.service.ts",
+      "kind": "server-only",
+      "exports": ["shelfService"],
+      "purpose": "Shelf business logic + data access",
+      "deps": ["@/db", "@/db/schema", "@/types"]
+    },
+    {
+      "path": "src/services/product.service.ts",
+      "kind": "server-only",
+      "exports": ["productService"],
+      "purpose": "Product business logic + data access",
+      "deps": ["@/db", "@/db/schema", "@/types"]
+    },
+    {
+      "path": "src/services/user.service.ts",
+      "kind": "server-only",
+      "exports": ["userService", "OAuthIdentityConflictError", "Session"],
+      "purpose": "Provider-sub identity upsert + hashed session create/lookup/delete",
+      "deps": ["@/db", "@/db/schema", "@/lib/auth-tokens"]
+    },
+    {
+      "path": "src/store/cart.ts",
+      "kind": "client-store",
+      "exports": ["useCartStore", "selectTotalCount", "selectTotalCents"],
+      "purpose": "Zustand cart store (persist localStorage atk-cart)",
+      "deps": ["@/types"]
+    },
+    {
+      "path": "src/lib/format.ts",
+      "kind": "util",
+      "exports": ["formatPrice"],
+      "purpose": "Satang -> THB currency string"
+    },
+    {
+      "path": "src/lib/use-hydrated.ts",
+      "kind": "client-hook",
+      "exports": ["useHydrated"],
+      "purpose": "SSR-safe hydration flag"
+    },
+    {
+      "path": "src/lib/utils.ts",
+      "kind": "util",
+      "exports": ["cn"],
+      "purpose": "clsx + tailwind-merge class helper"
+    },
+    {
+      "path": "src/lib/auth.ts",
+      "kind": "server-only",
+      "exports": [
+        "getCurrentUser",
+        "requireCurrentUser",
+        "hasSameOrigin",
+        "AuthenticationRequiredError"
+      ],
+      "purpose": "Secure DB-backed auth DAL and route-mutation origin guard",
+      "deps": [
+        "next/headers",
+        "react",
+        "@/services/user.service",
+        "@/lib/auth-shared"
+      ]
+    },
+    {
+      "path": "src/lib/auth-shared.ts",
+      "kind": "shared",
+      "exports": [
+        "SESSION_COOKIE",
+        "GOOGLE_OAUTH_STATE_COOKIE",
+        "GOOGLE_OAUTH_PKCE_COOKIE",
+        "GOOGLE_OAUTH_NONCE_COOKIE",
+        "SIGN_IN_PATH",
+        "PUBLIC_PATHS",
+        "sessionCookieOptions",
+        "oauthCookieOptions"
+      ],
+      "purpose": "Edge-safe session and OAuth cookie constants/helpers"
+    },
+    {
+      "path": "src/lib/auth-tokens.ts",
+      "kind": "server-util",
+      "exports": [
+        "createOpaqueToken",
+        "hashSessionToken",
+        "tokensMatch",
+        "createPkceChallenge"
+      ],
+      "purpose": "OAuth/session security primitives"
+    },
+    {
+      "path": "src/lib/google-id-token.ts",
+      "kind": "server-only",
+      "exports": ["verifyGoogleIdToken"],
+      "purpose": "Google JWKS signature and claim verification",
+      "deps": ["jose", "./google-id-token-claims"]
+    },
+    {
+      "path": "src/lib/google-id-token-claims.ts",
+      "kind": "util",
+      "exports": [
+        "getGoogleIdentityFromClaims",
+        "GoogleIdTokenValidationError",
+        "GoogleIdentity"
+      ],
+      "purpose": "Pure Google ID-token claim validation"
+    },
+    {
+      "path": "src/proxy.ts",
+      "kind": "proxy",
+      "exports": ["proxy", "config"],
+      "purpose": "Next 16 route guard: optimistic cookie-based auth redirects",
+      "deps": ["@/lib/auth-shared"]
+    },
+    {
+      "path": "src/types/index.ts",
+      "kind": "types",
+      "exports": ["Product", "Shelf", "ShelfWithProducts", "CartItem"],
+      "purpose": "Shared types",
+      "deps": ["@/db/schema"]
+    }
   ],
   "routes": {
     "pages": [
       { "path": "/", "file": "src/app/page.tsx", "rendering": "server" },
-      { "path": "/shelf/[id]", "file": "src/app/shelf/[id]/page.tsx", "rendering": "server" },
-      { "path": "/cart", "file": "src/app/cart/page.tsx", "rendering": "client" },
-      { "path": "/signin", "file": "src/app/signin/page.tsx", "rendering": "server" }
+      {
+        "path": "/shelf/[id]",
+        "file": "src/app/shelf/[id]/page.tsx",
+        "rendering": "server"
+      },
+      {
+        "path": "/cart",
+        "file": "src/app/cart/page.tsx",
+        "rendering": "client"
+      },
+      {
+        "path": "/signin",
+        "file": "src/app/signin/page.tsx",
+        "rendering": "server"
+      }
     ],
     "api": [
-      { "method": "GET", "path": "/api/shelf/[id]", "file": "src/app/api/shelf/[id]/route.ts" },
-      { "method": "GET", "path": "/api/auth/signin/google", "file": "src/app/api/auth/signin/google/route.ts" },
-      { "method": "GET", "path": "/api/auth/callback/google", "file": "src/app/api/auth/callback/google/route.ts" },
-      { "method": "GET|POST", "path": "/api/auth/signout", "file": "src/app/api/auth/signout/route.ts" }
+      {
+        "method": "GET",
+        "path": "/api/shelf/[id]",
+        "file": "src/app/api/shelf/[id]/route.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth/signin/google",
+        "file": "src/app/api/auth/signin/google/route.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/auth/callback/google",
+        "file": "src/app/api/auth/callback/google/route.ts"
+      },
+      {
+        "method": "POST",
+        "path": "/api/auth/signout",
+        "file": "src/app/api/auth/signout/route.ts"
+      }
     ],
-    "proxy": { "file": "src/proxy.ts", "purpose": "Optimistic auth gate; redirect unauthenticated to /signin", "matcherExcludes": ["api", "_next/static", "_next/image", "favicon.ico", "*.svg"] }
+    "proxy": {
+      "file": "src/proxy.ts",
+      "purpose": "Optimistic auth gate; redirect unauthenticated to /signin",
+      "matcherExcludes": [
+        "api",
+        "_next/static",
+        "_next/image",
+        "favicon.ico",
+        "*.svg"
+      ]
+    }
   },
   "dataModel": {
     "tables": [
@@ -86,7 +388,11 @@
           { "name": "id", "type": "text", "constraints": ["pk"] },
           { "name": "name", "type": "text", "constraints": ["not null"] },
           { "name": "location", "type": "text", "constraints": ["nullable"] },
-          { "name": "created_at", "type": "timestamptz", "constraints": ["not null", "default now()"] }
+          {
+            "name": "created_at",
+            "type": "timestamptz",
+            "constraints": ["not null", "default now()"]
+          }
         ]
       },
       {
@@ -94,22 +400,54 @@
         "primaryKey": ["id"],
         "columns": [
           { "name": "id", "type": "serial", "constraints": ["pk"] },
-          { "name": "sku", "type": "text", "constraints": ["not null", "unique"] },
+          {
+            "name": "sku",
+            "type": "text",
+            "constraints": ["not null", "unique"]
+          },
           { "name": "name", "type": "text", "constraints": ["not null"] },
-          { "name": "description", "type": "text", "constraints": ["nullable"] },
-          { "name": "price_cents", "type": "integer", "constraints": ["not null"] },
+          {
+            "name": "description",
+            "type": "text",
+            "constraints": ["nullable"]
+          },
+          {
+            "name": "price_cents",
+            "type": "integer",
+            "constraints": ["not null"]
+          },
           { "name": "image_url", "type": "text", "constraints": ["nullable"] },
-          { "name": "stock", "type": "integer", "constraints": ["not null", "default 0"] },
-          { "name": "created_at", "type": "timestamptz", "constraints": ["not null", "default now()"] }
+          {
+            "name": "stock",
+            "type": "integer",
+            "constraints": ["not null", "default 0"]
+          },
+          {
+            "name": "created_at",
+            "type": "timestamptz",
+            "constraints": ["not null", "default now()"]
+          }
         ]
       },
       {
         "name": "shelf_products",
         "primaryKey": ["shelf_id", "product_id"],
         "columns": [
-          { "name": "shelf_id", "type": "text", "constraints": ["not null", "fk shelves.id cascade"] },
-          { "name": "product_id", "type": "integer", "constraints": ["not null", "fk products.id cascade"] },
-          { "name": "position", "type": "integer", "constraints": ["not null", "default 0"] }
+          {
+            "name": "shelf_id",
+            "type": "text",
+            "constraints": ["not null", "fk shelves.id cascade"]
+          },
+          {
+            "name": "product_id",
+            "type": "integer",
+            "constraints": ["not null", "fk products.id cascade"]
+          },
+          {
+            "name": "position",
+            "type": "integer",
+            "constraints": ["not null", "default 0"]
+          }
         ]
       },
       {
@@ -117,29 +455,75 @@
         "primaryKey": ["id"],
         "columns": [
           { "name": "id", "type": "serial", "constraints": ["pk"] },
-          { "name": "email", "type": "text", "constraints": ["not null", "unique"] },
+          {
+            "name": "email",
+            "type": "text",
+            "constraints": ["not null", "unique"]
+          },
           { "name": "name", "type": "text", "constraints": ["nullable"] },
           { "name": "avatar_url", "type": "text", "constraints": ["nullable"] },
-          { "name": "auth_method", "type": "auth_method", "constraints": ["not null", "default google"] },
-          { "name": "provider_account_id", "type": "text", "constraints": ["nullable"] },
-          { "name": "created_at", "type": "timestamptz", "constraints": ["not null", "default now()"] },
-          { "name": "updated_at", "type": "timestamptz", "constraints": ["not null", "default now()"] },
-          { "name": "last_login_at", "type": "timestamptz", "constraints": ["nullable"] }
+          {
+            "name": "auth_method",
+            "type": "auth_method",
+            "constraints": ["not null", "default google"]
+          },
+          {
+            "name": "provider_account_id",
+            "type": "text",
+            "constraints": [
+              "nullable",
+              "auth_method + provider_account_id unique"
+            ]
+          },
+          {
+            "name": "created_at",
+            "type": "timestamptz",
+            "constraints": ["not null", "default now()"]
+          },
+          {
+            "name": "updated_at",
+            "type": "timestamptz",
+            "constraints": ["not null", "default now()"]
+          },
+          {
+            "name": "last_login_at",
+            "type": "timestamptz",
+            "constraints": ["nullable"]
+          }
         ]
       },
       {
         "name": "sessions",
         "primaryKey": ["id"],
         "columns": [
-          { "name": "id", "type": "text", "constraints": ["pk", "opaque random token"] },
-          { "name": "user_id", "type": "integer", "constraints": ["not null", "fk users.id cascade"] },
-          { "name": "expires_at", "type": "timestamptz", "constraints": ["not null"] },
-          { "name": "created_at", "type": "timestamptz", "constraints": ["not null", "default now()"] }
+          {
+            "name": "id",
+            "type": "text",
+            "constraints": ["pk", "SHA-256 hash of opaque random token"]
+          },
+          {
+            "name": "user_id",
+            "type": "integer",
+            "constraints": ["not null", "fk users.id cascade"]
+          },
+          {
+            "name": "expires_at",
+            "type": "timestamptz",
+            "constraints": ["not null"]
+          },
+          {
+            "name": "created_at",
+            "type": "timestamptz",
+            "constraints": ["not null", "default now()"]
+          }
         ]
       }
     ],
     "enums": [
-      { "name": "auth_method", "values": ["google", "facebook", "line", "apple", "credentials"] }
+      {
+        "name": "auth_method",
+        "values": ["google", "facebook", "line", "apple", "credentials"]
+      }
     ],
     "relations": [
       "shelves 1-* shelf_products",
@@ -150,13 +534,26 @@
   "auth": {
     "provider": "google",
     "sessionCookie": "atk_session",
-    "sessionStrategy": "database (opaque token in httpOnly cookie)",
-    "guard": "src/proxy.ts (optimistic) + src/lib/auth.ts getCurrentUser (secure)",
+    "sessionStrategy": "database (opaque token in httpOnly cookie; SHA-256 hash at rest)",
+    "guard": "src/proxy.ts (optimistic) + src/lib/auth.ts requireCurrentUser (private route handler/action guard)",
     "callbackUrl": "/api/auth/callback/google",
-    "envKeys": ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET", "AUTH_URL", "AUTH_SECRET"]
+    "envKeys": [
+      "GOOGLE_CLIENT_ID",
+      "GOOGLE_CLIENT_SECRET",
+      "AUTH_URL",
+      "AUTH_SECRET"
+    ]
   },
   "todos": [
-    { "tag": "payment", "where": "src/app/cart/page.tsx", "desc": "Real checkout / payment (PromptPay, card)" },
-    { "tag": "order", "where": "src/app/cart/page.tsx", "desc": "Persist client cart to order table" }
+    {
+      "tag": "payment",
+      "where": "src/app/cart/page.tsx",
+      "desc": "Real checkout / payment (PromptPay, card)"
+    },
+    {
+      "tag": "order",
+      "where": "src/app/cart/page.tsx",
+      "desc": "Persist client cart to order table"
+    }
   ]
 }

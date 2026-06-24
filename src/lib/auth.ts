@@ -19,3 +19,23 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   return userService.getUserBySession(token);
 });
+
+export class AuthenticationRequiredError extends Error {
+  constructor() {
+    super("Authentication is required");
+    this.name = "AuthenticationRequiredError";
+  }
+}
+
+/** Use in every private Route Handler or Server Action. */
+export async function requireCurrentUser(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user) throw new AuthenticationRequiredError();
+  return user;
+}
+
+/** Reject browser-originated mutations from a different origin. */
+export function hasSameOrigin(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  return origin === new URL(request.url).origin;
+}

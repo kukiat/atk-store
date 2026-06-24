@@ -7,6 +7,7 @@ import {
   serial,
   text,
   timestamp,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -25,26 +26,35 @@ export const authMethodEnum = pgEnum("auth_method", [
  * An enrolled user. One row per person, keyed by email. `authMethod` records
  * which channel they last signed in with so we can support multiple providers.
  */
-export const users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  email: text("email").notNull().unique(),
-  name: text("name"),
-  avatarUrl: text("avatar_url"),
-  authMethod: authMethodEnum("auth_method").notNull().default("google"),
-  // Provider-specific account id (e.g. the Google `sub`/`id`).
-  providerAccountId: text("provider_account_id"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
-});
+export const users = pgTable(
+  "users",
+  {
+    id: serial("id").primaryKey(),
+    email: text("email").notNull().unique(),
+    name: text("name"),
+    avatarUrl: text("avatar_url"),
+    authMethod: authMethodEnum("auth_method").notNull().default("google"),
+    // Provider-specific immutable subject (Google OpenID Connect `sub`).
+    providerAccountId: text("provider_account_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("users_auth_method_provider_account_id_unique").on(
+      table.authMethod,
+      table.providerAccountId,
+    ),
+  ],
+);
 
 /**
- * A server-side login session. The opaque `id` is the random token stored in
- * the user's httpOnly cookie; rows are removed on logout or expiry.
+ * A server-side login session. `id` stores a SHA-256 hash of the opaque token
+ * in the user's httpOnly cookie; rows are removed on logout or expiry.
  */
 export const sessions = pgTable("sessions", {
   id: text("id").primaryKey(),

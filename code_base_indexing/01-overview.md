@@ -4,8 +4,8 @@
 
 **ATK Store** is a mobile-first "smart shelf scan-to-shop" starter web app. A customer
 scans a QR code on a physical shelf, lands on that shelf's product page, adds items to a
-client-side cart, and reviews the cart. Payment, orders, and auth are intentionally left
-as `TODO` markers for extension.
+client-side cart, and reviews the cart. Payment and orders are intentionally left as
+`TODO` markers for extension.
 
 - **Name / version:** `atk-store` 0.1.0 (private)
 - **Primary language:** TypeScript
@@ -13,18 +13,18 @@ as `TODO` markers for extension.
 
 ## Tech stack
 
-| Area | Choice | Notes |
-| --- | --- | --- |
-| Framework | Next.js 16 (App Router) | Server Components by default |
-| UI runtime | React 19 | |
-| Styling | Tailwind CSS v4 + `tw-animate-css` | via `@tailwindcss/postcss` |
-| Components | shadcn/ui (`components.json`) + `@base-ui/react` | New York / base style |
-| Icons | `lucide-react` | |
-| State | Zustand 5 (+ `persist`) | client cart → `localStorage` (`atk-cart`) |
-| ORM | Drizzle ORM 0.45 + `drizzle-kit` | dialect `postgresql` |
-| Driver | `postgres` (postgres-js) | |
-| Database | PostgreSQL 16 (Docker, local) | `docker-compose.yml` |
-| Utilities | `clsx`, `tailwind-merge`, `class-variance-authority` | `cn()` helper |
+| Area       | Choice                                               | Notes                                     |
+| ---------- | ---------------------------------------------------- | ----------------------------------------- |
+| Framework  | Next.js 16 (App Router)                              | Server Components by default              |
+| UI runtime | React 19                                             |                                           |
+| Styling    | Tailwind CSS v4 + `tw-animate-css`                   | via `@tailwindcss/postcss`                |
+| Components | shadcn/ui (`components.json`) + `@base-ui/react`     | New York / base style                     |
+| Icons      | `lucide-react`                                       |                                           |
+| State      | Zustand 5 (+ `persist`)                              | client cart → `localStorage` (`atk-cart`) |
+| ORM        | Drizzle ORM 0.45 + `drizzle-kit`                     | dialect `postgresql`                      |
+| Driver     | `postgres` (postgres-js)                             |                                           |
+| Database   | PostgreSQL 16 (Docker, local)                        | `docker-compose.yml`                      |
+| Utilities  | `clsx`, `tailwind-merge`, `class-variance-authority` | `cn()` helper                             |
 
 ## Architecture
 
@@ -52,17 +52,19 @@ yet (that's the `TODO(order)` extension point).
 
 ## Tooling / scripts
 
-| Script | Command | Purpose |
-| --- | --- | --- |
-| `dev` | `next dev` | Dev server |
-| `build` / `start` | `next build` / `next start` | Production build & serve |
-| `lint` | `eslint` | Lint |
-| `format` | `prettier --write .` | Format |
-| `db:generate` | `drizzle-kit generate` | SQL migration from schema |
-| `db:migrate` | `drizzle-kit migrate` | Apply migrations |
-| `db:push` | `drizzle-kit push` | Push schema directly (dev) |
-| `db:seed` | `tsx src/db/seed.ts` | Seed sample shelves & products |
-| `db:studio` | `drizzle-kit studio` | Drizzle Studio |
+| Script            | Command                     | Purpose                        |
+| ----------------- | --------------------------- | ------------------------------ |
+| `dev`             | `next dev`                  | Dev server                     |
+| `build` / `start` | `next build` / `next start` | Production build & serve       |
+| `lint`            | `eslint`                    | Lint                           |
+| `test`            | `vitest run`                | Run focused Node tests         |
+| `test:watch`      | `vitest`                    | Watch focused Node tests       |
+| `format`          | `prettier --write .`        | Format                         |
+| `db:generate`     | `drizzle-kit generate`      | SQL migration from schema      |
+| `db:migrate`      | `drizzle-kit migrate`       | Apply migrations               |
+| `db:push`         | `drizzle-kit push`          | Push schema directly (dev)     |
+| `db:seed`         | `tsx src/db/seed.ts`        | Seed sample shelves & products |
+| `db:studio`       | `drizzle-kit studio`        | Drizzle Studio                 |
 
 ## Environment
 
@@ -72,14 +74,18 @@ yet (that's the `TODO(order)` extension point).
 ## Authentication
 
 - **Provider:** Google OAuth 2.0 (manual flow, no auth library).
-- **Flow:** `/signin` → `/api/auth/signin/google` → Google consent → `/api/auth/callback/google`
-  (exchanges code, fetches userinfo, upserts `users` row, opens a `sessions` row,
-  sets the `atk_session` httpOnly cookie) → `/`. Sign out via `/api/auth/signout`.
-- **Guarding:** `src/proxy.ts` does an optimistic cookie-presence redirect (unauthenticated
-  → `/signin`; authenticated away from `/signin`). The secure, DB-backed check is
-  `getCurrentUser()` in `src/lib/auth.ts` (used by Server Components).
-- **Multi-channel ready:** `users.auth_method` (`auth_method` enum) tracks the channel;
-  `google` is live, with `facebook`/`line`/`apple`/`credentials` pre-declared.
+- **Flow:** `/signin` → `/api/auth/signin/google` creates short-lived `state`, PKCE
+  verifier and nonce cookies → Google consent → `/api/auth/callback/google` validates
+  those cookies, validates the Google ID token signature and claims, upserts the verified
+  provider identity, opens a DB session, and sets `atk_session` → `/`.
+- **Session security:** the browser receives a random opaque token in an httpOnly cookie;
+  the database stores only its SHA-256 hash. `getCurrentUser()` resolves it from DB and
+  `requireCurrentUser()` is the mandatory guard for private Route Handlers/Actions.
+- **Guarding:** `src/proxy.ts` only performs optimistic page redirect. It does not replace
+  route-level authentication or resource-ownership authorization.
+- **Identity mapping:** `users.auth_method` plus immutable provider account ID (Google OIDC
+  `sub`) is unique. An existing email with another provider identity is rejected instead
+  of being linked silently.
 - **Env keys:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_URL`, `AUTH_SECRET`.
 
 ## Extension points (`TODO`)

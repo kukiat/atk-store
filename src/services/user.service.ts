@@ -1,8 +1,6 @@
 import "server-only";
 
-import { randomBytes } from "node:crypto";
-
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -12,6 +10,7 @@ import {
   type Session,
   type User,
 } from "@/db/schema";
+import { createOpaqueToken, hashSessionToken } from "@/lib/auth-tokens";
 
 /** How long a login session stays valid. */
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
@@ -24,6 +23,13 @@ type UpsertOAuthUserInput = {
   providerAccountId?: string | null;
 };
 
+export class OAuthIdentityConflictError extends Error {
+  constructor() {
+    super("This email is already linked to a different sign-in identity");
+    this.name = "OAuthIdentityConflictError";
+  }
+}
+
 /**
  * Users + login sessions. Keeps all auth-related data access in one place so
  * route handlers and the data-access layer share the same logic.
@@ -31,12 +37,53 @@ type UpsertOAuthUserInput = {
 class UserService {
   /**
    * Insert a user on first sign-in, or refresh their profile on return.
-   * Matching is done by (normalized) email so the same person keeps one row
-   * even if they later sign in through a different channel.
+   * The immutable provider identity is authoritative. An existing email with a
+   * different provider subject is rejected instead of being linked silently.
    */
   async upsertOAuthUser(input: UpsertOAuthUserInput): Promise<User> {
     const email = input.email.trim().toLowerCase();
     const now = new Date();
+
+    if (!input.providerAccountId) {
+      throw new Error("OAuth provider account ID is required");
+    }
+
+    const [existingByProvider] = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.authMethod, input.authMethod),
+          eq(users.providerAccountId, input.providerAccountId),
+        ),
+      )
+      .limit(1);
+
+    if (existingByProvider) {
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          email,
+          name: input.name ?? null,
+          avatarUrl: input.avatarUrl ?? null,
+          lastLoginAt: now,
+          updatedAt: now,
+        })
+        .where(eq(users.id, existingByProvider.id))
+        .returning();
+
+      return updatedUser;
+    }
+
+    const [existingByEmail] = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (existingByEmail) {
+      throw new OAuthIdentityConflictError();
+    }
 
     const [user] = await db
       .insert(users)
@@ -48,17 +95,6 @@ class UserService {
         providerAccountId: input.providerAccountId ?? null,
         lastLoginAt: now,
       })
-      .onConflictDoUpdate({
-        target: users.email,
-        set: {
-          name: input.name ?? null,
-          avatarUrl: input.avatarUrl ?? null,
-          authMethod: input.authMethod,
-          providerAccountId: input.providerAccountId ?? null,
-          lastLoginAt: now,
-          updatedAt: now,
-        },
-      })
       .returning();
 
     return user;
@@ -68,10 +104,12 @@ class UserService {
   async createSession(
     userId: number,
   ): Promise<{ token: string; expiresAt: Date }> {
-    const token = randomBytes(32).toString("hex");
+    const token = createOpaqueToken();
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
 
-    await db.insert(sessions).values({ id: token, userId, expiresAt });
+    await db
+      .insert(sessions)
+      .values({ id: hashSessionToken(token), userId, expiresAt });
 
     return { token, expiresAt };
   }
@@ -87,7 +125,7 @@ class UserService {
       .select({ user: users, expiresAt: sessions.expiresAt })
       .from(sessions)
       .innerJoin(users, eq(sessions.userId, users.id))
-      .where(eq(sessions.id, token))
+      .where(eq(sessions.id, hashSessionToken(token)))
       .limit(1);
 
     const found = rows[0];
@@ -103,7 +141,7 @@ class UserService {
 
   /** Remove a single session (logout). */
   async deleteSession(token: string): Promise<void> {
-    await db.delete(sessions).where(eq(sessions.id, token));
+    await db.delete(sessions).where(eq(sessions.id, hashSessionToken(token)));
   }
 }
 

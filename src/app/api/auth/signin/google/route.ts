@@ -1,9 +1,16 @@
-import { redirect } from "next/navigation";
-import { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+
+import {
+  GOOGLE_OAUTH_NONCE_COOKIE,
+  GOOGLE_OAUTH_PKCE_COOKIE,
+  GOOGLE_OAUTH_STATE_COOKIE,
+  oauthCookieOptions,
+} from "@/lib/auth-shared";
+import { createOpaqueToken, createPkceChallenge } from "@/lib/auth-tokens";
 
 const GOOGLE_AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const authUrl = process.env.AUTH_URL ?? "http://localhost:3000";
 
@@ -14,20 +21,28 @@ export async function GET(request: NextRequest) {
 
   const callbackUrl = `${authUrl}/api/auth/callback/google`;
 
+  const state = createOpaqueToken();
+  const nonce = createOpaqueToken();
+  const codeVerifier = createOpaqueToken();
+
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: callbackUrl,
     response_type: "code",
     scope: "openid email profile",
-    access_type: "offline",
-    prompt: "consent",
+    state,
+    nonce,
+    code_challenge: createPkceChallenge(codeVerifier),
+    code_challenge_method: "S256",
   });
 
   const fullRedirectUrl = `${GOOGLE_AUTH_URL}?${params.toString()}`;
+  const response = NextResponse.redirect(fullRedirectUrl);
+  const cookieOptions = oauthCookieOptions();
 
-  console.log("[auth/signin/google] Redirecting to Google OAuth");
-  console.log("[auth/signin/google] redirect_uri:", callbackUrl);
-  console.log("[auth/signin/google] Request URL:", request.url);
+  response.cookies.set(GOOGLE_OAUTH_STATE_COOKIE, state, cookieOptions);
+  response.cookies.set(GOOGLE_OAUTH_NONCE_COOKIE, nonce, cookieOptions);
+  response.cookies.set(GOOGLE_OAUTH_PKCE_COOKIE, codeVerifier, cookieOptions);
 
-  redirect(fullRedirectUrl);
+  return response;
 }

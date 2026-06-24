@@ -8,10 +8,12 @@ import { Button } from "@/components/ui/button";
 const GOOGLE_SIGN_IN_URL = "/api/auth/signin/google";
 
 const ERROR_MESSAGES: Record<string, string> = {
+  invalid_state: "การยืนยันการเข้าสู่ระบบไม่ถูกต้อง กรุณาลองใหม่",
   no_code: "ไม่ได้รับรหัสยืนยันจาก Google กรุณาลองใหม่อีกครั้ง",
-  no_email: "ไม่พบอีเมลในบัญชี Google ของคุณ",
   token_exchange_failed: "แลกเปลี่ยนข้อมูลกับ Google ไม่สำเร็จ กรุณาลองใหม่",
-  userinfo_failed: "ดึงข้อมูลผู้ใช้จาก Google ไม่สำเร็จ กรุณาลองใหม่",
+  invalid_identity: "ไม่สามารถยืนยันบัญชี Google ได้ กรุณาลองใหม่",
+  account_conflict:
+    "อีเมลนี้เชื่อมกับบัญชี Google อื่นอยู่ กรุณาติดต่อผู้ดูแลระบบ",
   access_denied: "คุณยกเลิกการเข้าสู่ระบบด้วย Google",
 };
 
@@ -68,7 +70,8 @@ export default async function SignInPage({
 
           <h1 className="mt-6 text-2xl font-bold">เข้าสู่ระบบ</h1>
           <p className="text-muted-foreground mt-2 text-sm">
-            ยินดีต้อนรับสู่ <span className="text-foreground font-medium">ATK Store</span>
+            ยินดีต้อนรับสู่{" "}
+            <span className="text-foreground font-medium">ATK Store</span>
             <br />
             เข้าสู่ระบบด้วยบัญชี Google เพื่อเริ่มต้นใช้งาน
           </p>

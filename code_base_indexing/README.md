@@ -8,14 +8,14 @@ locate files, symbols, routes, and data structures without re-scanning the whole
 
 ## Contents
 
-| File | What's inside |
-| --- | --- |
-| [`01-overview.md`](./01-overview.md) | Project summary, tech stack, architecture, conventions |
-| [`02-file-index.md`](./02-file-index.md) | Every source file with purpose, key exports & dependencies |
-| [`03-symbols.md`](./03-symbols.md) | Flat index of exported functions, components, types & stores |
-| [`04-data-model.md`](./04-data-model.md) | Database tables, relations, and TypeScript types |
-| [`05-routes.md`](./05-routes.md) | Pages, API routes, and the request flow |
-| [`index.json`](./index.json) | Machine-readable index (files, exports, routes, tables) |
+| File                                     | What's inside                                                |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| [`01-overview.md`](./01-overview.md)     | Project summary, tech stack, architecture, conventions       |
+| [`02-file-index.md`](./02-file-index.md) | Every source file with purpose, key exports & dependencies   |
+| [`03-symbols.md`](./03-symbols.md)       | Flat index of exported functions, components, types & stores |
+| [`04-data-model.md`](./04-data-model.md) | Database tables, relations, and TypeScript types             |
+| [`05-routes.md`](./05-routes.md)         | Pages, API routes, and the request flow                      |
+| [`index.json`](./index.json)             | Machine-readable index (files, exports, routes, tables)      |
 
 ## Quick facts
 
@@ -23,7 +23,7 @@ locate files, symbols, routes, and data structures without re-scanning the whole
 - **Stack:** Next.js 16 (App Router) · React 19 · TypeScript · Tailwind v4 · shadcn/ui · Drizzle ORM · PostgreSQL · Zustand
 - **Source root:** `src/` (path alias `@/*` → `src/*`)
 - **Core flow:** sign in with Google → scan shelf QR → `/shelf/[id]` → add to cart → `/cart`
-- **Auth:** Google OAuth · DB sessions (`atk_session` cookie) · `proxy.ts` route guard
+- **Auth:** Google OAuth (state + PKCE + nonce + ID-token validation) · DB sessions (`atk_session` cookie, token hash at rest) · `proxy.ts` redirect guard + route-level checks
 - **Counts:** 5 DB tables · 4 pages + 4 API routes + 1 proxy
 
 ## Layer map

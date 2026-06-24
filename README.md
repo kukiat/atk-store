@@ -1,6 +1,6 @@
 # ATK Store — Smart Shelf Scan-to-Shop (Starter)
 
-เว็บร้านค้าแบบ **mobile-first** ที่ลูกค้าใช้มือถือ **สแกน QR ที่ชั้นวาง (smart shelf)** เพื่อดูสินค้าบนชั้นนั้น แล้วใส่ตะกร้า โปรเจกต์นี้เป็น **starter** ที่วางโครง + flow หลักไว้ให้ต่อยอด (payment / auth / order ยังไม่ทำ — มี `TODO` ฝังไว้ในโค้ด)
+เว็บร้านค้าแบบ **mobile-first** ที่ลูกค้าใช้มือถือ **สแกน QR ที่ชั้นวาง (smart shelf)** เพื่อดูสินค้าบนชั้นนั้น แล้วใส่ตะกร้า โปรเจกต์นี้วางโครง flow หลักไว้ให้ต่อยอด payment และ order
 
 Flow: `สแกน QR ชั้นวาง → /shelf/[id] → เลือกสินค้า → /cart`
 
@@ -10,6 +10,13 @@ Flow: `สแกน QR ชั้นวาง → /shelf/[id] → เลือก
 - **Tailwind CSS v4** + **shadcn/ui**
 - **Drizzle ORM** + **PostgreSQL** (`postgres-js` driver)
 - **Zustand** (+ `persist`) — ตะกร้าฝั่ง client (localStorage)
+
+## Google Authentication
+
+- Google OAuth 2.0 Authorization Code Flow พร้อม `state`, PKCE และ nonce
+- server ตรวจ Google ID token ก่อนสร้าง session
+- browser ใช้ opaque httpOnly session cookie; PostgreSQL เก็บเฉพาะ SHA-256 hash ของ token
+- private Route Handlers ในอนาคตต้องเรียก `requireCurrentUser()`; `proxy.ts` มีหน้าที่ redirect UX เท่านั้น
 
 ## โครงสร้างชั้น (architecture)
 
@@ -75,7 +82,7 @@ src/
 ├── db/                       # schema.ts, index.ts (drizzle client), seed.ts
 ├── services/                 # business logic + data access (server-only)
 ├── store/cart.ts             # Zustand cart store (persist → localStorage)
-├── lib/                      # format.ts, use-hydrated.ts, utils.ts
+├── lib/                      # auth, Google ID-token validation, format, hooks, utils
 └── types/index.ts
 ```
 
@@ -85,9 +92,7 @@ src/
 
 - `TODO(payment)` — checkout / payment จริง (PromptPay, บัตร)
 - `TODO(order)` — แปลงตะกร้า client → order table ใน Postgres
-- `TODO(auth)` — ระบบ login / ผูก user-session
-
-นอกจากนี้: การ generate QR ของแต่ละชั้น, admin panel, deploy/CI
+  นอกจากนี้: การ generate QR ของแต่ละชั้น, admin panel, deploy/CI
 
 ## ต่อ Postgres แบบ hosted
 

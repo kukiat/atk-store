@@ -22,7 +22,9 @@ device_management/
 │   ├── devicedestination/         # Step 10 ✅
 │   ├── mapping/                   # Step 10 ✅
 │   ├── destination/router/        # Step 11 ✅
-│   └── retry/                     # Step 11 ✅
+│   ├── retry/                     # Step 11 ✅
+│   ├── websocket/                 # Step 12 ✅
+│   └── auth/                      # Step 13 ✅
 ├── domain/model/                # GORM entities (Step 2 ✅)
 │   ├── mqtt_connection.go
 │   ├── device.go
@@ -33,6 +35,8 @@ device_management/
 │   ├── config/
 │   ├── database/
 │   ├── dto/
+│   ├── jwtutil/
+│   ├── middleware/
 │   └── redis/
 └── migrations/                  # SQL migrations (ไม่ใช้ AutoMigrate)
 ```
@@ -61,18 +65,58 @@ make health
 curl http://localhost:8081/health
 ```
 
-**Response ตัวอย่าง (Step 11):**
+**Response ตัวอย่าง (Step 13):**
 
 ```json
 {
   "status": "degraded",
-  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 11 },
+  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 13 },
   "dependencies": { "postgres": true, "schema": true, "redis": false },
   "time": "2026-06-24T10:00:00+07:00"
 }
 ```
 
 `status: ok` = postgres + schema + redis ครบ · `degraded` = ขาด redis หรือ schema ยังไม่ migrate
+
+## Auth (Step 13)
+
+```bash
+# Login
+curl -X POST http://localhost:8081/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"your-password"}'
+
+# ใช้ token กับ API อื่น
+curl http://localhost:8081/api/v1/devices \
+  -H "Authorization: Bearer <token>"
+```
+
+| Role | สิทธิ์ |
+|---|---|
+| `VIEWER` | GET เท่านั้น |
+| `OPERATOR` | GET + POST/PUT/PATCH (ไม่มี DELETE) |
+| `ADMIN` | ทุกอย่าง + จัดการ users + audit logs |
+
+ตั้ง `AUTH_ENABLED=false` ใน `.env` เพื่อ bypass auth ใน dev (ได้สิทธิ์ ADMIN อัตโนมัติ)
+
+Admin คนแรกถูกสร้างจาก `ADMIN_USERNAME` / `ADMIN_PASSWORD` เมื่อตาราง `users` ว่าง
+
+## WebSocket Realtime (Step 12)
+
+```text
+ws://localhost:8081/api/v1/ws/weights?token=<jwt>
+ws://localhost:8081/api/v1/ws/weights?token=<jwt>&deviceId=scale-01
+```
+
+Event ที่ push:
+
+```json
+{
+  "type": "weight.update",
+  "deviceId": "scale-01",
+  "data": { "device_id": "scale-01", "weight": 12.5, "unit": "kg", "stable": true, ... }
+}
+```
 
 ## Redis
 

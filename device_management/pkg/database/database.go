@@ -66,6 +66,8 @@ var schemaTables = []string{
 	"data_destinations",
 	"device_destinations",
 	"delivery_logs",
+	"users",
+	"audit_logs",
 }
 
 // SchemaReady reports whether Step 2 MVP tables exist.

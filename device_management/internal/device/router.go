@@ -13,7 +13,7 @@ import (
 func Router(v1 fiber.Router, runtime mqttruntime.ConnectionRuntime, destRouter *destrouter.Router) {
 	repo := NewDeviceRepository(database.DB)
 	service := NewDeviceService(repo, runtime)
-	telemetrySvc := telemetry.NewTelemetryService(database.DB, destRouter)
+	telemetrySvc := telemetry.NewTelemetryService(database.DB, destRouter, nil)
 	handler := NewDeviceHandler(service, telemetrySvc)
 
 	g := v1.Group("/devices")

@@ -2181,6 +2181,6 @@ MQTT → telemetry → destination router
 | `devicedestination/` | §17, §24 | 10 ✅ |
 | `destination/router/` | §19, §31 | 11 ✅ |
 | `retry` | §19 | 11 ✅ |
-| `websocket` | §31 | 12 |
-| `auth` | §29 | 13 |
+| `websocket` | §31 | 12 ✅ |
+| `auth` | §29 | 13 ✅ |
 

@@ -13,9 +13,11 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/recover"
 
 	"github.com/kukiat/atk-store/device_management/external"
+	"github.com/kukiat/atk-store/device_management/internal/auth"
 	destrouter "github.com/kukiat/atk-store/device_management/internal/destination/router"
 	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
 	"github.com/kukiat/atk-store/device_management/internal/retry"
+	"github.com/kukiat/atk-store/device_management/internal/websocket"
 	"github.com/kukiat/atk-store/device_management/pkg/config"
 	"github.com/kukiat/atk-store/device_management/pkg/database"
 	redisclient "github.com/kukiat/atk-store/device_management/pkg/redis"
@@ -27,8 +29,12 @@ func main() {
 	redisclient.Connect()
 
 	destRouter := destrouter.New(database.DB)
+	wsHub := websocket.NewHub()
 
-	mqttManager := mqttruntime.NewManager(database.DB, destRouter)
+	mqttManager := mqttruntime.NewManager(database.DB, destRouter, wsHub)
+	if err := auth.NewServiceFromDB().BootstrapAdmin(); err != nil {
+		log.Printf("[auth] bootstrap admin: %v", err)
+	}
 	go mqttManager.Start(context.Background())
 
 	retryWorker := retry.NewWorker(database.DB)
@@ -60,7 +66,7 @@ func main() {
 		AllowCredentials: true,
 	}))
 
-	external.Register(app, mqttManager, destRouter)
+	external.Register(app, mqttManager, destRouter, wsHub)
 
 	addr := ":" + cfg.AppPort
 	log.Printf("[server] listening on %s", addr)

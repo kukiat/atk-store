@@ -18,22 +18,28 @@ import (
 
 var ErrDeviceNotFound = errors.New("device not found")
 
+type WeightBroadcaster interface {
+	PublishWeight(deviceID string, data dto.LatestWeightResponse)
+}
+
 type TelemetryService interface {
 	ProcessTelemetry(device model.Device, rawPayload []byte) error
 	GetLatestWeight(deviceID string) (*dto.LatestWeightResponse, error)
 }
 
 type telemetryService struct {
-	repo   TelemetryRepository
-	cache  WeightCache
-	router *router.Router
+	repo      TelemetryRepository
+	cache     WeightCache
+	router    *router.Router
+	broadcast WeightBroadcaster
 }
 
-func NewTelemetryService(db *gorm.DB, destRouter *router.Router) TelemetryService {
+func NewTelemetryService(db *gorm.DB, destRouter *router.Router, broadcast WeightBroadcaster) TelemetryService {
 	return telemetryService{
-		repo:   NewTelemetryRepository(db),
-		cache:  NewWeightCache(),
-		router: destRouter,
+		repo:      NewTelemetryRepository(db),
+		cache:     NewWeightCache(),
+		router:    destRouter,
+		broadcast: broadcast,
 	}
 }
 
@@ -76,6 +82,9 @@ func (s telemetryService) ProcessTelemetry(device model.Device, rawPayload []byt
 	latest := toLatestResponse(standard, "mqtt-cache")
 	if err := s.cache.Set(context.Background(), device.DeviceID, latest); err != nil {
 		log.Printf("[telemetry] cache latest weight device=%s: %v", device.DeviceID, err)
+	}
+	if s.broadcast != nil {
+		s.broadcast.PublishWeight(device.DeviceID, latest)
 	}
 	if s.router != nil {
 		s.router.HandleTelemetry(device, standard)

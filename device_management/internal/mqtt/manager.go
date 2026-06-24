@@ -25,12 +25,12 @@ type Manager struct {
 	telemetry telemetry.TelemetryService
 }
 
-func NewManager(db *gorm.DB, destRouter *destrouter.Router) *Manager {
+func NewManager(db *gorm.DB, destRouter *destrouter.Router, broadcast telemetry.WeightBroadcaster) *Manager {
 	m := &Manager{
 		db:        db,
 		sessions:  make(map[uuid.UUID]*managedSession),
 		cmd:       NewCommandManager(),
-		telemetry: telemetry.NewTelemetryService(db, destRouter),
+		telemetry: telemetry.NewTelemetryService(db, destRouter, broadcast),
 	}
 	m.pub = NewPublisherService(m)
 	return m

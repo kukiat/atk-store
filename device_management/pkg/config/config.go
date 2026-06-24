@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -28,6 +29,12 @@ type Config struct {
 	RedisTLS      bool
 
 	EncryptionKey string
+
+	JWTSecret      string
+	JWTExpiryHours int
+	AuthEnabled    bool
+	AdminUsername  string
+	AdminPassword  string
 }
 
 var App *Config
@@ -55,6 +62,12 @@ func Load() *Config {
 		RedisTLS:      getEnv("REDIS_TLS", "false") == "true",
 
 		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
+
+		JWTSecret:      getEnv("JWT_SECRET", ""),
+		JWTExpiryHours: getEnvInt("JWT_EXPIRY_HOURS", 24),
+		AuthEnabled:    getEnv("AUTH_ENABLED", "true") == "true",
+		AdminUsername:  getEnv("ADMIN_USERNAME", "admin"),
+		AdminPassword:  getEnv("ADMIN_PASSWORD", ""),
 	}
 
 	return App
@@ -63,6 +76,16 @@ func Load() *Config {
 func getEnv(key, fallback string) string {
 	if v, ok := os.LookupEnv(key); ok && v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getEnvInt(key string, fallback int) int {
+	if v, ok := os.LookupEnv(key); ok && v != "" {
+		var n int
+		if _, err := fmt.Sscanf(v, "%d", &n); err == nil {
+			return n
+		}
 	}
 	return fallback
 }

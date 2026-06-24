@@ -5,11 +5,17 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/kukiat/atk-store/device_management/internal/telemetry"
 	"github.com/kukiat/atk-store/device_management/pkg/dto"
 )
 
 type deviceHandler struct {
-	service DeviceService
+	service    DeviceService
+	telemetry  TelemetryReader
+}
+
+type TelemetryReader interface {
+	GetLatestWeight(deviceID string) (*dto.LatestWeightResponse, error)
 }
 
 type DeviceHandler interface {
@@ -18,10 +24,11 @@ type DeviceHandler interface {
 	Create(c *fiber.Ctx) error
 	Update(c *fiber.Ctx) error
 	Delete(c *fiber.Ctx) error
+	GetLatestWeight(c *fiber.Ctx) error
 }
 
-func NewDeviceHandler(service DeviceService) DeviceHandler {
-	return deviceHandler{service: service}
+func NewDeviceHandler(service DeviceService, telemetry TelemetryReader) DeviceHandler {
+	return deviceHandler{service: service, telemetry: telemetry}
 }
 
 // GET /api/v1/devices
@@ -79,6 +86,26 @@ func (h deviceHandler) Delete(c *fiber.Ctx) error {
 		return c.Status(mapErr(err)).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(fiber.Map{"message": "device deleted"})
+}
+
+// GET /api/v1/devices/:deviceId/weight/latest
+func (h deviceHandler) GetLatestWeight(c *fiber.Ctx) error {
+	item, err := h.telemetry.GetLatestWeight(c.Params("deviceId"))
+	if err != nil {
+		return c.Status(mapWeightErr(err)).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(item)
+}
+
+func mapWeightErr(err error) int {
+	switch {
+	case errors.Is(err, telemetry.ErrDeviceNotFound):
+		return fiber.StatusNotFound
+	case errors.Is(err, telemetry.ErrWeightNotFound):
+		return fiber.StatusNotFound
+	default:
+		return fiber.StatusInternalServerError
+	}
 }
 
 func mapErr(err error) int {

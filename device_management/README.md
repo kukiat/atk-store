@@ -54,12 +54,12 @@ make health
 curl http://localhost:8081/health
 ```
 
-**Response ตัวอย่าง (Step 6):**
+**Response ตัวอย่าง (Step 7):**
 
 ```json
 {
   "status": "degraded",
-  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 6 },
+  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 7 },
   "dependencies": { "postgres": true, "schema": true, "redis": false },
   "time": "2026-06-24T10:00:00+07:00"
 }

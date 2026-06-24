@@ -1,26 +1,37 @@
 package telemetry
 
 import (
+	"context"
+	"errors"
 	"log"
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	"github.com/kukiat/atk-store/device_management/domain/model"
 	"github.com/kukiat/atk-store/device_management/internal/parser"
+	"github.com/kukiat/atk-store/device_management/pkg/dto"
 )
+
+var ErrDeviceNotFound = errors.New("device not found")
 
 type TelemetryService interface {
 	ProcessTelemetry(device model.Device, rawPayload []byte) error
+	GetLatestWeight(deviceID string) (*dto.LatestWeightResponse, error)
 }
 
 type telemetryService struct {
-	repo TelemetryRepository
+	repo  TelemetryRepository
+	cache WeightCache
 }
 
 func NewTelemetryService(db *gorm.DB) TelemetryService {
-	return telemetryService{repo: NewTelemetryRepository(db)}
+	return telemetryService{
+		repo:  NewTelemetryRepository(db),
+		cache: NewWeightCache(),
+	}
 }
 
 func (s telemetryService) ProcessTelemetry(device model.Device, rawPayload []byte) error {
@@ -55,5 +66,79 @@ func (s telemetryService) ProcessTelemetry(device model.Device, rawPayload []byt
 		SourceTimestamp: &ts,
 		RecordedAt:      time.Now().UTC(),
 	}
-	return s.repo.InsertReading(reading)
+	if err := s.repo.InsertReading(reading); err != nil {
+		return err
+	}
+
+	latest := toLatestResponse(standard, "mqtt-cache")
+	if err := s.cache.Set(context.Background(), device.DeviceID, latest); err != nil {
+		log.Printf("[telemetry] cache latest weight device=%s: %v", device.DeviceID, err)
+	}
+	return nil
+}
+
+func (s telemetryService) GetLatestWeight(deviceID string) (*dto.LatestWeightResponse, error) {
+	code := strings.TrimSpace(deviceID)
+	if code == "" {
+		return nil, ErrDeviceNotFound
+	}
+
+	device, err := s.repo.FindDeviceByDeviceID(code)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrDeviceNotFound
+		}
+		return nil, err
+	}
+
+	if cached, err := s.cache.Get(context.Background(), code); err == nil && cached != nil {
+		return cached, nil
+	} else if err != nil && !errors.Is(err, redis.Nil) {
+		log.Printf("[telemetry] redis get latest device=%s: %v", code, err)
+	}
+
+	reading, err := s.repo.FindLatestReading(device.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrWeightNotFound
+		}
+		return nil, err
+	}
+	return readingToLatestResponse(code, reading), nil
+}
+
+func toLatestResponse(standard *dto.StandardTelemetryPayload, source string) dto.LatestWeightResponse {
+	return dto.LatestWeightResponse{
+		DeviceID:  standard.DeviceID,
+		Weight:    standard.Weight,
+		Unit:      standard.Unit,
+		Stable:    standard.Stable,
+		Overload:  standard.Overload,
+		RawValue:  standard.RawValue,
+		Timestamp: standard.Timestamp,
+		Source:    source,
+	}
+}
+
+func readingToLatestResponse(deviceID string, reading *model.WeightReading) *dto.LatestWeightResponse {
+	unit := "kg"
+	if reading.Unit != nil && strings.TrimSpace(*reading.Unit) != "" {
+		unit = *reading.Unit
+	}
+
+	ts := reading.RecordedAt.UTC().Format(time.RFC3339Nano)
+	if reading.SourceTimestamp != nil {
+		ts = reading.SourceTimestamp.UTC().Format(time.RFC3339Nano)
+	}
+
+	return &dto.LatestWeightResponse{
+		DeviceID:  deviceID,
+		Weight:    reading.Weight,
+		Unit:      unit,
+		Stable:    reading.Stable,
+		Overload:  reading.Overload,
+		RawValue:  reading.RawValue,
+		Timestamp: ts,
+		Source:    "database",
+	}
 }

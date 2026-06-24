@@ -10,3 +10,15 @@ type StandardTelemetryPayload struct {
 	RawValue  *int64  `json:"rawValue,omitempty"`
 	Timestamp string  `json:"timestamp"`
 }
+
+// LatestWeightResponse is returned by GET /devices/:deviceId/weight/latest.
+type LatestWeightResponse struct {
+	DeviceID  string  `json:"deviceId"`
+	Weight    float64 `json:"weight"`
+	Unit      string  `json:"unit"`
+	Stable    bool    `json:"stable"`
+	Overload  bool    `json:"overload,omitempty"`
+	RawValue  *int64  `json:"rawValue,omitempty"`
+	Timestamp string  `json:"timestamp"`
+	Source    string  `json:"source"`
+}

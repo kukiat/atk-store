@@ -1723,11 +1723,14 @@ flowchart LR
     subgraph STEP6["✅ Step 6"]
         S6A["Telemetry Parser<br/>normalize + weight_readings"]
     end
-    subgraph STEP7["Step 7+"]
-        S7["Redis cache · Commands · Calibration"]
+    subgraph STEP7["✅ Step 7"]
+        S7A["Latest Weight API<br/>Redis cache"]
+    end
+    subgraph STEP8["Step 8+"]
+        S8["Commands · Calibration · Destinations"]
     end
 
-    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7
+    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7 --> STEP8
 ```
 
 ## Step 1: Project Scaffold ✅
@@ -1965,7 +1968,7 @@ internal/telemetry/
 
 ---
 
-## Step 7: Latest Weight API (Redis Cache)
+## Step 7: Latest Weight API (Redis Cache) ✅
 
 **Route:**
 
@@ -1973,7 +1976,28 @@ internal/telemetry/
 GET /api/v1/devices/:deviceId/weight/latest
 ```
 
-**Flow:** MQTT → Normalize → Redis `device:{id}:weight:latest` → API response
+**Flow:** MQTT → Normalize → Redis `device:{deviceId}:weight:latest` → API response
+
+**Response:**
+
+```json
+{
+  "deviceId": "SCALE-001",
+  "weight": 12.485,
+  "unit": "kg",
+  "stable": true,
+  "rawValue": 1238420,
+  "timestamp": "2026-06-24T10:20:31.451Z",
+  "source": "mqtt-cache"
+}
+```
+
+**พฤติกรรม:**
+
+- `telemetry.ProcessTelemetry` เขียน cache หลังบันทึก `weight_readings`
+- Redis key: `device:{deviceId}:weight:latest` (TTL 7 วัน)
+- Redis ไม่พร้อม → fallback อ่านจาก `weight_readings` (`source: database`)
+- ไม่มีข้อมูล → `404`
 
 ---
 
@@ -2050,7 +2074,7 @@ POST /api/v1/devices/:deviceId/commands/factory-reset
 | `device` | §4, §21 | 4 ✅ |
 | `mqtt/` | §3, §5, §9 | 5, 8 |
 | `parser` | §7 | 6 ✅ |
-| `telemetry` | §6, §8 | 6 ✅, 7 |
+| `telemetry` | §6, §8 | 6 ✅, 7 ✅ |
 | `calibration` | §11, §12, §22 | 9 |
 | `destination/` | §13–§17, §23–§24 | 10, 11 |
 | `mapping` | §15, §16 | 10 |

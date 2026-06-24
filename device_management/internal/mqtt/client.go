@@ -88,7 +88,7 @@ func (s *managedSession) connect() error {
 	if !token.WaitTimeout(time.Duration(s.conn.ConnectTimeoutSeconds) * time.Second) {
 		msg := "mqtt connect timeout"
 		s.manager.setConnectionStatus(s.conn.ID, "offline", &msg)
-		return fmt.Errorf(msg)
+		return fmt.Errorf("mqtt connect timeout")
 	}
 	if err := token.Error(); err != nil {
 		msg := err.Error()

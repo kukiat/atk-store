@@ -3,15 +3,16 @@ package device
 import (
 	"github.com/gofiber/fiber/v2"
 
+	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
 	"github.com/kukiat/atk-store/device_management/pkg/database"
 )
 
 // Router register device routes
 //
 // Wire dependencies: db -> repository -> service -> handler -> routes
-func Router(v1 fiber.Router) {
+func Router(v1 fiber.Router, runtime mqttruntime.ConnectionRuntime) {
 	repo := NewDeviceRepository(database.DB)
-	service := NewDeviceService(repo)
+	service := NewDeviceService(repo, runtime)
 	handler := NewDeviceHandler(service)
 
 	g := v1.Group("/devices")

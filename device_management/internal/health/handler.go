@@ -37,7 +37,7 @@ func (h healthHandler) Check(c *fiber.Ctx) error {
 		"service": fiber.Map{
 			"name":    "loadcell-gateway",
 			"version": "0.1.0",
-			"step":    4,
+			"step":    5,
 		},
 		"dependencies": fiber.Map{
 			"postgres": postgresOK,

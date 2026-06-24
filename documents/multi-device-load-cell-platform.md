@@ -1708,16 +1708,16 @@ flowchart LR
     subgraph STEP1["✅ Step 1"]
         S1["Scaffold<br/>main / config / DB / Redis / health"]
     end
-    subgraph STEP2["Step 2"]
+    subgraph STEP2["✅ Step 2"]
         S2["Schema MVP<br/>mqtt_connections + devices"]
     end
-    subgraph STEP3["Step 3"]
+    subgraph STEP3["✅ Step 3"]
         S3["MQTT Connection API<br/>CRUD + test"]
     end
-    subgraph STEP4["Step 4"]
+    subgraph STEP4["✅ Step 4"]
         S4["Device API<br/>CRUD + topics"]
     end
-    subgraph STEP5["Step 5"]
+    subgraph STEP5["✅ Step 5"]
         S5["MQTT Manager<br/>multi-broker runtime"]
     end
     subgraph STEP6["Step 6+"]
@@ -1876,7 +1876,7 @@ curl -X POST http://localhost:8081/api/v1/devices \
 
 ---
 
-## Step 5: MQTT Connection Manager
+## Step 5: MQTT Connection Manager ✅
 
 **เป้าหมาย:** เปิด connection หลาย Broker พร้อมกัน runtime
 
@@ -1884,17 +1884,29 @@ curl -X POST http://localhost:8081/api/v1/devices \
 
 ```text
 internal/mqtt/
-├── connection-manager/   # จัดการ connect / disconnect / reconnect
-├── subscriber/           # subscribe telemetry + status topics
-├── publisher/            # publish commands
-└── command-manager/      # requestId + timeout
+├── manager.go          # connect / disconnect / reload / watchdog
+├── client.go           # paho session + TLS + reconnect loop
+├── subscriber.go       # subscribe telemetry + status topics
+├── publisher.go        # publish commands (stub Step 8)
+├── command_manager.go  # requestId + timeout (stub Step 8)
+└── runtime.go          # ConnectionRuntime interface
+```
+
+**Routes เพิ่มเติม:**
+
+```http
+POST /api/v1/mqtt-connections/:id/connect
+POST /api/v1/mqtt-connections/:id/disconnect
 ```
 
 **พฤติกรรม:**
 
-- Connect เฉพาะ broker ที่ `enabled = true`
+- `main.go` สร้าง `mqtt.NewManager` แล้ว `go manager.Start(ctx)` — auto-connect broker ที่ `enabled = true`
+- Connect / Disconnect / Reload ผ่าน API และ hook จาก mqttconnection + device CRUD
 - อัปเดต `connection_status`, `last_connected_at`, `last_error`
-- Reconnect ตาม `reconnect_interval_seconds`
+- Subscribe `telemetry_topic` + `status_topic` ของ device ที่ผูก broker นั้น
+- รับ message แล้วอัปเดต `devices.last_seen_at` (parse payload ใน Step 6)
+- Reconnect ตาม `reconnect_interval_seconds` + watchdog ทุก 30 วินาที
 
 ---
 

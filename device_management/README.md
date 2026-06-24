@@ -12,7 +12,8 @@ device_management/
 ├── internal/                    # feature modules (vertical slices)
 │   ├── health/
 │   ├── mqttconnection/          # Step 3 ✅
-│   └── device/                  # Step 4 ✅
+│   ├── device/                    # Step 4 ✅
+│   └── mqtt/                      # Step 5 ✅
 ├── domain/model/                # GORM entities (Step 2 ✅)
 │   ├── mqtt_connection.go
 │   ├── device.go
@@ -51,12 +52,12 @@ make health
 curl http://localhost:8081/health
 ```
 
-**Response ตัวอย่าง (Step 2 สำเร็จ):**
+**Response ตัวอย่าง (Step 5):**
 
 ```json
 {
   "status": "degraded",
-  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 2 },
+  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 5 },
   "dependencies": { "postgres": true, "schema": true, "redis": false },
   "time": "2026-06-24T10:00:00+07:00"
 }

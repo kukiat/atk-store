@@ -59,6 +59,12 @@ type MqttConnectionResponse struct {
 	UpdatedAt                string  `json:"updated_at"`
 }
 
+type MqttConnectionActionResponse struct {
+	Success          bool   `json:"success"`
+	ConnectionStatus string `json:"connection_status"`
+	Message          string `json:"message"`
+}
+
 type TestMqttConnectionResponse struct {
 	Success   bool   `json:"success"`
 	LatencyMs int64  `json:"latency_ms"`

@@ -5,15 +5,15 @@ import (
 
 	"github.com/kukiat/atk-store/device_management/internal/device"
 	"github.com/kukiat/atk-store/device_management/internal/health"
+	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
 	"github.com/kukiat/atk-store/device_management/internal/mqttconnection"
 )
 
 // Register รวม register routes ของทุก feature
-// เพิ่ม feature ใหม่ -> import + เรียก Router(v1) ที่นี่ที่เดียว
-func Register(app *fiber.App) {
+func Register(app *fiber.App, runtime mqttruntime.ConnectionRuntime) {
 	health.Router(app)
 
 	v1 := app.Group("/api/v1")
-	mqttconnection.Router(v1)
-	device.Router(v1)
+	mqttconnection.Router(v1, runtime)
+	device.Router(v1, runtime)
 }

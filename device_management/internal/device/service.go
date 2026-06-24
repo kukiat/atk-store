@@ -10,6 +10,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/kukiat/atk-store/device_management/domain/model"
+	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
 	"github.com/kukiat/atk-store/device_management/pkg/dto"
 )
 
@@ -27,7 +28,8 @@ var allowedPayloadFormats = map[string]struct{}{
 }
 
 type deviceService struct {
-	repo DeviceRepository
+	repo    DeviceRepository
+	runtime mqttruntime.ConnectionRuntime
 }
 
 type DeviceService interface {
@@ -38,8 +40,8 @@ type DeviceService interface {
 	Delete(deviceID string) error
 }
 
-func NewDeviceService(repo DeviceRepository) DeviceService {
-	return deviceService{repo: repo}
+func NewDeviceService(repo DeviceRepository, runtime mqttruntime.ConnectionRuntime) DeviceService {
+	return deviceService{repo: repo, runtime: runtime}
 }
 
 func (s deviceService) List(f ListFilter) ([]dto.DeviceResponse, error) {
@@ -86,6 +88,9 @@ func (s deviceService) Create(req dto.CreateDeviceRequest) (*dto.DeviceResponse,
 		}
 		return nil, err
 	}
+	if s.runtime != nil && device.MqttConnectionID != nil {
+		_ = s.runtime.Reload(*device.MqttConnectionID)
+	}
 	return s.Get(device.DeviceID)
 }
 
@@ -123,16 +128,36 @@ func (s deviceService) Update(deviceID string, req dto.UpdateDeviceRequest) (*dt
 	if err := s.repo.UpdateFields(device.ID, updates); err != nil {
 		return nil, err
 	}
+	if s.runtime != nil {
+		if device.MqttConnectionID != nil {
+			_ = s.runtime.Reload(*device.MqttConnectionID)
+		}
+		if connRaw, ok := updates["mqtt_connection_id"]; ok {
+			if connID, ok := connRaw.(uuid.UUID); ok && (device.MqttConnectionID == nil || connID != *device.MqttConnectionID) {
+				_ = s.runtime.Reload(connID)
+			}
+		}
+	}
 	return s.Get(device.DeviceID)
 }
 
 func (s deviceService) Delete(deviceID string) error {
+	device, err := s.repo.FindByDeviceID(strings.TrimSpace(deviceID))
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrNotFound
+		}
+		return err
+	}
 	affected, err := s.repo.DeleteByDeviceID(strings.TrimSpace(deviceID))
 	if err != nil {
 		return err
 	}
 	if affected == 0 {
 		return ErrNotFound
+	}
+	if s.runtime != nil && device.MqttConnectionID != nil {
+		_ = s.runtime.Reload(*device.MqttConnectionID)
 	}
 	return nil
 }

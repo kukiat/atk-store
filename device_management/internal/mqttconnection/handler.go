@@ -20,6 +20,8 @@ type MqttConnectionHandler interface {
 	Update(c *fiber.Ctx) error
 	Delete(c *fiber.Ctx) error
 	Test(c *fiber.Ctx) error
+	Connect(c *fiber.Ctx) error
+	Disconnect(c *fiber.Ctx) error
 }
 
 func NewMqttConnectionHandler(service MqttConnectionService) MqttConnectionHandler {
@@ -100,6 +102,32 @@ func (h mqttConnectionHandler) Test(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
 	}
 	result, err := h.service.Test(id)
+	if err != nil {
+		return c.Status(mapErr(err)).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(result)
+}
+
+// POST /api/v1/mqtt-connections/:id/connect
+func (h mqttConnectionHandler) Connect(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
+	}
+	result, err := h.service.Connect(id)
+	if err != nil {
+		return c.Status(mapErr(err)).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(result)
+}
+
+// POST /api/v1/mqtt-connections/:id/disconnect
+func (h mqttConnectionHandler) Disconnect(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid id"})
+	}
+	result, err := h.service.Disconnect(id)
 	if err != nil {
 		return c.Status(mapErr(err)).JSON(fiber.Map{"error": err.Error()})
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/kukiat/atk-store/device_management/domain/model"
 	appcrypto "github.com/kukiat/atk-store/device_management/pkg/crypto"
 	"github.com/kukiat/atk-store/device_management/pkg/dto"
+	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
 )
 
 var (
@@ -31,7 +32,8 @@ var allowedProtocols = map[string]struct{}{
 }
 
 type mqttConnectionService struct {
-	repo MqttConnectionRepository
+	repo    MqttConnectionRepository
+	runtime mqttruntime.ConnectionRuntime
 }
 
 type MqttConnectionService interface {
@@ -42,10 +44,12 @@ type MqttConnectionService interface {
 	Delete(id uuid.UUID) error
 	Test(id uuid.UUID) (*dto.TestMqttConnectionResponse, error)
 	TestConfig(req dto.CreateMqttConnectionRequest) (*dto.TestMqttConnectionResponse, error)
+	Connect(id uuid.UUID) (*dto.MqttConnectionActionResponse, error)
+	Disconnect(id uuid.UUID) (*dto.MqttConnectionActionResponse, error)
 }
 
-func NewMqttConnectionService(repo MqttConnectionRepository) MqttConnectionService {
-	return mqttConnectionService{repo: repo}
+func NewMqttConnectionService(repo MqttConnectionRepository, runtime mqttruntime.ConnectionRuntime) MqttConnectionService {
+	return mqttConnectionService{repo: repo, runtime: runtime}
 }
 
 func (s mqttConnectionService) List(f ListFilter) ([]dto.MqttConnectionResponse, error) {
@@ -83,6 +87,9 @@ func (s mqttConnectionService) Create(req dto.CreateMqttConnectionRequest) (*dto
 		}
 		return nil, err
 	}
+	if conn.Enabled && s.runtime != nil {
+		_ = s.runtime.Connect(conn.ID)
+	}
 	return s.Get(conn.ID)
 }
 
@@ -108,10 +115,25 @@ func (s mqttConnectionService) Update(id uuid.UUID, req dto.UpdateMqttConnection
 		}
 		return nil, err
 	}
-	return s.Get(id)
+	resp, err := s.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	if s.runtime != nil {
+		if !resp.Enabled {
+			_ = s.runtime.Disconnect(id)
+		} else {
+			_ = s.runtime.Reload(id)
+		}
+		return s.Get(id)
+	}
+	return resp, nil
 }
 
 func (s mqttConnectionService) Delete(id uuid.UUID) error {
+	if s.runtime != nil {
+		_ = s.runtime.Disconnect(id)
+	}
 	count, err := s.repo.CountDevices(id)
 	if err != nil {
 		return err
@@ -147,6 +169,64 @@ func (s mqttConnectionService) TestConfig(req dto.CreateMqttConnectionRequest) (
 		return nil, err
 	}
 	return runBrokerTest(*conn)
+}
+
+func (s mqttConnectionService) Connect(id uuid.UUID) (*dto.MqttConnectionActionResponse, error) {
+	if _, err := s.repo.FindByID(id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if s.runtime == nil {
+		return &dto.MqttConnectionActionResponse{
+			Success:          false,
+			ConnectionStatus: "offline",
+			Message:          "mqtt runtime is not available",
+		}, nil
+	}
+	if err := s.runtime.Connect(id); err != nil {
+		resp, _ := s.Get(id)
+		status := "offline"
+		if resp != nil {
+			status = resp.ConnectionStatus
+		}
+		return &dto.MqttConnectionActionResponse{
+			Success:          false,
+			ConnectionStatus: status,
+			Message:          err.Error(),
+		}, nil
+	}
+	resp, err := s.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.MqttConnectionActionResponse{
+		Success:          true,
+		ConnectionStatus: resp.ConnectionStatus,
+		Message:          "connected",
+	}, nil
+}
+
+func (s mqttConnectionService) Disconnect(id uuid.UUID) (*dto.MqttConnectionActionResponse, error) {
+	if _, err := s.repo.FindByID(id); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	if s.runtime != nil {
+		_ = s.runtime.Disconnect(id)
+	}
+	resp, err := s.Get(id)
+	if err != nil {
+		return nil, err
+	}
+	return &dto.MqttConnectionActionResponse{
+		Success:          true,
+		ConnectionStatus: resp.ConnectionStatus,
+		Message:          "disconnected",
+	}, nil
 }
 
 func runBrokerTest(conn model.MqttConnection) (*dto.TestMqttConnectionResponse, error) {

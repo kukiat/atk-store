@@ -1,0 +1,89 @@
+# 01 — Overview
+
+## Project
+
+**ATK Store** is a mobile-first "smart shelf scan-to-shop" starter web app. A customer
+scans a QR code on a physical shelf, lands on that shelf's product page, adds items to a
+client-side cart, and reviews the cart. Payment, orders, and auth are intentionally left
+as `TODO` markers for extension.
+
+- **Name / version:** `atk-store` 0.1.0 (private)
+- **Primary language:** TypeScript
+- **UI language / locale:** Thai (`th`), currency THB (satang minor units)
+
+## Tech stack
+
+| Area | Choice | Notes |
+| --- | --- | --- |
+| Framework | Next.js 16 (App Router) | Server Components by default |
+| UI runtime | React 19 | |
+| Styling | Tailwind CSS v4 + `tw-animate-css` | via `@tailwindcss/postcss` |
+| Components | shadcn/ui (`components.json`) + `@base-ui/react` | New York / base style |
+| Icons | `lucide-react` | |
+| State | Zustand 5 (+ `persist`) | client cart → `localStorage` (`atk-cart`) |
+| ORM | Drizzle ORM 0.45 + `drizzle-kit` | dialect `postgresql` |
+| Driver | `postgres` (postgres-js) | |
+| Database | PostgreSQL 16 (Docker, local) | `docker-compose.yml` |
+| Utilities | `clsx`, `tailwind-merge`, `class-variance-authority` | `cn()` helper |
+
+## Architecture
+
+Both Server Components and API routes call the **same service singletons** so business
+logic and data access live in exactly one place (`src/services/`). Services and the
+Drizzle client are marked `"server-only"` to prevent leaking into client bundles.
+
+```
+app/shelf/[id]/page.tsx (Server Component) ─┐
+app/api/shelf/[id]/route.ts (Route Handler) ─┴─► shelfService ─► db (Drizzle) ─► Postgres
+```
+
+The cart is purely client-side state (Zustand + `persist`); it never touches the server
+yet (that's the `TODO(order)` extension point).
+
+## Conventions
+
+- **Path alias:** `@/*` → `src/*` (see `tsconfig.json`).
+- **Money:** stored & passed as integer satang (`priceCents`); formatted with `formatPrice`.
+- **Server-only modules:** `src/db/index.ts`, `src/services/*` import `"server-only"`.
+- **Client modules:** start with `"use client"` (components, cart store, hooks that read DOM).
+- **Hydration safety:** `useHydrated()` gates rendering of persisted cart state to avoid
+  SSR/client mismatch.
+- **Singletons:** `db`, `productService`, `shelfService`, `useCartStore`.
+
+## Tooling / scripts
+
+| Script | Command | Purpose |
+| --- | --- | --- |
+| `dev` | `next dev` | Dev server |
+| `build` / `start` | `next build` / `next start` | Production build & serve |
+| `lint` | `eslint` | Lint |
+| `format` | `prettier --write .` | Format |
+| `db:generate` | `drizzle-kit generate` | SQL migration from schema |
+| `db:migrate` | `drizzle-kit migrate` | Apply migrations |
+| `db:push` | `drizzle-kit push` | Push schema directly (dev) |
+| `db:seed` | `tsx src/db/seed.ts` | Seed sample shelves & products |
+| `db:studio` | `drizzle-kit studio` | Drizzle Studio |
+
+## Environment
+
+- `DATABASE_URL` — Postgres connection string (`.env`, copied from `.env.example`).
+  Local default targets the Docker Compose Postgres (`atk_store`, user/pass `postgres`).
+
+## Authentication
+
+- **Provider:** Google OAuth 2.0 (manual flow, no auth library).
+- **Flow:** `/signin` → `/api/auth/signin/google` → Google consent → `/api/auth/callback/google`
+  (exchanges code, fetches userinfo, upserts `users` row, opens a `sessions` row,
+  sets the `atk_session` httpOnly cookie) → `/`. Sign out via `/api/auth/signout`.
+- **Guarding:** `src/proxy.ts` does an optimistic cookie-presence redirect (unauthenticated
+  → `/signin`; authenticated away from `/signin`). The secure, DB-backed check is
+  `getCurrentUser()` in `src/lib/auth.ts` (used by Server Components).
+- **Multi-channel ready:** `users.auth_method` (`auth_method` enum) tracks the channel;
+  `google` is live, with `facebook`/`line`/`apple`/`credentials` pre-declared.
+- **Env keys:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_URL`, `AUTH_SECRET`.
+
+## Extension points (`TODO`)
+
+- `TODO(payment)` — real checkout / payment (PromptPay, card) — `src/app/cart/page.tsx`
+- `TODO(order)` — persist client cart → order table — `src/app/cart/page.tsx`
+- Also unimplemented: per-shelf QR generation, admin panel, deploy/CI.

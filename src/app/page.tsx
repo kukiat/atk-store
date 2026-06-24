@@ -1,11 +1,31 @@
-import { QrCode, ScanLine } from "lucide-react";
+import { LogOut, QrCode, ScanLine } from "lucide-react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/auth";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const user = await getCurrentUser();
+
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-8 px-6 py-16 text-center">
+      {user && (
+        <div className="absolute inset-x-0 top-0 mx-auto flex w-full max-w-md items-center justify-between gap-2 px-4 py-3">
+          <span className="text-muted-foreground truncate text-sm">
+            สวัสดี, <span className="text-foreground font-medium">{user.name ?? user.email}</span>
+          </span>
+          <Button
+            render={<Link href="/api/auth/signout" />}
+            variant="ghost"
+            size="sm"
+            className="shrink-0"
+          >
+            <LogOut className="size-4" />
+            ออกจากระบบ
+          </Button>
+        </div>
+      )}
+
       <div className="bg-primary text-primary-foreground flex size-20 items-center justify-center rounded-2xl">
         <ScanLine className="size-10" />
       </div>

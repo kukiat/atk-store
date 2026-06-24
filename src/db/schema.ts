@@ -1,12 +1,72 @@
 import { relations } from "drizzle-orm";
 import {
   integer,
+  pgEnum,
   pgTable,
   primaryKey,
   serial,
   text,
   timestamp,
 } from "drizzle-orm/pg-core";
+
+/**
+ * How a user authenticated. `google` is live today; the other values are
+ * pre-declared so new sign-in channels can be added without a schema change.
+ */
+export const authMethodEnum = pgEnum("auth_method", [
+  "google",
+  "facebook",
+  "line",
+  "apple",
+  "credentials",
+]);
+
+/**
+ * An enrolled user. One row per person, keyed by email. `authMethod` records
+ * which channel they last signed in with so we can support multiple providers.
+ */
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  avatarUrl: text("avatar_url"),
+  authMethod: authMethodEnum("auth_method").notNull().default("google"),
+  // Provider-specific account id (e.g. the Google `sub`/`id`).
+  providerAccountId: text("provider_account_id"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  lastLoginAt: timestamp("last_login_at", { withTimezone: true }),
+});
+
+/**
+ * A server-side login session. The opaque `id` is the random token stored in
+ * the user's httpOnly cookie; rows are removed on logout or expiry.
+ */
+export const sessions = pgTable("sessions", {
+  id: text("id").primaryKey(),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const usersRelations = relations(users, ({ many }) => ({
+  sessions: many(sessions),
+}));
+
+export const sessionsRelations = relations(sessions, ({ one }) => ({
+  user: one(users, {
+    fields: [sessions.userId],
+    references: [users.id],
+  }),
+}));
 
 /**
  * A physical smart shelf in the store.
@@ -78,3 +138,9 @@ export const shelfProductsRelations = relations(shelfProducts, ({ one }) => ({
 export type Shelf = typeof shelves.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type ShelfProduct = typeof shelfProducts.$inferSelect;
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type Session = typeof sessions.$inferSelect;
+
+/** Union of supported sign-in channels, e.g. "google" | "line" | … */
+export type AuthMethod = (typeof authMethodEnum.enumValues)[number];

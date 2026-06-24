@@ -23,9 +23,12 @@ func NewHealthHandler() HealthHandler {
 func (h healthHandler) Check(c *fiber.Ctx) error {
 	postgresOK := database.Ping() == nil
 	redisOK := redis.Client() != nil
+	schemaOK := postgresOK && database.SchemaReady()
 
 	status := "ok"
-	if !postgresOK || !redisOK {
+	if !postgresOK || !schemaOK {
+		status = "degraded"
+	} else if !redisOK {
 		status = "degraded"
 	}
 
@@ -34,11 +37,12 @@ func (h healthHandler) Check(c *fiber.Ctx) error {
 		"service": fiber.Map{
 			"name":    "loadcell-gateway",
 			"version": "0.1.0",
-			"step":    1,
+			"step":    2,
 		},
 		"dependencies": fiber.Map{
 			"postgres": postgresOK,
 			"redis":    redisOK,
+			"schema":   schemaOK,
 		},
 		"time": time.Now().Format(time.RFC3339),
 	})

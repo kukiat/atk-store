@@ -1781,22 +1781,30 @@ make health
 
 ---
 
-## Step 2: Database Schema MVP
+## Step 2: Database Schema MVP ✅
 
-**เป้าหมาย:** สร้างตารางหลัก Phase 1
+**เป้าหมาย:** สร้างตารางหลัก Phase 1 + GORM models
 
-| Migration | ตาราง | อ้างอิงเอกสาร |
-|---|---|---|
-| `002_mqtt_connections.sql` | `mqtt_connections` | §3 |
-| `003_devices.sql` | `devices` | §4 |
-| `004_device_calibrations.sql` | `device_calibrations` | §12 |
-| `005_weight_readings.sql` | `weight_readings`, `weight_events` | §18 |
+| Migration | ตาราง |
+|---|---|
+| `002_mqtt_connections.sql` | `mqtt_connections` |
+| `003_devices.sql` | `devices` |
+| `004_device_calibrations.sql` | `device_calibrations` |
+| `005_weight_readings.sql` | `weight_readings`, `weight_events` |
 
-**ไฟล์ที่จะเพิ่ม:**
+**Models:** `domain/model/mqtt_connection.go`, `device.go`, `device_calibration.go`, `weight_reading.go`, `weight_event.go`
 
-- `domain/model/mqtt_connection.go`
-- `domain/model/device.go`
-- `migrations/002_*.sql` … `005_*.sql`
+**รัน migration:**
+
+```bash
+cd device_management && make migrate
+```
+
+**ตรวจ schema ผ่าน health:**
+
+```json
+"dependencies": { "postgres": true, "schema": true, "redis": false }
+```
 
 ---
 
@@ -1962,6 +1970,7 @@ POST /api/v1/devices/:deviceId/commands/factory-reset
 | Module (`internal/`) | เอกสาร | Step |
 |---|---|---|
 | `health` | — | 1 ✅ |
+| `domain/model` | §3, §4, §12, §18 | 2 ✅ |
 | `mqttconnection` | §3, §20 | 3 |
 | `device` | §4, §21 | 4 |
 | `mqtt/` | §3, §5, §9 | 5, 8 |

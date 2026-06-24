@@ -10,8 +10,7 @@ health:
 	@curl -sf http://localhost:8081/health | python3 -m json.tool
 
 migrate:
-	@set -a && [ -f .env ] && . ./.env && set +a; \
-	./scripts/init-db.sh
+	@go run ./cmd/migrate
 
 tidy:
 	go mod tidy

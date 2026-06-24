@@ -11,12 +11,14 @@ device_management/
 ├── external/routers.go          # รวม register routes
 ├── internal/                    # feature modules (vertical slices)
 │   ├── health/
-│   ├── mqttconnection/          # Step 2
-│   ├── device/                  # Step 3
-│   ├── telemetry/               # Step 6
-│   ├── calibration/             # Step 10
-│   └── destination/             # Step 12
-├── domain/model/                # GORM entities
+│   ├── mqttconnection/          # Step 3
+│   └── device/                  # Step 4
+├── domain/model/                # GORM entities (Step 2 ✅)
+│   ├── mqtt_connection.go
+│   ├── device.go
+│   ├── device_calibration.go
+│   ├── weight_reading.go
+│   └── weight_event.go
 ├── pkg/
 │   ├── config/
 │   ├── database/
@@ -49,18 +51,18 @@ make health
 curl http://localhost:8081/health
 ```
 
-**Response ตัวอย่าง (Step 1 สำเร็จ):**
+**Response ตัวอย่าง (Step 2 สำเร็จ):**
 
 ```json
 {
-  "status": "ok",
-  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 1 },
-  "dependencies": { "postgres": true, "redis": true },
+  "status": "degraded",
+  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 2 },
+  "dependencies": { "postgres": true, "schema": true, "redis": false },
   "time": "2026-06-24T10:00:00+07:00"
 }
 ```
 
-`status: degraded` = PostgreSQL หรือ Redis ยังเชื่อมไม่ได้
+`status: ok` = postgres + schema + redis ครบ · `degraded` = ขาด redis หรือ schema ยังไม่ migrate
 
 ## Redis
 

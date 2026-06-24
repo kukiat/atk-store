@@ -56,3 +56,30 @@ func Ping() error {
 	}
 	return sqlDB.Ping()
 }
+
+var schemaTables = []string{
+	"mqtt_connections",
+	"devices",
+	"device_calibrations",
+	"weight_readings",
+	"weight_events",
+}
+
+// SchemaReady reports whether Step 2 MVP tables exist.
+func SchemaReady() bool {
+	if DB == nil {
+		return false
+	}
+	for _, table := range schemaTables {
+		var count int64
+		err := DB.Raw(
+			`SELECT COUNT(*) FROM information_schema.tables
+			 WHERE table_schema = 'public' AND table_name = ?`,
+			table,
+		).Scan(&count).Error
+		if err != nil || count == 0 {
+			return false
+		}
+	}
+	return true
+}

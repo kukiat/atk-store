@@ -4,6 +4,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 
 	"github.com/kukiat/atk-store/device_management/internal/health"
+	"github.com/kukiat/atk-store/device_management/internal/mqttconnection"
 )
 
 // Register รวม register routes ของทุก feature
@@ -12,5 +13,5 @@ func Register(app *fiber.App) {
 	health.Router(app)
 
 	v1 := app.Group("/api/v1")
-	_ = v1 // Step 2+: mqttconnection.Router(v1), device.Router(v1), ...
+	mqttconnection.Router(v1)
 }

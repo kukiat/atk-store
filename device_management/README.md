@@ -11,8 +11,8 @@ device_management/
 ├── external/routers.go          # รวม register routes
 ├── internal/                    # feature modules (vertical slices)
 │   ├── health/
-│   ├── mqttconnection/          # Step 3
-│   └── device/                  # Step 4
+│   ├── mqttconnection/          # Step 3 ✅
+│   └── device/                  # Step 4 (ถัดไป)
 ├── domain/model/                # GORM entities (Step 2 ✅)
 │   ├── mqtt_connection.go
 │   ├── device.go

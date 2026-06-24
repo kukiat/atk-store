@@ -1808,24 +1808,36 @@ cd device_management && make migrate
 
 ---
 
-## Step 3: MQTT Connection API
-
-**เป้าหมาย:** CRUD MQTT Broker configuration
+## Step 3: MQTT Connection API ✅
 
 **Route:** `/api/v1/mqtt-connections`
 
 ```http
-POST   /api/v1/mqtt-connections
 GET    /api/v1/mqtt-connections
 GET    /api/v1/mqtt-connections/:id
+POST   /api/v1/mqtt-connections
 PUT    /api/v1/mqtt-connections/:id
 DELETE /api/v1/mqtt-connections/:id
 POST   /api/v1/mqtt-connections/:id/test
 ```
 
-**Module:** `internal/mqttconnection/` (handler, service, repository, router)
+**Module:** `internal/mqttconnection/`  
+**DTO:** `pkg/dto/mqtt_connection.go`  
+**Crypto:** `pkg/crypto/secret.go` — password เข้ารหัสด้วย `ENCRYPTION_KEY`
 
-**หมายเหตุ:** password ต้อง encrypt ก่อนเก็บ (§29)
+**ตัวอย่างสร้าง broker:**
+
+```bash
+curl -X POST http://localhost:8081/api/v1/mqtt-connections \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "connection_name": "Warehouse A Broker",
+    "protocol": "mqtt",
+    "host": "test.mosquitto.org",
+    "port": 1883,
+    "enabled": true
+  }'
+```
 
 ---
 
@@ -1971,7 +1983,7 @@ POST /api/v1/devices/:deviceId/commands/factory-reset
 |---|---|---|
 | `health` | — | 1 ✅ |
 | `domain/model` | §3, §4, §12, §18 | 2 ✅ |
-| `mqttconnection` | §3, §20 | 3 |
+| `mqttconnection` | §3, §20 | 3 ✅ |
 | `device` | §4, §21 | 4 |
 | `mqtt/` | §3, §5, §9 | 5, 8 |
 | `parser` | §7 | 6 |

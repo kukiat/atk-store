@@ -26,6 +26,8 @@ type Config struct {
 	RedisAddr     string
 	RedisPassword string
 	RedisTLS      bool
+
+	EncryptionKey string
 }
 
 var App *Config
@@ -51,6 +53,8 @@ func Load() *Config {
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
 		RedisPassword: getEnv("REDIS_PASSWORD", ""),
 		RedisTLS:      getEnv("REDIS_TLS", "false") == "true",
+
+		EncryptionKey: getEnv("ENCRYPTION_KEY", ""),
 	}
 
 	return App

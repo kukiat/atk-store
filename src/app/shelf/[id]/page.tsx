@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 
 import { CartBar } from "@/components/cart-bar";
 import { ProductCard } from "@/components/product-card";
-import { getShelfWithProducts } from "@/services/shelf.service";
+import { shelfService } from "@/services/shelf.service";
 
 export default async function ShelfPage({
   params,
@@ -10,7 +10,7 @@ export default async function ShelfPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const shelf = await getShelfWithProducts(id);
+  const shelf = await shelfService.getShelfWithProducts(id);
 
   if (!shelf) notFound();
 

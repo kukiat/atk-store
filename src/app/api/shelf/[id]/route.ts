@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getShelfWithProducts } from "@/services/shelf.service";
+import { shelfService } from "@/services/shelf.service";
 
 // GET /api/shelf/:id -> shelf with its products (same service the page uses).
 export async function GET(
@@ -8,7 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const shelf = await getShelfWithProducts(id);
+  const shelf = await shelfService.getShelfWithProducts(id);
 
   if (!shelf) {
     return NextResponse.json({ error: "Shelf not found" }, { status: 404 });

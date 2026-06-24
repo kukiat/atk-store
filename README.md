@@ -1,36 +1,94 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ATK Store — Smart Shelf Scan-to-Shop (Starter)
 
-## Getting Started
+เว็บร้านค้าแบบ **mobile-first** ที่ลูกค้าใช้มือถือ **สแกน QR ที่ชั้นวาง (smart shelf)** เพื่อดูสินค้าบนชั้นนั้น แล้วใส่ตะกร้า โปรเจกต์นี้เป็น **starter** ที่วางโครง + flow หลักไว้ให้ต่อยอด (payment / auth / order ยังไม่ทำ — มี `TODO` ฝังไว้ในโค้ด)
 
-First, run the development server:
+Flow: `สแกน QR ชั้นวาง → /shelf/[id] → เลือกสินค้า → /cart`
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+## Tech Stack
+
+- **Next.js 16** (App Router) + **React 19** + **TypeScript**
+- **Tailwind CSS v4** + **shadcn/ui**
+- **Drizzle ORM** + **PostgreSQL** (`postgres-js` driver)
+- **Zustand** (+ `persist`) — ตะกร้าฝั่ง client (localStorage)
+
+## โครงสร้างชั้น (architecture)
+
+```
+app/page.tsx (Server Component) ─┐
+app/api/shelf/[id]/route.ts      ─┴─► services/*  ─► Drizzle ─► Postgres
+                                     (business logic + data access, server-only)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ทั้ง Server Component และ API route เรียกผ่าน **service เดียวกัน** (`src/services/`) — logic ไม่ซ้ำ
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## เริ่มใช้งาน (Getting Started)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+ต้องมี **Node 20.12+** และ **Docker** (สำหรับ Postgres local)
 
-## Learn More
+```bash
+# 1) ติดตั้ง dependencies
+npm install
 
-To learn more about Next.js, take a look at the following resources:
+# 2) เตรียม env
+cp .env.example .env
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+# 3) รัน Postgres (Docker)
+docker compose up -d
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+# 4) สร้างตารางในฐานข้อมูล
+npm run db:push
 
-## Deploy on Vercel
+# 5) ใส่ข้อมูลตัวอย่าง (ชั้น A12, B03 + สินค้า)
+npm run db:seed
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# 6) รัน dev server
+npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+เปิด http://localhost:3000 — แนะนำให้ทดสอบใน **mobile viewport** (DevTools)
+ลองเปิดหน้าชั้นวางได้เลย: `/shelf/A12` หรือ `/shelf/B03`
+
+## NPM Scripts
+
+| คำสั่ง                        | ทำอะไร                                   |
+| ----------------------------- | ---------------------------------------- |
+| `npm run dev`                 | รัน dev server                           |
+| `npm run build` / `npm start` | build / รัน production                   |
+| `npm run lint`                | ESLint                                   |
+| `npm run format`              | จัดรูปแบบโค้ดด้วย Prettier               |
+| `npm run db:generate`         | สร้าง SQL migration จาก schema           |
+| `npm run db:migrate`          | รัน migration                            |
+| `npm run db:push`             | push schema เข้า DB ตรง ๆ (เหมาะกับ dev) |
+| `npm run db:seed`             | ใส่ข้อมูลตัวอย่าง                        |
+| `npm run db:studio`           | เปิด Drizzle Studio ดูข้อมูลใน DB        |
+
+## โครงไฟล์หลัก
+
+```
+src/
+├── app/
+│   ├── page.tsx              # landing — ปุ่มทดลองไปหน้าชั้นวาง
+│   ├── shelf/[id]/page.tsx   # สินค้าบนชั้น (Server Component → service)
+│   ├── cart/page.tsx         # ตะกร้า (client, Zustand)
+│   └── api/shelf/[id]/route.ts
+├── components/               # product-card, cart-bar, quantity-stepper, ui/ (shadcn)
+├── db/                       # schema.ts, index.ts (drizzle client), seed.ts
+├── services/                 # business logic + data access (server-only)
+├── store/cart.ts             # Zustand cart store (persist → localStorage)
+├── lib/                      # format.ts, use-hydrated.ts, utils.ts
+└── types/index.ts
+```
+
+## ยังไม่ได้ทำ (ตั้งใจเว้นไว้ให้ต่อยอด)
+
+ค้นหา `TODO(...)` ในโค้ดได้:
+
+- `TODO(payment)` — checkout / payment จริง (PromptPay, บัตร)
+- `TODO(order)` — แปลงตะกร้า client → order table ใน Postgres
+- `TODO(auth)` — ระบบ login / ผูก user-session
+
+นอกจากนี้: การ generate QR ของแต่ละชั้น, admin panel, deploy/CI
+
+## ต่อ Postgres แบบ hosted
+
+แค่เปลี่ยน `DATABASE_URL` ใน `.env` ไปชี้ Neon / Supabase / ฯลฯ — โค้ดส่วนอื่นไม่ต้องแก้

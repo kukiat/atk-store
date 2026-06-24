@@ -1726,11 +1726,14 @@ flowchart LR
     subgraph STEP7["✅ Step 7"]
         S7A["Latest Weight API<br/>Redis cache"]
     end
-    subgraph STEP8["Step 8+"]
-        S8["Commands · Calibration · Destinations"]
+    subgraph STEP8["✅ Step 8"]
+        S8A["Device Commands<br/>MQTT publish + response"]
+    end
+    subgraph STEP9["Step 9+"]
+        S9["Calibration · Destinations · WebSocket"]
     end
 
-    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7 --> STEP8
+    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6 --> STEP7 --> STEP8 --> STEP9
 ```
 
 ## Step 1: Project Scaffold ✅
@@ -1893,8 +1896,8 @@ internal/mqtt/
 ├── manager.go          # connect / disconnect / reload / watchdog
 ├── client.go           # paho session + TLS + reconnect loop
 ├── subscriber.go       # subscribe telemetry + status topics
-├── publisher.go        # publish commands (stub Step 8)
-├── command_manager.go  # requestId + timeout (stub Step 8)
+├── publisher.go        # publish commands
+├── command_manager.go  # requestId + timeout matching
 └── runtime.go          # ConnectionRuntime interface
 ```
 
@@ -2001,7 +2004,7 @@ GET /api/v1/devices/:deviceId/weight/latest
 
 ---
 
-## Step 8: Device Commands
+## Step 8: Device Commands ✅
 
 **Route:**
 
@@ -2013,7 +2016,25 @@ POST /api/v1/devices/:deviceId/commands/restart
 POST /api/v1/devices/:deviceId/commands/factory-reset
 ```
 
-**Module:** `internal/mqtt/command-manager/`
+**Module:** `internal/command/`, `internal/mqtt/command_manager.go`
+
+**MQTT Command Payload:**
+
+```json
+{
+  "requestId": "req-<uuid>",
+  "command": "read_weight",
+  "timestamp": "2026-06-24T10:20:30.000Z"
+}
+```
+
+**พฤติกรรม:**
+
+- Publish ไป `command_topic` ของ device ผ่าน broker ที่เชื่อมอยู่
+- Subscribe `response_topic` แล้วจับคู่ด้วย `requestId` (timeout 5 วินาที)
+- `read-weight` คืน weight/unit/stable/rawValue + `responseTimeMs`
+- timeout → `{ "success": false, "error": "DEVICE_RESPONSE_TIMEOUT" }`
+- broker offline → `503`, ไม่มี command/response topic → `400`
 
 ---
 
@@ -2072,7 +2093,7 @@ POST /api/v1/devices/:deviceId/commands/factory-reset
 | `domain/model` | §3, §4, §12, §18 | 2 ✅ |
 | `mqttconnection` | §3, §20 | 3 ✅ |
 | `device` | §4, §21 | 4 ✅ |
-| `mqtt/` | §3, §5, §9 | 5, 8 |
+| `mqtt/` | §3, §5, §9 | 5 ✅, 8 ✅ |
 | `parser` | §7 | 6 ✅ |
 | `telemetry` | §6, §8 | 6 ✅, 7 ✅ |
 | `calibration` | §11, §12, §22 | 9 |

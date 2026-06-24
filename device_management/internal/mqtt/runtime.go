@@ -19,3 +19,10 @@ type ConnectionRuntime interface {
 type Publisher interface {
 	Publish(connectionID uuid.UUID, topic string, payload []byte, qos byte) error
 }
+
+// CommandRuntime publishes commands and waits for device responses.
+type CommandRuntime interface {
+	PublishCommand(connectionID uuid.UUID, topic string, payload []byte) error
+	RegisterCommandResponse(requestID string) <-chan []byte
+	CancelCommandResponse(requestID string)
+}

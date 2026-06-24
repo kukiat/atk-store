@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-// CommandManager tracks MQTT command/response pairs (Step 8).
+// CommandManager tracks MQTT command/response pairs.
 type CommandManager struct {
 	mu      sync.Mutex
 	pending map[string]chan []byte
@@ -40,15 +40,19 @@ func (c *CommandManager) Complete(requestID string, payload []byte) bool {
 	return true
 }
 
+func (c *CommandManager) Cancel(requestID string) {
+	c.mu.Lock()
+	delete(c.pending, requestID)
+	c.mu.Unlock()
+}
+
 func (c *CommandManager) Wait(requestID string, timeout time.Duration) ([]byte, bool) {
 	ch := c.Register(requestID)
 	select {
 	case payload := <-ch:
 		return payload, true
 	case <-time.After(timeout):
-		c.mu.Lock()
-		delete(c.pending, requestID)
-		c.mu.Unlock()
+		c.Cancel(requestID)
 		return nil, false
 	}
 }

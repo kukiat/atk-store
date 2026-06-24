@@ -15,7 +15,8 @@ device_management/
 │   ├── device/                    # Step 4 ✅
 │   ├── mqtt/                      # Step 5 ✅
 │   ├── parser/                    # Step 6 ✅
-│   └── telemetry/                 # Step 6 ✅
+│   ├── telemetry/                 # Step 6–7 ✅
+│   └── command/                   # Step 8 ✅
 ├── domain/model/                # GORM entities (Step 2 ✅)
 │   ├── mqtt_connection.go
 │   ├── device.go
@@ -54,12 +55,12 @@ make health
 curl http://localhost:8081/health
 ```
 
-**Response ตัวอย่าง (Step 7):**
+**Response ตัวอย่าง (Step 8):**
 
 ```json
 {
   "status": "degraded",
-  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 7 },
+  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 8 },
   "dependencies": { "postgres": true, "schema": true, "redis": false },
   "time": "2026-06-24T10:00:00+07:00"
 }
@@ -73,6 +74,41 @@ curl http://localhost:8081/health
 |---|---|---|
 | ภายใน Docker | `redis://:P%40ssr3d%21@redis:6379` | ไม่ใช้ |
 | ภายนอก (DNS) | `rediss://:P%40ssr3d%21@redis.hexdas.cloud:6379` | **ต้องใช้เสมอ** |
+
+## MQTT Broker (Hexdas RabbitMQ)
+
+| ใช้กับ | ใช้ได้? | ค่าที่ใส่ใน API |
+|---|---|---|
+| **MQTT TCP + TLS** (Gateway, ESP32, Node-RED) | ✅ **ใช้ตัวนี้** | host `mqtt.hexdas.cloud`, port `1883`, protocol `mqtts`, `use_tls: true` |
+| MQTT WebSocket (`wss://mqttws.hexdas.cloud/ws`) | ❌ | สำหรับ Browser/Web app เท่านั้น — backend Go ไม่ใช้ |
+| AMQP (`76.13.209.136:5672`) | ❌ | โปรtocol คนละแบบกับ MQTT |
+| RabbitMQ Management UI | ❌ | เปิดดู queue ผ่านเว็บ — ไม่ใช่ connection ของ gateway |
+
+**ค่า MQTT ที่ Gateway ต้องใช้:**
+
+```json
+{
+  "connection_name": "hexdas-rabbitmq",
+  "protocol": "mqtts",
+  "host": "mqtt.hexdas.cloud",
+  "port": 1883,
+  "username": "rabbitmqadmin",
+  "use_tls": true,
+  "enabled": true
+}
+```
+
+> Traefik terminate TLS ที่ port 1883 — client ต้องเปิด SSL/TLS (`use_tls: true`)  
+> ไม่ต้องใส่ CA certificate ถ้า broker ใช้ cert จาก public CA
+
+**Seed ผ่าน script** (ตั้ง `MQTT_SEED_*` ใน `.env` แล้วรัน server):
+
+```bash
+chmod +x scripts/seed-hexdas-mqtt.sh
+source .env 2>/dev/null || export $(grep -v '^#' .env | xargs)
+./scripts/seed-hexdas-mqtt.sh
+```
+
 
 ตั้งค่าใน `.env`:
 

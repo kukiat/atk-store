@@ -169,3 +169,19 @@ func (m *Manager) sessionByConnection(id uuid.UUID) *managedSession {
 	defer m.mu.RUnlock()
 	return m.sessions[id]
 }
+
+func (m *Manager) PublishCommand(connectionID uuid.UUID, topic string, payload []byte) error {
+	return m.pub.Publish(connectionID, topic, payload, 1)
+}
+
+func (m *Manager) RegisterCommandResponse(requestID string) <-chan []byte {
+	return m.cmd.Register(requestID)
+}
+
+func (m *Manager) CancelCommandResponse(requestID string) {
+	m.cmd.Cancel(requestID)
+}
+
+func (m *Manager) completeCommandResponse(requestID string, payload []byte) {
+	m.cmd.Complete(requestID, payload)
+}

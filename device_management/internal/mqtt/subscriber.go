@@ -7,6 +7,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/google/uuid"
+	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
 
 	"github.com/kukiat/atk-store/device_management/domain/model"
@@ -23,6 +24,9 @@ func subscribeDevices(db *gorm.DB, client mqtt.Client, connectionID uuid.UUID, h
 		topics := []string{device.TelemetryTopic}
 		if device.StatusTopic != nil {
 			topics = append(topics, *device.StatusTopic)
+		}
+		if device.ResponseTopic != nil {
+			topics = append(topics, *device.ResponseTopic)
 		}
 		for _, topic := range topics {
 			topic = strings.TrimSpace(topic)
@@ -50,8 +54,8 @@ func (m *Manager) handleMessage(_ mqtt.Client, msg mqtt.Message) {
 
 	var device model.Device
 	err := m.db.Where(
-		"telemetry_topic = ? OR status_topic = ?",
-		topic, topic,
+		"telemetry_topic = ? OR status_topic = ? OR response_topic = ?",
+		topic, topic, topic,
 	).First(&device).Error
 	if err != nil {
 		return
@@ -63,6 +67,14 @@ func (m *Manager) handleMessage(_ mqtt.Client, msg mqtt.Message) {
 		"status":       "online",
 	}
 	_ = m.db.Model(&model.Device{}).Where("id = ?", device.ID).Updates(updates).Error
+
+	if device.ResponseTopic != nil && topic == strings.TrimSpace(*device.ResponseTopic) {
+		requestID := strings.TrimSpace(gjson.GetBytes(payload, "requestId").String())
+		if requestID != "" {
+			m.completeCommandResponse(requestID, payload)
+		}
+		return
+	}
 
 	if topic == device.TelemetryTopic {
 		if err := m.telemetry.ProcessTelemetry(device, payload); err != nil {

@@ -13,7 +13,7 @@ export default async function RegisterFacePage() {
   const alreadyRegistered = user.faceEnrollmentStatus === "registered";
 
   return (
-    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-6 py-10">
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-6 py-10 sm:max-w-xl">
       <div className="flex items-center gap-2">
         <Button
           render={<Link href="/" />}

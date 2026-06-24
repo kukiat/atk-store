@@ -1693,4 +1693,284 @@ Config ควรแบ่งเป็น 4 ส่วนหลัก
 - ส่งเมื่อใด
 - Retry อย่างไร
 
+
 การออกแบบนี้ทำให้แต่ละ Device ใช้คนละ MQTT Broker, คนละ API, คนละ Database, คนละ Schema, คนละ Table และคนละ Field Mapping ได้อย่างอิสระ โดยไม่จำเป็นต้องแก้ Firmware เมื่อปลายทางเปลี่ยน
+
+---
+
+# 37. Backend Implementation Steps (Golang Fiber)
+
+Backend อยู่ที่ `device_management/` โครงสร้างอ้างอิงจาก `StockManagement/backend`  
+รูปแบบ: **vertical slice** (`handler.go` → `service.go` → `repository.go` → `router.go`) + SQL migrations + GORM
+
+```mermaid
+flowchart LR
+    subgraph STEP1["✅ Step 1"]
+        S1["Scaffold<br/>main / config / DB / Redis / health"]
+    end
+    subgraph STEP2["Step 2"]
+        S2["Schema MVP<br/>mqtt_connections + devices"]
+    end
+    subgraph STEP3["Step 3"]
+        S3["MQTT Connection API<br/>CRUD + test"]
+    end
+    subgraph STEP4["Step 4"]
+        S4["Device API<br/>CRUD + topics"]
+    end
+    subgraph STEP5["Step 5"]
+        S5["MQTT Manager<br/>multi-broker runtime"]
+    end
+    subgraph STEP6["Step 6+"]
+        S6["Telemetry · Commands · Calibration · Destinations"]
+    end
+
+    STEP1 --> STEP2 --> STEP3 --> STEP4 --> STEP5 --> STEP6
+```
+
+## Step 1: Project Scaffold ✅
+
+**เป้าหมาย:** รัน Fiber server ได้ + เชื่อม PostgreSQL + Redis + health check
+
+**ไฟล์หลัก:**
+
+```text
+device_management/
+├── main.go
+├── Makefile
+├── go.mod
+├── .env.example
+├── external/routers.go
+├── domain/model/              # GORM entities (Step 2+)
+├── internal/health/
+├── pkg/config/
+├── pkg/database/
+├── pkg/dto/
+├── pkg/redis/
+├── migrations/001_init.sql
+└── scripts/init-db.sh
+```
+
+**รัน:**
+
+```bash
+cd device_management
+cp .env.example .env
+make migrate
+make run
+make health
+```
+
+**Response ตัวอย่าง:**
+
+```json
+{
+  "status": "ok",
+  "service": { "name": "loadcell-gateway", "version": "0.1.0", "step": 1 },
+  "dependencies": { "postgres": true, "redis": true },
+  "time": "2026-06-24T10:00:00+07:00"
+}
+```
+
+**Env ที่ใช้ (remote):**
+
+| Key | ค่า |
+|---|---|
+| `DB_HOST` | `postgres.hexdas.cloud` |
+| `DB_NAME` | `atkstore` |
+| `REDIS_URL` | `rediss://:P%40ssr3d%21@redis.hexdas.cloud:6379` |
+
+---
+
+## Step 2: Database Schema MVP
+
+**เป้าหมาย:** สร้างตารางหลัก Phase 1
+
+| Migration | ตาราง | อ้างอิงเอกสาร |
+|---|---|---|
+| `002_mqtt_connections.sql` | `mqtt_connections` | §3 |
+| `003_devices.sql` | `devices` | §4 |
+| `004_device_calibrations.sql` | `device_calibrations` | §12 |
+| `005_weight_readings.sql` | `weight_readings`, `weight_events` | §18 |
+
+**ไฟล์ที่จะเพิ่ม:**
+
+- `domain/model/mqtt_connection.go`
+- `domain/model/device.go`
+- `migrations/002_*.sql` … `005_*.sql`
+
+---
+
+## Step 3: MQTT Connection API
+
+**เป้าหมาย:** CRUD MQTT Broker configuration
+
+**Route:** `/api/v1/mqtt-connections`
+
+```http
+POST   /api/v1/mqtt-connections
+GET    /api/v1/mqtt-connections
+GET    /api/v1/mqtt-connections/:id
+PUT    /api/v1/mqtt-connections/:id
+DELETE /api/v1/mqtt-connections/:id
+POST   /api/v1/mqtt-connections/:id/test
+```
+
+**Module:** `internal/mqttconnection/` (handler, service, repository, router)
+
+**หมายเหตุ:** password ต้อง encrypt ก่อนเก็บ (§29)
+
+---
+
+## Step 4: Device API
+
+**เป้าหมาย:** CRUD Device + ผูก MQTT Connection
+
+**Route:** `/api/v1/devices`
+
+```http
+POST   /api/v1/devices
+GET    /api/v1/devices
+GET    /api/v1/devices/:deviceId
+PUT    /api/v1/devices/:deviceId
+DELETE /api/v1/devices/:deviceId
+```
+
+**Module:** `internal/device/`
+
+---
+
+## Step 5: MQTT Connection Manager
+
+**เป้าหมาย:** เปิด connection หลาย Broker พร้อมกัน runtime
+
+**Module:** `internal/mqtt/`
+
+```text
+internal/mqtt/
+├── connection-manager/   # จัดการ connect / disconnect / reconnect
+├── subscriber/           # subscribe telemetry + status topics
+├── publisher/            # publish commands
+└── command-manager/      # requestId + timeout
+```
+
+**พฤติกรรม:**
+
+- Connect เฉพาะ broker ที่ `enabled = true`
+- อัปเดต `connection_status`, `last_connected_at`, `last_error`
+- Reconnect ตาม `reconnect_interval_seconds`
+
+---
+
+## Step 6: Telemetry & Payload Parser
+
+**เป้าหมาย:** รับ MQTT → แปลงเป็น Standard Payload
+
+**Module:** `internal/telemetry/`, `internal/parser/`
+
+**Standard Payload:**
+
+```json
+{
+  "deviceId": "SCALE-001",
+  "weight": 12.485,
+  "unit": "kg",
+  "stable": true,
+  "rawValue": 1238420,
+  "timestamp": "2026-06-24T10:30:00Z"
+}
+```
+
+---
+
+## Step 7: Latest Weight API (Redis Cache)
+
+**Route:**
+
+```http
+GET /api/v1/devices/:deviceId/weight/latest
+```
+
+**Flow:** MQTT → Normalize → Redis `device:{id}:weight:latest` → API response
+
+---
+
+## Step 8: Device Commands
+
+**Route:**
+
+```http
+POST /api/v1/devices/:deviceId/commands/read-weight
+POST /api/v1/devices/:deviceId/commands/tare
+POST /api/v1/devices/:deviceId/commands/zero
+POST /api/v1/devices/:deviceId/commands/restart
+POST /api/v1/devices/:deviceId/commands/factory-reset
+```
+
+**Module:** `internal/mqtt/command-manager/`
+
+---
+
+## Step 9: Calibration Service
+
+**Route:** `/api/v1/devices/:deviceId/calibration/*` (§22)
+
+**Module:** `internal/calibration/`
+
+---
+
+## Step 10: Data Destinations & Field Mapping
+
+**ตาราง:** `data_destinations`, `device_destinations` (§13, §17)
+
+**Route:** `/api/v1/data-destinations`, `/api/v1/devices/:deviceId/destinations`
+
+**Module:** `internal/destination/`, `internal/mapping/`
+
+---
+
+## Step 11: Destination Router + Retry Queue
+
+**ตาราง:** `delivery_logs` (§19)
+
+**Module:** `internal/destination/router/`, `internal/retry/`
+
+**Trigger types:** `stable_weight`, `interval`, `weight_changed`, … (§17)
+
+---
+
+## Step 12: WebSocket Realtime
+
+**Module:** `internal/websocket/`
+
+**Flow:** Redis latest value → WebSocket push → Web Dashboard (§31)
+
+---
+
+## Step 13: Auth & RBAC
+
+**Module:** `internal/auth/`, `pkg/middleware/`
+
+- JWT authentication
+- Role-based access (ADMIN, OPERATOR, VIEWER)
+- MQTT credential encryption
+- Audit log
+
+---
+
+## สรุป Module ↔ เอกสาร
+
+| Module (`internal/`) | เอกสาร | Step |
+|---|---|---|
+| `health` | — | 1 ✅ |
+| `mqttconnection` | §3, §20 | 3 |
+| `device` | §4, §21 | 4 |
+| `mqtt/` | §3, §5, §9 | 5, 8 |
+| `parser` | §7 | 6 |
+| `telemetry` | §6, §8 | 6, 7 |
+| `calibration` | §11, §12, §22 | 9 |
+| `destination/` | §13–§17, §23–§24 | 10, 11 |
+| `mapping` | §15, §16 | 10 |
+| `retry` | §19 | 11 |
+| `websocket` | §31 | 12 |
+| `auth` | §29 | 13 |
+

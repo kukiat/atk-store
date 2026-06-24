@@ -12,7 +12,9 @@
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx src/db/seed.ts",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "graphify": "graphify extract src --no-cluster --out . && graphify cluster-only . --no-label",
+    "graphify:update": "graphify update ."
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

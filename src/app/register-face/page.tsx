@@ -49,7 +49,9 @@ export default async function RegisterFacePage() {
           </div>
         </div>
       ) : (
-        <FaceLivenessRegistration />
+        <FaceLivenessRegistration
+          debugMode={process.env.ENABLE_FACENESS_DEBUG !== "NO"}
+        />
       )}
     </main>
   );

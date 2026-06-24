@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const REGION = process.env.NEXT_PUBLIC_AWS_LIVENESS_REGION ?? "";
 
@@ -30,8 +31,16 @@ type Phase =
  * the user presses start (never on mount), streams via the Amplify detector
  * using short-lived credentials from our bridge, and reads the backend decision
  * once after the detector's completion callback (with at most one retry).
+ *
+ * `debugMode` is injected by the server page from `ENABLE_FACENESS_DEBUG` env.
+ * When true, a confidence badge (score + color tier) is shown after each
+ * attempt. Set `ENABLE_FACENESS_DEBUG=NO` in production to hide it.
  */
-export function FaceLivenessRegistration() {
+export function FaceLivenessRegistration({
+  debugMode = false,
+}: {
+  debugMode?: boolean;
+}) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>("intro");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -130,11 +139,8 @@ export function FaceLivenessRegistration() {
       <Result
         icon={<CheckCircle2 className="size-12 text-green-600" />}
         title="ลงทะเบียนใบหน้าสำเร็จ"
-        description={
-          confidence != null
-            ? `ระบบยืนยันตัวตนของคุณแล้ว (ความมั่นใจ ${confidence.toFixed(1)}%)`
-            : "ระบบยืนยันตัวตนของคุณแล้ว"
-        }
+        description="ระบบยืนยันตัวตนของคุณแล้ว"
+        debug={debugMode ? <ConfidenceBadge confidence={confidence} /> : null}
         action={
           <Button render={<Link href="/" />} size="lg" className="w-full">
             กลับสู่หน้าหลัก
@@ -150,6 +156,7 @@ export function FaceLivenessRegistration() {
         icon={<XCircle className="size-12 text-destructive" />}
         title="ยืนยันใบหน้าไม่สำเร็จ"
         description="กรุณาตรวจสอบแสงสว่างและตำแหน่งใบหน้า แล้วลองใหม่อีกครั้ง"
+        debug={debugMode ? <ConfidenceBadge confidence={confidence} /> : null}
         action={
           <Button onClick={() => resetTo(setPhase, setSessionId)} size="lg" className="w-full">
             ลองใหม่อีกครั้ง
@@ -254,11 +261,13 @@ function Result({
   icon,
   title,
   description,
+  debug,
   action,
 }: {
   icon: React.ReactNode;
   title: string;
   description: string;
+  debug?: React.ReactNode;
   action?: React.ReactNode;
 }) {
   return (
@@ -268,7 +277,86 @@ function Result({
         <h2 className="text-lg font-semibold">{title}</h2>
         <p className="text-muted-foreground text-sm">{description}</p>
       </div>
+      {debug}
       {action ? <div className="w-full pt-2">{action}</div> : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Debug-only confidence badge — never rendered when ENABLE_FACENESS_DEBUG=NO
+// ---------------------------------------------------------------------------
+
+type ConfidenceTier = {
+  label: string;
+  bar: string;    // Tailwind bg color for the filled bar
+  badge: string;  // Tailwind text + border classes for the pill
+};
+
+function getConfidenceTier(score: number): ConfidenceTier {
+  if (score >= 90)
+    return {
+      label: "สูงมาก (≥ 90)",
+      bar: "bg-green-500",
+      badge: "border-green-500 text-green-700 bg-green-50",
+    };
+  if (score >= 70)
+    return {
+      label: "ปานกลาง (70–89)",
+      bar: "bg-amber-400",
+      badge: "border-amber-400 text-amber-700 bg-amber-50",
+    };
+  if (score >= 50)
+    return {
+      label: "ต่ำ (50–69)",
+      bar: "bg-orange-400",
+      badge: "border-orange-400 text-orange-700 bg-orange-50",
+    };
+  return {
+    label: "ต่ำมาก (< 50)",
+    bar: "bg-red-400",
+    badge: "border-red-400 text-red-700 bg-red-50",
+  };
+}
+
+function ConfidenceBadge({ confidence }: { confidence: number | null }) {
+  if (confidence === null) {
+    return (
+      <div className="border-muted-foreground/30 text-muted-foreground rounded-lg border px-3 py-2 text-xs font-mono">
+        [DEBUG] confidence: n/a
+      </div>
+    );
+  }
+
+  const tier = getConfidenceTier(confidence);
+  const pct = Math.min(100, Math.max(0, confidence));
+
+  return (
+    <div className="border-border w-full space-y-2 rounded-lg border p-3 text-left">
+      <p className="text-muted-foreground text-[10px] font-semibold uppercase tracking-widest">
+        Debug — Confidence Score
+      </p>
+      {/* Bar */}
+      <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+        <div
+          className={cn("h-full rounded-full transition-all", tier.bar)}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {/* Score + tier pill */}
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-sm font-semibold">
+          {confidence.toFixed(2)}%
+        </span>
+        <span
+          className={cn(
+            "rounded-full border px-2 py-0.5 text-xs font-medium",
+            tier.badge,
+          )}
+        >
+          {tier.label}
+        </span>
+      </div>
     </div>
   );
 }

@@ -1,7 +1,8 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 import { CartBar } from "@/components/cart-bar";
 import { ProductCard } from "@/components/product-card";
+import { getCurrentUser } from "@/lib/auth";
 import { shelfService } from "@/services/shelf.service";
 
 export default async function ShelfPage({
@@ -9,6 +10,9 @@ export default async function ShelfPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (!user) redirect("/signin");
+
   const { id } = await params;
   const shelf = await shelfService.getShelfWithProducts(id);
 

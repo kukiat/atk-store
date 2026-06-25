@@ -5,7 +5,9 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 
+	"github.com/kukiat/atk-store/device_management/internal/confighistory"
 	"github.com/kukiat/atk-store/device_management/internal/telemetry"
+	"github.com/kukiat/atk-store/device_management/pkg/database"
 	"github.com/kukiat/atk-store/device_management/pkg/dto"
 )
 
@@ -69,14 +71,36 @@ func (h deviceHandler) Create(c *fiber.Ctx) error {
 
 // PUT /api/v1/devices/:deviceId
 func (h deviceHandler) Update(c *fiber.Ctx) error {
+	deviceID := c.Params("deviceId")
 	var req dto.UpdateDeviceRequest
 	if err := c.BodyParser(&req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid payload"})
 	}
-	item, err := h.service.Update(c.Params("deviceId"), req)
+
+	before, err := h.service.Get(deviceID)
 	if err != nil {
 		return c.Status(mapErr(err)).JSON(fiber.Map{"error": err.Error()})
 	}
+
+	item, err := h.service.Update(deviceID, req)
+	if err != nil {
+		return c.Status(mapErr(err)).JSON(fiber.Map{"error": err.Error()})
+	}
+
+	changes := confighistory.DiffDeviceMeta(
+		before.DeviceName,
+		before.Location,
+		before.Branch,
+		before.DeviceType,
+		before.Enabled,
+		item.DeviceName,
+		item.Location,
+		item.Branch,
+		item.DeviceType,
+		item.Enabled,
+	)
+	confighistory.RecordMetaChange(database.DB, c, deviceID, changes)
+
 	return c.JSON(item)
 }
 

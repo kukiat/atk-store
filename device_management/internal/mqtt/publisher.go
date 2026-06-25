@@ -15,12 +15,12 @@ func NewPublisherService(manager *Manager) *PublisherService {
 	return &PublisherService{manager: manager}
 }
 
-func (p *PublisherService) Publish(connectionID uuid.UUID, topic string, payload []byte, qos byte) error {
+func (p *PublisherService) Publish(connectionID uuid.UUID, topic string, payload []byte, qos byte, retain bool) error {
 	client := p.manager.client(connectionID)
 	if client == nil || !client.IsConnected() {
 		return fmt.Errorf("mqtt connection is not online")
 	}
-	token := client.Publish(topic, qos, false, payload)
+	token := client.Publish(topic, qos, retain, payload)
 	if !token.WaitTimeout(10 * time.Second) {
 		return fmt.Errorf("mqtt publish timeout")
 	}

@@ -2145,7 +2145,7 @@ MQTT → telemetry → destination router
 
 ---
 
-## Step 12: WebSocket Realtime
+## Step 12: WebSocket Realtime ✅
 
 **Module:** `internal/websocket/`
 
@@ -2153,7 +2153,7 @@ MQTT → telemetry → destination router
 
 ---
 
-## Step 13: Auth & RBAC
+## Step 13: Auth & RBAC ✅
 
 **Module:** `internal/auth/`, `pkg/middleware/`
 
@@ -2161,6 +2161,26 @@ MQTT → telemetry → destination router
 - Role-based access (ADMIN, OPERATOR, VIEWER)
 - MQTT credential encryption
 - Audit log
+
+---
+
+## Step 14: Web Dashboard Pages ✅
+
+**Location:** `src/app/loadcell/`, `src/components/loadcell/`
+
+| Route | ฟีเจอร์ |
+|---|---|
+| `/loadcell` | Dashboard หลัก (KPI, device grid, charts) |
+| `/loadcell/devices` | CRUD devices |
+| `/loadcell/monitor` | Realtime monitor + WebSocket |
+| `/loadcell/mqtt` | MQTT connections (create, test, connect) |
+| `/loadcell/calibration` | Calibration wizard |
+| `/loadcell/commands` | Tare / Zero / Read / Restart |
+| `/loadcell/destinations` | Data destinations list |
+| `/loadcell/delivery-logs` | Delivery logs |
+| `/loadcell/users` | Users & roles (ADMIN) |
+| `/loadcell/audit` | Audit logs (ADMIN) |
+| `/loadcell/login` | JWT login |
 
 ---
 
@@ -2183,4 +2203,5 @@ MQTT → telemetry → destination router
 | `retry` | §19 | 11 ✅ |
 | `websocket` | §31 | 12 ✅ |
 | `auth` | §29 | 13 ✅ |
+| `src/app/loadcell` | §25, §31 | 14 ✅ |
 

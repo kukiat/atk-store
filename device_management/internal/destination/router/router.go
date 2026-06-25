@@ -10,20 +10,28 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/kukiat/atk-store/device_management/domain/model"
+	"github.com/kukiat/atk-store/device_management/internal/branchdestination"
 	"github.com/kukiat/atk-store/device_management/internal/destination"
 	"github.com/kukiat/atk-store/device_management/internal/mapping"
 	"github.com/kukiat/atk-store/device_management/internal/retry"
+	"github.com/kukiat/atk-store/device_management/pkg/devicetype"
 	"github.com/kukiat/atk-store/device_management/pkg/dto"
+	"github.com/kukiat/atk-store/device_management/pkg/mqtttopics"
 )
 
 type Router struct {
-	db     *gorm.DB
-	repo   retry.Repository
-	state  sync.Map
+	db         *gorm.DB
+	repo       retry.Repository
+	branchRepo branchdestination.Repository
+	state      sync.Map
 }
 
 func New(db *gorm.DB) *Router {
-	return &Router{db: db, repo: retry.NewRepository(db)}
+	return &Router{
+		db:         db,
+		repo:       retry.NewRepository(db),
+		branchRepo: branchdestination.NewRepository(db),
+	}
 }
 
 type mappingState struct {
@@ -31,13 +39,26 @@ type mappingState struct {
 	lastWeight  float64
 }
 
-func (r *Router) HandleTelemetry(device model.Device, standard *dto.StandardTelemetryPayload) {
+func (r *Router) HandleTelemetry(device model.Device, standard *dto.StandardTelemetryPayload, rawPayload []byte) {
+	source := mapping.BuildSourceMap(standardToMap(standard), rawPayload)
+	branch := mqtttopics.ResolveBranch(branchString(device.Branch))
+	deviceType := devicetype.Normalize(device.DeviceType)
+
+	if row, err := r.branchRepo.FindEnabled(branch, deviceType); err == nil && row != nil {
+		if row.Destination != nil && row.Destination.Enabled {
+			mapping := branchToDeviceMapping(*row, device.ID)
+			if r.shouldTrigger(mapping, standard) {
+				r.dispatch(device, mapping, source)
+				return
+			}
+		}
+	}
+
 	mappings, err := r.repo.FindEnabledMappings(device.ID)
 	if err != nil {
 		log.Printf("[router] load mappings device=%s: %v", device.DeviceID, err)
 		return
 	}
-	source := standardToMap(standard)
 	for _, row := range mappings {
 		if row.Destination == nil || !row.Destination.Enabled {
 			continue
@@ -69,7 +90,13 @@ func (r *Router) dispatch(device model.Device, row model.DeviceDestination, sour
 	dest := *row.Destination
 	attempt := 1
 	started := time.Now().UTC()
-	reqPayload, _ := json.Marshal(mapped)
+	deliveryPayload := mapping.DeliveryPayload{
+		Body:    mapped.Body,
+		Query:   mapped.QueryParams,
+		Path:    mapped.PathParams,
+		Headers: mapped.Headers,
+	}
+	reqPayload, _ := json.Marshal(deliveryPayload)
 
 	logRow := &model.DeliveryLog{
 		DeviceID:            ptrUUID(device.ID),
@@ -84,7 +111,7 @@ func (r *Router) dispatch(device model.Device, row model.DeviceDestination, sour
 		return err
 	}
 
-	result, err := destination.Deliver(r.db, dest, mapped, cfg)
+	result, err := destination.Deliver(r.db, dest, deliveryPayload, cfg)
 	completed := time.Now().UTC()
 	updates := map[string]interface{}{
 		"completed_at": completed,
@@ -211,4 +238,25 @@ func standardToMap(standard *dto.StandardTelemetryPayload) map[string]interface{
 
 func ptrUUID(id uuid.UUID) *uuid.UUID {
 	return &id
+}
+
+func branchString(branch *string) string {
+	if branch == nil {
+		return ""
+	}
+	return *branch
+}
+
+func branchToDeviceMapping(row model.BranchDestination, deviceUUID uuid.UUID) model.DeviceDestination {
+	return model.DeviceDestination{
+		ID:              row.ID,
+		DeviceID:        deviceUUID,
+		DestinationID:   row.DestinationID,
+		Destination:     row.Destination,
+		TriggerType:     row.TriggerType,
+		OnlyStable:      row.OnlyStable,
+		DebounceSeconds: row.DebounceSeconds,
+		MappingConfig:   row.MappingConfig,
+		Enabled:         row.Enabled,
+	}
 }

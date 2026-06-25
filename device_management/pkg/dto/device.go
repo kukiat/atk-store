@@ -6,6 +6,8 @@ type CreateDeviceRequest struct {
 	DeviceID         string          `json:"device_id"`
 	DeviceName       string          `json:"device_name"`
 	Location         *string         `json:"location"`
+	Branch           *string         `json:"branch"`
+	DeviceType       *string         `json:"device_type"`
 	Model            *string         `json:"model"`
 	MqttConnectionID *string         `json:"mqtt_connection_id"`
 	TelemetryTopic   *string         `json:"telemetry_topic"`
@@ -23,6 +25,8 @@ type CreateDeviceRequest struct {
 type UpdateDeviceRequest struct {
 	DeviceName       *string          `json:"device_name"`
 	Location         *string          `json:"location"`
+	Branch           *string          `json:"branch"`
+	DeviceType       *string          `json:"device_type"`
 	Model            *string          `json:"model"`
 	MqttConnectionID *string          `json:"mqtt_connection_id"`
 	TelemetryTopic   *string          `json:"telemetry_topic"`
@@ -42,6 +46,8 @@ type DeviceResponse struct {
 	DeviceID           string                   `json:"device_id"`
 	DeviceName         string                   `json:"device_name"`
 	Location           *string                  `json:"location,omitempty"`
+	Branch             *string                  `json:"branch,omitempty"`
+	DeviceType         string                   `json:"device_type"`
 	Model              *string                  `json:"model,omitempty"`
 	MqttConnectionID   *string                  `json:"mqtt_connection_id,omitempty"`
 	MqttConnection     *MqttConnectionSummary   `json:"mqtt_connection,omitempty"`
@@ -58,6 +64,7 @@ type DeviceResponse struct {
 	MacAddress         *string                  `json:"mac_address,omitempty"`
 	Rssi               *int                     `json:"rssi,omitempty"`
 	Enabled            bool                     `json:"enabled"`
+	OutputEnabled      *bool                    `json:"output_enabled,omitempty"`
 	Status             string                   `json:"status"`
 	LastSeenAt         *string                  `json:"last_seen_at,omitempty"`
 	CreatedAt          string                   `json:"created_at"`

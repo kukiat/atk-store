@@ -1,7 +1,9 @@
 package mqttconnection
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -19,9 +21,14 @@ var (
 	ErrInvalidPayload   = errors.New("connection_name and host are required")
 	ErrInvalidPort      = errors.New("port must be between 1 and 65535")
 	ErrInvalidProtocol  = errors.New("protocol must be mqtt, mqtts, ws, or wss")
+	ErrInvalidQoS       = errors.New("qos must be 0, 1, or 2")
+	ErrInvalidJSONPayload = errors.New("lifecycle payload must be valid json")
 	ErrNothingToUpdate  = errors.New("no fields to update")
 	ErrInUseByDevices   = errors.New("mqtt connection is used by devices")
-	ErrNameDuplicated   = errors.New("connection_name already exists")
+	ErrNameDuplicated        = errors.New("connection_name already exists")
+	ErrBrokerAlreadyConfigured = errors.New("mqtt broker already configured")
+	ErrBrokerOffline    = errors.New("mqtt connection is not online")
+	ErrInvalidTopic     = errors.New("topic is required")
 )
 
 var allowedProtocols = map[string]struct{}{
@@ -32,13 +39,15 @@ var allowedProtocols = map[string]struct{}{
 }
 
 type mqttConnectionService struct {
-	repo    MqttConnectionRepository
-	runtime mqttruntime.ConnectionRuntime
+	repo      MqttConnectionRepository
+	runtime   mqttruntime.ConnectionRuntime
+	publisher mqttruntime.Publisher
 }
 
 type MqttConnectionService interface {
 	List(f ListFilter) ([]dto.MqttConnectionResponse, error)
 	Get(id uuid.UUID) (*dto.MqttConnectionResponse, error)
+	GetDefault() (*dto.MqttConnectionResponse, error)
 	Create(req dto.CreateMqttConnectionRequest) (*dto.MqttConnectionResponse, error)
 	Update(id uuid.UUID, req dto.UpdateMqttConnectionRequest) (*dto.MqttConnectionResponse, error)
 	Delete(id uuid.UUID) error
@@ -46,10 +55,15 @@ type MqttConnectionService interface {
 	TestConfig(req dto.CreateMqttConnectionRequest) (*dto.TestMqttConnectionResponse, error)
 	Connect(id uuid.UUID) (*dto.MqttConnectionActionResponse, error)
 	Disconnect(id uuid.UUID) (*dto.MqttConnectionActionResponse, error)
+	Publish(id uuid.UUID, req dto.PublishMqttMessageRequest) (*dto.PublishMqttMessageResponse, error)
 }
 
-func NewMqttConnectionService(repo MqttConnectionRepository, runtime mqttruntime.ConnectionRuntime) MqttConnectionService {
-	return mqttConnectionService{repo: repo, runtime: runtime}
+func NewMqttConnectionService(
+	repo MqttConnectionRepository,
+	runtime mqttruntime.ConnectionRuntime,
+	publisher mqttruntime.Publisher,
+) MqttConnectionService {
+	return mqttConnectionService{repo: repo, runtime: runtime, publisher: publisher}
 }
 
 func (s mqttConnectionService) List(f ListFilter) ([]dto.MqttConnectionResponse, error) {
@@ -76,11 +90,40 @@ func (s mqttConnectionService) Get(id uuid.UUID) (*dto.MqttConnectionResponse, e
 	return &resp, nil
 }
 
+func (s mqttConnectionService) GetDefault() (*dto.MqttConnectionResponse, error) {
+	row, err := s.repo.FindDefault()
+	if err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+		row, err = s.repo.FindAny()
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrNotFound
+			}
+			return nil, err
+		}
+		if !row.IsDefault {
+			_ = s.repo.UpdateFields(row.ID, map[string]interface{}{"is_default": true})
+			row.IsDefault = true
+		}
+	}
+	resp := toResponse(*row)
+	return &resp, nil
+}
+
 func (s mqttConnectionService) Create(req dto.CreateMqttConnectionRequest) (*dto.MqttConnectionResponse, error) {
+	if _, err := s.repo.FindAny(); err == nil {
+		return nil, ErrBrokerAlreadyConfigured
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
 	conn, err := buildModelFromCreate(req)
 	if err != nil {
 		return nil, err
 	}
+	conn.IsDefault = true
 	if err := s.repo.Insert(conn); err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrNameDuplicated
@@ -229,6 +272,54 @@ func (s mqttConnectionService) Disconnect(id uuid.UUID) (*dto.MqttConnectionActi
 	}, nil
 }
 
+func (s mqttConnectionService) Publish(id uuid.UUID, req dto.PublishMqttMessageRequest) (*dto.PublishMqttMessageResponse, error) {
+	conn, err := s.repo.FindByID(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	topic := strings.TrimSpace(req.Topic)
+	if topic == "" {
+		return nil, ErrInvalidTopic
+	}
+
+	if s.publisher == nil {
+		return nil, fmt.Errorf("mqtt publisher is not available")
+	}
+	if s.runtime != nil && !s.runtime.IsConnected(id) {
+		return nil, ErrBrokerOffline
+	}
+
+	qos := conn.PublishQoS
+	if req.QoS != nil {
+		qos, err = normalizeQoS(*req.QoS)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	retain := false
+	if req.Retain != nil {
+		retain = *req.Retain
+	}
+
+	if err := s.publisher.Publish(id, topic, []byte(req.Payload), byte(qos), retain); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not online") {
+			return nil, ErrBrokerOffline
+		}
+		return nil, err
+	}
+
+	return &dto.PublishMqttMessageResponse{
+		Success: true,
+		Topic:   topic,
+		Message: "message published",
+	}, nil
+}
+
 func runBrokerTest(conn model.MqttConnection) (*dto.TestMqttConnectionResponse, error) {
 	timeout := time.Duration(conn.ConnectTimeoutSeconds) * time.Second
 	result, err := TestBroker(BrokerTestInput{
@@ -291,6 +382,8 @@ func buildModelFromCreate(req dto.CreateMqttConnectionRequest) (*model.MqttConne
 		ClientCertificate:        trimPtr(req.ClientCertificate),
 		ConnectTimeoutSeconds:    10,
 		KeepAliveSeconds:         60,
+		SubscribeQoS:             1,
+		PublishQoS:               1,
 		ReconnectIntervalSeconds: 5,
 		Enabled:                  true,
 		ConnectionStatus:         "offline",
@@ -302,8 +395,25 @@ func buildModelFromCreate(req dto.CreateMqttConnectionRequest) (*model.MqttConne
 	if req.KeepAliveSeconds != nil {
 		conn.KeepAliveSeconds = *req.KeepAliveSeconds
 	}
+	if req.SubscribeQoS != nil {
+		qos, err := normalizeQoS(*req.SubscribeQoS)
+		if err != nil {
+			return nil, err
+		}
+		conn.SubscribeQoS = qos
+	}
+	if req.PublishQoS != nil {
+		qos, err := normalizeQoS(*req.PublishQoS)
+		if err != nil {
+			return nil, err
+		}
+		conn.PublishQoS = qos
+	}
 	if req.ReconnectIntervalSeconds != nil {
 		conn.ReconnectIntervalSeconds = *req.ReconnectIntervalSeconds
+	}
+	if err := applyLifecycleToModel(conn, req.BirthMessage, req.CloseMessage, req.WillMessage); err != nil {
+		return nil, err
 	}
 	if req.Enabled != nil {
 		conn.Enabled = *req.Enabled
@@ -392,8 +502,25 @@ func buildUpdatesFromRequest(req dto.UpdateMqttConnectionRequest) (map[string]in
 	if req.KeepAliveSeconds != nil {
 		updates["keep_alive_seconds"] = *req.KeepAliveSeconds
 	}
+	if req.SubscribeQoS != nil {
+		qos, err := normalizeQoS(*req.SubscribeQoS)
+		if err != nil {
+			return nil, err
+		}
+		updates["subscribe_qos"] = qos
+	}
+	if req.PublishQoS != nil {
+		qos, err := normalizeQoS(*req.PublishQoS)
+		if err != nil {
+			return nil, err
+		}
+		updates["publish_qos"] = qos
+	}
 	if req.ReconnectIntervalSeconds != nil {
 		updates["reconnect_interval_seconds"] = *req.ReconnectIntervalSeconds
+	}
+	if err := applyLifecycleUpdates(updates, req.BirthMessage, req.CloseMessage, req.WillMessage); err != nil {
+		return nil, err
 	}
 	if req.Enabled != nil {
 		updates["enabled"] = *req.Enabled
@@ -425,6 +552,111 @@ func trimPtr(v *string) *string {
 	return &s
 }
 
+func normalizeQoS(qos int) (int, error) {
+	if qos < 0 || qos > 2 {
+		return 0, ErrInvalidQoS
+	}
+	return qos, nil
+}
+
+func lifecycleFromModel(topic, payload string, retain bool, qos int) dto.MqttLifecycleMessage {
+	return dto.MqttLifecycleMessage{
+		Topic:   topic,
+		Payload: payload,
+		Retain:  retain,
+		QoS:     qos,
+	}
+}
+
+func applyLifecycleToModel(conn *model.MqttConnection, birth, close, will *dto.MqttLifecycleMessage) error {
+	if birth != nil {
+		if err := setLifecycleFields(&conn.BirthTopic, &conn.BirthPayload, &conn.BirthRetain, &conn.BirthQoS, *birth); err != nil {
+			return err
+		}
+	}
+	if close != nil {
+		if err := setLifecycleFields(&conn.CloseTopic, &conn.ClosePayload, &conn.CloseRetain, &conn.CloseQoS, *close); err != nil {
+			return err
+		}
+	}
+	if will != nil {
+		if err := setLifecycleFields(&conn.WillTopic, &conn.WillPayload, &conn.WillRetain, &conn.WillQoS, *will); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func applyLifecycleUpdates(updates map[string]interface{}, birth, close, will *dto.MqttLifecycleMessage) error {
+	if birth != nil {
+		if err := setLifecycleUpdates(updates, "birth", *birth); err != nil {
+			return err
+		}
+	}
+	if close != nil {
+		if err := setLifecycleUpdates(updates, "close", *close); err != nil {
+			return err
+		}
+	}
+	if will != nil {
+		if err := setLifecycleUpdates(updates, "will", *will); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func setLifecycleFields(topic *string, payload *string, retain *bool, qos *int, msg dto.MqttLifecycleMessage) error {
+	q, err := normalizeQoS(msg.QoS)
+	if err != nil {
+		return err
+	}
+	*topic = strings.TrimSpace(msg.Topic)
+	normalized, err := normalizeLifecyclePayload(msg.Payload)
+	if err != nil {
+		return err
+	}
+	*payload = normalized
+	*retain = msg.Retain
+	*qos = q
+	return nil
+}
+
+func setLifecycleUpdates(updates map[string]interface{}, prefix string, msg dto.MqttLifecycleMessage) error {
+	q, err := normalizeQoS(msg.QoS)
+	if err != nil {
+		return err
+	}
+	normalized, err := normalizeLifecyclePayload(msg.Payload)
+	if err != nil {
+		return err
+	}
+	updates[prefix+"_topic"] = strings.TrimSpace(msg.Topic)
+	updates[prefix+"_payload"] = normalized
+	updates[prefix+"_retain"] = msg.Retain
+	updates[prefix+"_qos"] = q
+	return nil
+}
+
+func normalizeLifecyclePayload(payload string) (string, error) {
+	trimmed := strings.TrimSpace(payload)
+	if trimmed == "" {
+		return "", nil
+	}
+	if trimmed[0] != '{' && trimmed[0] != '[' {
+		return payload, nil
+	}
+	var v any
+	if err := json.Unmarshal([]byte(trimmed), &v); err != nil {
+		return "", ErrInvalidJSONPayload
+	}
+	compact, err := json.Marshal(v)
+	if err != nil {
+		return "", ErrInvalidJSONPayload
+	}
+	return string(compact), nil
+}
+
 func toResponse(row ConnectionRow) dto.MqttConnectionResponse {
 	conn := row.MqttConnection
 	var lastConnected *string
@@ -445,8 +677,14 @@ func toResponse(row ConnectionRow) dto.MqttConnectionResponse {
 		ClientCertificate:        conn.ClientCertificate,
 		ConnectTimeoutSeconds:    conn.ConnectTimeoutSeconds,
 		KeepAliveSeconds:         conn.KeepAliveSeconds,
+		SubscribeQoS:             conn.SubscribeQoS,
+		PublishQoS:               conn.PublishQoS,
 		ReconnectIntervalSeconds: conn.ReconnectIntervalSeconds,
+		BirthMessage:             lifecycleFromModel(conn.BirthTopic, conn.BirthPayload, conn.BirthRetain, conn.BirthQoS),
+		CloseMessage:             lifecycleFromModel(conn.CloseTopic, conn.ClosePayload, conn.CloseRetain, conn.CloseQoS),
+		WillMessage:              lifecycleFromModel(conn.WillTopic, conn.WillPayload, conn.WillRetain, conn.WillQoS),
 		Enabled:                  conn.Enabled,
+		IsDefault:                conn.IsDefault,
 		ConnectionStatus:         conn.ConnectionStatus,
 		LastConnectedAt:          lastConnected,
 		LastError:                conn.LastError,

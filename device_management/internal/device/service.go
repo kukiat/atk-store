@@ -3,7 +3,6 @@ package device
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 
 	"github.com/google/uuid"
@@ -12,11 +11,13 @@ import (
 	"github.com/kukiat/atk-store/device_management/domain/model"
 	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
 	"github.com/kukiat/atk-store/device_management/pkg/dto"
+	"github.com/kukiat/atk-store/device_management/pkg/devicetype"
+	"github.com/kukiat/atk-store/device_management/pkg/mqtttopics"
 )
 
 var (
 	ErrNotFound              = errors.New("device not found")
-	ErrInvalidPayload        = errors.New("device_id and device_name are required")
+	ErrInvalidPayload        = errors.New("device_id, device_name and location are required")
 	ErrDeviceIDDuplicated    = errors.New("device_id already exists")
 	ErrMqttConnectionMissing = errors.New("mqtt_connection_id not found")
 	ErrInvalidPayloadFormat  = errors.New("payload_format must be json")
@@ -73,7 +74,16 @@ func (s deviceService) Create(req dto.CreateDeviceRequest) (*dto.DeviceResponse,
 	if err != nil {
 		return nil, err
 	}
-	if device.MqttConnectionID != nil {
+	if device.MqttConnectionID == nil {
+		defaultID, err := s.repo.FindDefaultMqttConnectionID()
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, ErrMqttConnectionMissing
+			}
+			return nil, err
+		}
+		device.MqttConnectionID = defaultID
+	} else {
 		ok, err := s.repo.MqttConnectionExists(*device.MqttConnectionID)
 		if err != nil {
 			return nil, err
@@ -107,36 +117,22 @@ func (s deviceService) Update(deviceID string, req dto.UpdateDeviceRequest) (*dt
 	if err != nil {
 		return nil, err
 	}
+	if req.Branch != nil {
+		branch := mqtttopics.ResolveBranch(ptrStr(req.Branch))
+		branchPtr := &branch
+		updates["branch"] = branchPtr
+		topics := mqtttopics.Build(device.DeviceID, branch)
+		applyDefaultTopics(updates, topics)
+	}
 	if len(updates) == 0 {
 		return nil, ErrNothingToUpdate
-	}
-
-	if connRaw, ok := updates["mqtt_connection_id"]; ok {
-		if connRaw == nil {
-			// allow unlink
-		} else if connID, ok := connRaw.(uuid.UUID); ok {
-			exists, err := s.repo.MqttConnectionExists(connID)
-			if err != nil {
-				return nil, err
-			}
-			if !exists {
-				return nil, ErrMqttConnectionMissing
-			}
-		}
 	}
 
 	if err := s.repo.UpdateFields(device.ID, updates); err != nil {
 		return nil, err
 	}
-	if s.runtime != nil {
-		if device.MqttConnectionID != nil {
-			_ = s.runtime.Reload(*device.MqttConnectionID)
-		}
-		if connRaw, ok := updates["mqtt_connection_id"]; ok {
-			if connID, ok := connRaw.(uuid.UUID); ok && (device.MqttConnectionID == nil || connID != *device.MqttConnectionID) {
-				_ = s.runtime.Reload(connID)
-			}
-		}
+	if s.runtime != nil && device.MqttConnectionID != nil {
+		_ = s.runtime.Reload(*device.MqttConnectionID)
 	}
 	return s.Get(device.DeviceID)
 }
@@ -168,6 +164,11 @@ func buildModelFromCreate(req dto.CreateDeviceRequest) (*model.Device, error) {
 	if code == "" || name == "" {
 		return nil, ErrInvalidPayload
 	}
+	location := strings.TrimSpace(ptrStr(req.Location))
+	if location == "" {
+		return nil, ErrInvalidPayload
+	}
+	locationPtr := &location
 
 	payloadFormat := "json"
 	if req.PayloadFormat != nil {
@@ -177,7 +178,7 @@ func buildModelFromCreate(req dto.CreateDeviceRequest) (*model.Device, error) {
 		return nil, ErrInvalidPayloadFormat
 	}
 
-	topics := defaultTopics(code)
+	topics := mqtttopics.Build(code, branchFromRequest(req))
 	if req.TelemetryTopic != nil && strings.TrimSpace(*req.TelemetryTopic) != "" {
 		topics.Telemetry = strings.TrimSpace(*req.TelemetryTopic)
 	}
@@ -197,10 +198,15 @@ func buildModelFromCreate(req dto.CreateDeviceRequest) (*model.Device, error) {
 		topics.Calibration = trimPtr(req.CalibrationTopic)
 	}
 
+	branch := branchFromRequest(req)
+	branchPtr := &branch
+
 	device := &model.Device{
 		DeviceID:         code,
 		DeviceName:       name,
-		Location:         trimPtr(req.Location),
+		Location:         locationPtr,
+		Branch:           branchPtr,
+		DeviceType:       deviceTypeFromRequest(req.DeviceType),
 		Model:            trimPtr(req.Model),
 		TelemetryTopic:   topics.Telemetry,
 		StatusTopic:      topics.Status,
@@ -240,23 +246,19 @@ func buildUpdatesFromRequest(req dto.UpdateDeviceRequest) (map[string]interface{
 		updates["device_name"] = v
 	}
 	if req.Location != nil {
-		updates["location"] = trimPtr(req.Location)
+		v := strings.TrimSpace(*req.Location)
+		if v == "" {
+			return nil, ErrInvalidPayload
+		}
+		updates["location"] = &v
 	}
 	if req.Model != nil {
 		updates["model"] = trimPtr(req.Model)
 	}
-	if req.MqttConnectionID != nil {
-		v := strings.TrimSpace(*req.MqttConnectionID)
-		if v == "" {
-			updates["mqtt_connection_id"] = nil
-		} else {
-			id, err := uuid.Parse(v)
-			if err != nil {
-				return nil, ErrMqttConnectionMissing
-			}
-			updates["mqtt_connection_id"] = id
-		}
+	if req.DeviceType != nil {
+		updates["device_type"] = devicetype.Normalize(*req.DeviceType)
 	}
+	// All devices share the single default MQTT broker — ignore per-device broker changes.
 	if req.TelemetryTopic != nil {
 		v := strings.TrimSpace(*req.TelemetryTopic)
 		if v == "" {
@@ -305,30 +307,34 @@ func buildUpdatesFromRequest(req dto.UpdateDeviceRequest) (map[string]interface{
 	return updates, nil
 }
 
-type topicSet struct {
-	Telemetry   string
-	Status      *string
-	Command     *string
-	Response    *string
-	Config      *string
-	Calibration *string
+func branchFromRequest(req dto.CreateDeviceRequest) string {
+	if req.Branch == nil {
+		return mqtttopics.DefaultBranch
+	}
+	return mqtttopics.ResolveBranch(*req.Branch)
 }
 
-func defaultTopics(deviceID string) topicSet {
-	base := fmt.Sprintf("loadcell/%s", deviceID)
-	status := base + "/status"
-	command := base + "/command"
-	response := base + "/command/response"
-	config := base + "/config"
-	calibration := base + "/calibration"
-	return topicSet{
-		Telemetry:   base + "/telemetry",
-		Status:      &status,
-		Command:     &command,
-		Response:    &response,
-		Config:      &config,
-		Calibration: &calibration,
+func deviceTypeFromRequest(raw *string) string {
+	if raw == nil {
+		return devicetype.Default
 	}
+	return devicetype.Normalize(*raw)
+}
+
+func ptrStr(p *string) string {
+	if p == nil {
+		return ""
+	}
+	return strings.TrimSpace(*p)
+}
+
+func applyDefaultTopics(updates map[string]interface{}, topics mqtttopics.Set) {
+	updates["telemetry_topic"] = topics.Telemetry
+	updates["status_topic"] = topics.Status
+	updates["command_topic"] = topics.Command
+	updates["response_topic"] = topics.Response
+	updates["config_topic"] = topics.Config
+	updates["calibration_topic"] = topics.Calibration
 }
 
 func toResponse(device model.Device) dto.DeviceResponse {
@@ -364,6 +370,8 @@ func toResponse(device model.Device) dto.DeviceResponse {
 		DeviceID:         device.DeviceID,
 		DeviceName:       device.DeviceName,
 		Location:         device.Location,
+		Branch:           device.Branch,
+		DeviceType:       devicetype.Normalize(device.DeviceType),
 		Model:            device.Model,
 		MqttConnectionID: connID,
 		MqttConnection:   connSummary,
@@ -380,6 +388,7 @@ func toResponse(device model.Device) dto.DeviceResponse {
 		MacAddress:       device.MacAddress,
 		Rssi:             device.Rssi,
 		Enabled:          device.Enabled,
+		OutputEnabled:    device.OutputEnabled,
 		Status:           device.Status,
 		LastSeenAt:       lastSeen,
 		CreatedAt:        device.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),

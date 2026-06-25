@@ -28,6 +28,7 @@ type DeviceRepository interface {
 	UpdateFields(id uuid.UUID, updates map[string]interface{}) error
 	DeleteByDeviceID(deviceID string) (int64, error)
 	MqttConnectionExists(id uuid.UUID) (bool, error)
+	FindDefaultMqttConnectionID() (*uuid.UUID, error)
 }
 
 func NewDeviceRepository(db *gorm.DB) DeviceRepository {
@@ -98,4 +99,13 @@ func (r deviceRepository) MqttConnectionExists(id uuid.UUID) (bool, error) {
 	var count int64
 	err := r.db.Model(&model.MqttConnection{}).Where("id = ?", id).Count(&count).Error
 	return count > 0, err
+}
+
+func (r deviceRepository) FindDefaultMqttConnectionID() (*uuid.UUID, error) {
+	var conn model.MqttConnection
+	if err := r.db.Where("is_default = ? AND enabled = ?", true, true).First(&conn).Error; err != nil {
+		return nil, err
+	}
+	id := conn.ID
+	return &id, nil
 }

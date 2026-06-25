@@ -1,5 +1,5 @@
 -- Data destinations + device mapping (§13, §17)
-CREATE TABLE IF NOT EXISTS data_destinations (
+CREATE TABLE IF NOT EXISTS loadcell.data_destinations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     destination_name VARCHAR(255) NOT NULL,
@@ -23,13 +23,13 @@ CREATE TABLE IF NOT EXISTS data_destinations (
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_data_destinations_name
-    ON data_destinations (destination_name);
+    ON loadcell.data_destinations (destination_name);
 
-CREATE TABLE IF NOT EXISTS device_destinations (
+CREATE TABLE IF NOT EXISTS loadcell.device_destinations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    device_id UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
-    destination_id UUID NOT NULL REFERENCES data_destinations(id) ON DELETE RESTRICT,
+    device_id UUID NOT NULL REFERENCES loadcell.devices(id) ON DELETE CASCADE,
+    destination_id UUID NOT NULL REFERENCES loadcell.data_destinations(id) ON DELETE RESTRICT,
 
     trigger_type VARCHAR(50) NOT NULL DEFAULT 'stable_weight',
 
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS device_destinations (
 );
 
 CREATE INDEX IF NOT EXISTS idx_device_destinations_device
-    ON device_destinations (device_id);
+    ON loadcell.device_destinations (device_id);
 
 CREATE INDEX IF NOT EXISTS idx_device_destinations_destination
-    ON device_destinations (destination_id);
+    ON loadcell.device_destinations (destination_id);

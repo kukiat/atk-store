@@ -263,14 +263,14 @@ func (s deviceDestinationService) SendSample(deviceID, mappingID string, req dto
 		if err := s.router.DispatchSample(*device, *row, source); err != nil {
 			return &dto.SendSampleResponse{
 				Success:       false,
-				MappedPayload: mapped,
+				MappedPayload: mapped.Body,
 				Message:       err.Error(),
 			}, nil
 		}
 	}
 	return &dto.SendSampleResponse{
 		Success:       true,
-		MappedPayload: mapped,
+		MappedPayload: mapped.Body,
 		Message:       "delivered",
 	}, nil
 }

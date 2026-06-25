@@ -69,9 +69,10 @@ func (s *managedSession) connect() error {
 		s.mu.Lock()
 		s.connected = true
 		s.mu.Unlock()
-		if err := subscribeDevices(mgr.db, client, connID, mgr.handleMessage); err != nil {
+		if err := subscribeDevices(mgr.db, client, connID, clampQoS(s.conn.SubscribeQoS), mgr.handleMessage); err != nil {
 			log.Printf("[mqtt] subscribe %s: %v", connID, err)
 		}
+		publishLifecycleMessage(client, s.conn, lifecycleBirth)
 	})
 
 	opts.SetConnectionLostHandler(func(_ mqtt.Client, err error) {
@@ -143,10 +144,12 @@ func (s *managedSession) stop() {
 		close(s.stopCh)
 		s.mu.Lock()
 		client := s.client
+		conn := s.conn
 		s.client = nil
 		s.connected = false
 		s.mu.Unlock()
 		if client != nil && client.IsConnected() {
+			publishLifecycleMessage(client, conn, lifecycleClose)
 			client.Disconnect(250)
 		}
 	})
@@ -202,6 +205,8 @@ func buildClientOptions(conn model.MqttConnection) (*mqtt.ClientOptions, string,
 		}
 		opts.SetTLSConfig(tlsCfg)
 	}
+
+	applyWillMessage(opts, conn)
 
 	return opts, clientID, nil
 }

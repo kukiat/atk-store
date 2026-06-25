@@ -1,5 +1,12 @@
 package dto
 
+type MqttLifecycleMessage struct {
+	Topic   string `json:"topic"`
+	Payload string `json:"payload"`
+	Retain  bool   `json:"retain"`
+	QoS     int    `json:"qos"`
+}
+
 type CreateMqttConnectionRequest struct {
 	ConnectionName           string  `json:"connection_name"`
 	Protocol                 string  `json:"protocol"`
@@ -14,8 +21,13 @@ type CreateMqttConnectionRequest struct {
 	ClientPrivateKey         *string `json:"client_private_key"`
 	ConnectTimeoutSeconds    *int    `json:"connect_timeout_seconds"`
 	KeepAliveSeconds         *int    `json:"keep_alive_seconds"`
-	ReconnectIntervalSeconds *int    `json:"reconnect_interval_seconds"`
-	Enabled                  *bool   `json:"enabled"`
+	SubscribeQoS             *int    `json:"subscribe_qos"`
+	PublishQoS               *int    `json:"publish_qos"`
+	ReconnectIntervalSeconds *int                    `json:"reconnect_interval_seconds"`
+	BirthMessage             *MqttLifecycleMessage   `json:"birth_message"`
+	CloseMessage             *MqttLifecycleMessage   `json:"close_message"`
+	WillMessage              *MqttLifecycleMessage   `json:"will_message"`
+	Enabled                  *bool                   `json:"enabled"`
 }
 
 type UpdateMqttConnectionRequest struct {
@@ -32,8 +44,13 @@ type UpdateMqttConnectionRequest struct {
 	ClientPrivateKey         *string `json:"client_private_key"`
 	ConnectTimeoutSeconds    *int    `json:"connect_timeout_seconds"`
 	KeepAliveSeconds         *int    `json:"keep_alive_seconds"`
-	ReconnectIntervalSeconds *int    `json:"reconnect_interval_seconds"`
-	Enabled                  *bool   `json:"enabled"`
+	SubscribeQoS             *int    `json:"subscribe_qos"`
+	PublishQoS               *int    `json:"publish_qos"`
+	ReconnectIntervalSeconds *int                    `json:"reconnect_interval_seconds"`
+	BirthMessage             *MqttLifecycleMessage   `json:"birth_message"`
+	CloseMessage             *MqttLifecycleMessage   `json:"close_message"`
+	WillMessage              *MqttLifecycleMessage   `json:"will_message"`
+	Enabled                  *bool                   `json:"enabled"`
 }
 
 type MqttConnectionResponse struct {
@@ -49,8 +66,14 @@ type MqttConnectionResponse struct {
 	ClientCertificate        *string `json:"client_certificate,omitempty"`
 	ConnectTimeoutSeconds    int     `json:"connect_timeout_seconds"`
 	KeepAliveSeconds         int     `json:"keep_alive_seconds"`
-	ReconnectIntervalSeconds int     `json:"reconnect_interval_seconds"`
-	Enabled                  bool    `json:"enabled"`
+	SubscribeQoS             int     `json:"subscribe_qos"`
+	PublishQoS               int     `json:"publish_qos"`
+	ReconnectIntervalSeconds int                   `json:"reconnect_interval_seconds"`
+	BirthMessage             MqttLifecycleMessage  `json:"birth_message"`
+	CloseMessage             MqttLifecycleMessage  `json:"close_message"`
+	WillMessage              MqttLifecycleMessage  `json:"will_message"`
+	Enabled                  bool                  `json:"enabled"`
+	IsDefault                bool    `json:"is_default"`
 	ConnectionStatus         string  `json:"connection_status"`
 	LastConnectedAt          *string `json:"last_connected_at,omitempty"`
 	LastError                *string `json:"last_error,omitempty"`
@@ -69,4 +92,17 @@ type TestMqttConnectionResponse struct {
 	Success   bool   `json:"success"`
 	LatencyMs int64  `json:"latency_ms"`
 	Message   string `json:"message"`
+}
+
+type PublishMqttMessageRequest struct {
+	Topic   string `json:"topic"`
+	Payload string `json:"payload"`
+	QoS     *int   `json:"qos"`
+	Retain  *bool  `json:"retain"`
+}
+
+type PublishMqttMessageResponse struct {
+	Success bool   `json:"success"`
+	Topic   string `json:"topic"`
+	Message string `json:"message"`
 }

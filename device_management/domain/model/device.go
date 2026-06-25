@@ -12,6 +12,8 @@ type Device struct {
 	DeviceID         string          `gorm:"size:100;uniqueIndex;not null" json:"device_id"`
 	DeviceName       string          `gorm:"size:255;not null" json:"device_name"`
 	Location         *string         `gorm:"size:255" json:"location,omitempty"`
+	Branch           *string         `gorm:"size:100" json:"branch,omitempty"`
+	DeviceType       string          `gorm:"size:50;not null;default:loadcell;index" json:"device_type"`
 	Model            *string         `gorm:"size:100" json:"model,omitempty"`
 	MqttConnectionID *uuid.UUID      `gorm:"type:uuid" json:"mqtt_connection_id,omitempty"`
 	TelemetryTopic   string          `gorm:"size:500;not null" json:"telemetry_topic"`
@@ -22,11 +24,13 @@ type Device struct {
 	CalibrationTopic *string         `gorm:"size:500" json:"calibration_topic,omitempty"`
 	PayloadFormat    string          `gorm:"size:50;not null;default:json" json:"payload_format"`
 	ParserConfig     json.RawMessage `gorm:"type:jsonb" json:"parser_config,omitempty"`
+	DeviceConfig     json.RawMessage `gorm:"type:jsonb" json:"device_config,omitempty"`
 	FirmwareVersion  *string         `gorm:"size:50" json:"firmware_version,omitempty"`
 	IPAddress        *string         `gorm:"size:50" json:"ip_address,omitempty"`
 	MacAddress       *string         `gorm:"size:50" json:"mac_address,omitempty"`
 	Rssi             *int            `json:"rssi,omitempty"`
 	Enabled          bool            `gorm:"not null;default:true" json:"enabled"`
+	OutputEnabled    *bool           `json:"output_enabled,omitempty"`
 	Status           string          `gorm:"size:20;not null;default:offline" json:"status"`
 	LastSeenAt       *time.Time      `json:"last_seen_at,omitempty"`
 	CreatedAt        time.Time       `json:"created_at"`

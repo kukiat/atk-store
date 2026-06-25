@@ -17,20 +17,33 @@ import (
 )
 
 type Manager struct {
-	db        *gorm.DB
-	mu        sync.RWMutex
-	sessions  map[uuid.UUID]*managedSession
-	pub       *PublisherService
-	cmd       *CommandManager
-	telemetry telemetry.TelemetryService
+	db                *gorm.DB
+	mu                sync.RWMutex
+	sessions          map[uuid.UUID]*managedSession
+	pub               *PublisherService
+	cmd               *CommandManager
+	telemetry         telemetry.TelemetryService
+	statusBroadcaster StatusBroadcaster
+	outputUpdater     OutputStateUpdater
 }
 
-func NewManager(db *gorm.DB, destRouter *destrouter.Router, broadcast telemetry.WeightBroadcaster) *Manager {
+// OutputStateUpdater persists device output on/off from MQTT status messages.
+type OutputStateUpdater interface {
+	UpdateOutputEnabled(deviceID string, enabled bool, source string) error
+}
+
+func NewManager(
+	db *gorm.DB,
+	destRouter *destrouter.Router,
+	broadcast telemetry.WeightBroadcaster,
+	statusBroadcaster StatusBroadcaster,
+) *Manager {
 	m := &Manager{
-		db:        db,
-		sessions:  make(map[uuid.UUID]*managedSession),
-		cmd:       NewCommandManager(),
-		telemetry: telemetry.NewTelemetryService(db, destRouter, broadcast),
+		db:                db,
+		sessions:          make(map[uuid.UUID]*managedSession),
+		cmd:               NewCommandManager(),
+		telemetry:         telemetry.NewTelemetryService(db, destRouter, broadcast),
+		statusBroadcaster: statusBroadcaster,
 	}
 	m.pub = NewPublisherService(m)
 	return m
@@ -40,10 +53,18 @@ func (m *Manager) CommandManager() *CommandManager {
 	return m.cmd
 }
 
+func (m *Manager) SetOutputUpdater(updater OutputStateUpdater) {
+	m.outputUpdater = updater
+}
+
 func (m *Manager) Start(ctx context.Context) {
 	var connections []model.MqttConnection
-	if err := m.db.Where("enabled = ?", true).Find(&connections).Error; err != nil {
-		log.Printf("[mqtt] failed to load enabled connections: %v", err)
+	if err := m.db.Where("is_default = ? AND enabled = ?", true, true).Find(&connections).Error; err != nil {
+		log.Printf("[mqtt] failed to load default connection: %v", err)
+		return
+	}
+	if len(connections) == 0 {
+		log.Println("[mqtt] no default broker configured — set MQTT_SEED_HOST and run migrate")
 		return
 	}
 	for _, conn := range connections {
@@ -70,7 +91,7 @@ func (m *Manager) watchdog(ctx context.Context) {
 
 func (m *Manager) ensureEnabledConnections() {
 	var connections []model.MqttConnection
-	if err := m.db.Where("enabled = ?", true).Find(&connections).Error; err != nil {
+	if err := m.db.Where("is_default = ? AND enabled = ?", true, true).Find(&connections).Error; err != nil {
 		return
 	}
 	for _, conn := range connections {
@@ -162,6 +183,10 @@ func (m *Manager) setConnectionStatus(id uuid.UUID, status string, lastError *st
 	}
 	if err := m.db.Model(&model.MqttConnection{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		log.Printf("[mqtt] update status %s: %v", id, err)
+		return
+	}
+	if m.statusBroadcaster != nil {
+		m.statusBroadcaster.PublishMqttStatus(id, status, lastError)
 	}
 }
 
@@ -171,8 +196,25 @@ func (m *Manager) sessionByConnection(id uuid.UUID) *managedSession {
 	return m.sessions[id]
 }
 
+func (m *Manager) Publish(connectionID uuid.UUID, topic string, payload []byte, qos byte, retain bool) error {
+	return m.pub.Publish(connectionID, topic, payload, qos, retain)
+}
+
+// PublishToTopic publishes using the connection's configured publish_qos.
+func (m *Manager) PublishToTopic(connectionID uuid.UUID, topic string, payload []byte) error {
+	return m.pub.Publish(connectionID, topic, payload, m.publishQoS(connectionID), false)
+}
+
 func (m *Manager) PublishCommand(connectionID uuid.UUID, topic string, payload []byte) error {
-	return m.pub.Publish(connectionID, topic, payload, 1)
+	return m.pub.Publish(connectionID, topic, payload, m.publishQoS(connectionID), false)
+}
+
+func (m *Manager) publishQoS(connectionID uuid.UUID) byte {
+	var conn model.MqttConnection
+	if err := m.db.First(&conn, "id = ?", connectionID).Error; err != nil {
+		return 1
+	}
+	return clampQoS(conn.PublishQoS)
 }
 
 func (m *Manager) RegisterCommandResponse(requestID string) <-chan []byte {
@@ -181,6 +223,10 @@ func (m *Manager) RegisterCommandResponse(requestID string) <-chan []byte {
 
 func (m *Manager) CancelCommandResponse(requestID string) {
 	m.cmd.Cancel(requestID)
+}
+
+func (m *Manager) CompleteCommandResponse(requestID string, payload []byte) {
+	m.completeCommandResponse(requestID, payload)
 }
 
 func (m *Manager) completeCommandResponse(requestID string, payload []byte) {

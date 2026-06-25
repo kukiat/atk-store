@@ -5,15 +5,33 @@ import (
 	"log"
 	"sync"
 
+	"github.com/google/uuid"
+
 	"github.com/kukiat/atk-store/device_management/pkg/dto"
 )
 
 const EventWeightUpdate = "weight.update"
+const EventMqttStatus = "mqtt.status"
+const EventDeviceOutput = "device.output"
 
 type weightEvent struct {
 	Type     string                   `json:"type"`
 	DeviceID string                   `json:"deviceId"`
 	Data     dto.LatestWeightResponse `json:"data"`
+}
+
+type mqttStatusEvent struct {
+	Type             string  `json:"type"`
+	ConnectionID     string  `json:"connectionId"`
+	ConnectionStatus string  `json:"connection_status"`
+	LastError        *string `json:"last_error,omitempty"`
+}
+
+type deviceOutputEvent struct {
+	Type      string `json:"type"`
+	DeviceID  string `json:"deviceId"`
+	Enabled   bool   `json:"enabled"`
+	Source    string `json:"source"`
 }
 
 // Hub broadcasts latest weight updates to dashboard clients.
@@ -57,6 +75,48 @@ func (h *Hub) PublishWeight(deviceID string, data dto.LatestWeightResponse) {
 		case ch <- payload:
 		default:
 			log.Printf("[websocket] slow client dropped message device=%s", deviceID)
+		}
+	}
+}
+
+func (h *Hub) PublishDeviceOutput(deviceID string, enabled bool, source string) {
+	payload, err := json.Marshal(deviceOutputEvent{
+		Type:     EventDeviceOutput,
+		DeviceID: deviceID,
+		Enabled:  enabled,
+		Source:   source,
+	})
+	if err != nil {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for ch := range h.clients {
+		select {
+		case ch <- payload:
+		default:
+			log.Printf("[websocket] slow client dropped device output device=%s", deviceID)
+		}
+	}
+}
+
+func (h *Hub) PublishMqttStatus(connectionID uuid.UUID, status string, lastError *string) {
+	payload, err := json.Marshal(mqttStatusEvent{
+		Type:             EventMqttStatus,
+		ConnectionID:     connectionID.String(),
+		ConnectionStatus: status,
+		LastError:        lastError,
+	})
+	if err != nil {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for ch := range h.clients {
+		select {
+		case ch <- payload:
+		default:
+			log.Printf("[websocket] slow client dropped mqtt status connection=%s", connectionID)
 		}
 	}
 }

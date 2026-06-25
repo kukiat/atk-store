@@ -17,7 +17,7 @@ type ConnectionRuntime interface {
 
 // Publisher publishes MQTT messages on a broker connection.
 type Publisher interface {
-	Publish(connectionID uuid.UUID, topic string, payload []byte, qos byte) error
+	Publish(connectionID uuid.UUID, topic string, payload []byte, qos byte, retain bool) error
 }
 
 // CommandRuntime publishes commands and waits for device responses.
@@ -25,4 +25,5 @@ type CommandRuntime interface {
 	PublishCommand(connectionID uuid.UUID, topic string, payload []byte) error
 	RegisterCommandResponse(requestID string) <-chan []byte
 	CancelCommandResponse(requestID string)
+	CompleteCommandResponse(requestID string, payload []byte)
 }

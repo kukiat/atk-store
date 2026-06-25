@@ -87,7 +87,7 @@ func (s telemetryService) ProcessTelemetry(device model.Device, rawPayload []byt
 		s.broadcast.PublishWeight(device.DeviceID, latest)
 	}
 	if s.router != nil {
-		s.router.HandleTelemetry(device, standard)
+		s.router.HandleTelemetry(device, standard, rawPayload)
 	}
 	return nil
 }

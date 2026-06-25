@@ -1,4 +1,3 @@
--- Step 1: bootstrap extensions for Load Cell Gateway
--- Apply: psql -U postgres -d loadcell_gateway -f migrations/001_init.sql
-
+-- Step 1: bootstrap extensions + loadcell schema
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE SCHEMA IF NOT EXISTS loadcell;

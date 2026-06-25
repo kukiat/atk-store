@@ -26,10 +26,13 @@ type mqttConnectionRepository struct {
 type MqttConnectionRepository interface {
 	FindAll(f ListFilter) ([]ConnectionRow, error)
 	FindByID(id uuid.UUID) (*ConnectionRow, error)
+	FindDefault() (*ConnectionRow, error)
+	FindAny() (*ConnectionRow, error)
 	Insert(conn *model.MqttConnection) error
 	UpdateFields(id uuid.UUID, updates map[string]interface{}) error
 	Delete(id uuid.UUID) (int64, error)
 	CountDevices(id uuid.UUID) (int64, error)
+	HasDefault() (bool, error)
 }
 
 func NewMqttConnectionRepository(db *gorm.DB) MqttConnectionRepository {
@@ -77,6 +80,28 @@ func (r mqttConnectionRepository) FindByID(id uuid.UUID) (*ConnectionRow, error)
 	return &row, nil
 }
 
+func (r mqttConnectionRepository) FindDefault() (*ConnectionRow, error) {
+	var row ConnectionRow
+	if err := r.baseQuery().Where("mc.is_default = ?", true).Scan(&row).Error; err != nil {
+		return nil, err
+	}
+	if row.ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &row, nil
+}
+
+func (r mqttConnectionRepository) FindAny() (*ConnectionRow, error) {
+	var rows []ConnectionRow
+	if err := r.baseQuery().Order("mc.is_default DESC, mc.created_at ASC").Limit(1).Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 || rows[0].ID == uuid.Nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &rows[0], nil
+}
+
 func (r mqttConnectionRepository) Insert(conn *model.MqttConnection) error {
 	return r.db.Create(conn).Error
 }
@@ -94,4 +119,10 @@ func (r mqttConnectionRepository) CountDevices(id uuid.UUID) (int64, error) {
 	var count int64
 	err := r.db.Model(&model.Device{}).Where("mqtt_connection_id = ?", id).Count(&count).Error
 	return count, err
+}
+
+func (r mqttConnectionRepository) HasDefault() (bool, error) {
+	var count int64
+	err := r.db.Model(&model.MqttConnection{}).Where("is_default = ?", true).Count(&count).Error
+	return count > 0, err
 }

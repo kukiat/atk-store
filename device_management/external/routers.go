@@ -5,17 +5,22 @@ import (
 
 	"github.com/kukiat/atk-store/device_management/internal/audit"
 	"github.com/kukiat/atk-store/device_management/internal/auth"
+	"github.com/kukiat/atk-store/device_management/internal/branchdestination"
 	"github.com/kukiat/atk-store/device_management/internal/calibration"
 	"github.com/kukiat/atk-store/device_management/internal/command"
+	"github.com/kukiat/atk-store/device_management/internal/confighistory"
 	"github.com/kukiat/atk-store/device_management/internal/deliverylog"
 	"github.com/kukiat/atk-store/device_management/internal/devicedestination"
+	"github.com/kukiat/atk-store/device_management/internal/devicetypecatalog"
 	"github.com/kukiat/atk-store/device_management/internal/destination"
 	destrouter "github.com/kukiat/atk-store/device_management/internal/destination/router"
 	"github.com/kukiat/atk-store/device_management/internal/device"
+	"github.com/kukiat/atk-store/device_management/internal/deviceconfig"
 	"github.com/kukiat/atk-store/device_management/internal/health"
 	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
 	"github.com/kukiat/atk-store/device_management/internal/mqttconnection"
 	"github.com/kukiat/atk-store/device_management/internal/websocket"
+	"github.com/kukiat/atk-store/device_management/pkg/database"
 	"github.com/kukiat/atk-store/device_management/pkg/middleware"
 )
 
@@ -29,13 +34,19 @@ func Register(app *fiber.App, mgr *mqttruntime.Manager, destRouter *destrouter.R
 	websocket.Router(app, wsHub)
 
 	protected := v1.Group("", middleware.RequireAuth(), middleware.RBAC())
-	mqttconnection.Router(protected, mgr)
+	mqttconnection.Router(protected, mgr, mgr)
 	destination.Router(protected)
+	branchdestination.Router(protected)
+	devicetypecatalog.Router(protected)
 	deliverylog.Router(protected)
-	device.Router(protected, mgr, destRouter)
+	outputSvc := device.NewOutputStateService(device.NewDeviceRepository(database.DB), wsHub)
+	mgr.SetOutputUpdater(outputSvc)
+	device.Router(protected, mgr, destRouter, wsHub, mgr)
 	devices := protected.Group("/devices")
-	command.Router(devices, mgr, mgr)
+	command.Router(devices, mgr, mgr, outputSvc)
 	calibration.Router(devices, mgr, mgr)
+	deviceconfig.Router(devices, mgr, mgr)
 	devicedestination.Router(devices, destRouter)
 	audit.Router(protected)
+	confighistory.Router(protected)
 }

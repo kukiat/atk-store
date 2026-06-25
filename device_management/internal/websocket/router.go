@@ -34,8 +34,12 @@ func Router(app *fiber.App, hub *Hub) {
 
 		for msg := range ch {
 			if filter != "" {
-				var evt weightEvent
-				if err := json.Unmarshal(msg, &evt); err == nil && evt.DeviceID != filter {
+				var envelope struct {
+					Type     string `json:"type"`
+					DeviceID string `json:"deviceId"`
+				}
+				if err := json.Unmarshal(msg, &envelope); err == nil &&
+					envelope.Type == EventWeightUpdate && envelope.DeviceID != filter {
 					continue
 				}
 			}

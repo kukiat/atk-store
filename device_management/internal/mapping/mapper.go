@@ -3,8 +3,10 @@ package mapping
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
-	"time"
+
+	"github.com/tidwall/gjson"
 )
 
 type FieldMapping struct {
@@ -18,7 +20,24 @@ type FieldMapping struct {
 }
 
 type Config struct {
-	FieldMappings []FieldMapping `json:"fieldMappings"`
+	FieldMappings       []FieldMapping `json:"fieldMappings"`
+	QueryParamMappings  []FieldMapping `json:"queryParamMappings"`
+	PathParamMappings   []FieldMapping `json:"pathParamMappings"`
+	HeaderMappings      []FieldMapping `json:"headerMappings"`
+}
+
+type ApplyResult struct {
+	Body        map[string]interface{}
+	QueryParams map[string]string
+	PathParams  map[string]string
+	Headers     map[string]string
+}
+
+type DeliveryPayload struct {
+	Body    map[string]interface{} `json:"body"`
+	Query   map[string]string      `json:"query,omitempty"`
+	Path    map[string]string      `json:"path,omitempty"`
+	Headers map[string]string      `json:"headers,omitempty"`
 }
 
 func ParseConfig(raw json.RawMessage) Config {
@@ -30,32 +49,202 @@ func ParseConfig(raw json.RawMessage) Config {
 	return cfg
 }
 
-// Apply transforms a standard telemetry map using field mappings.
-func Apply(source map[string]interface{}, cfg Config) (map[string]interface{}, error) {
-	out := make(map[string]interface{})
+// BuildSourceMap creates a mapping source from standard telemetry and optional raw MQTT JSON.
+func BuildSourceMap(standard map[string]interface{}, rawPayload []byte) map[string]interface{} {
+	out := make(map[string]interface{}, len(standard)+1)
+	for k, v := range standard {
+		out[k] = v
+	}
+	if len(rawPayload) > 0 && gjson.ValidBytes(rawPayload) {
+		out["_raw"] = json.RawMessage(rawPayload)
+	}
+	return out
+}
+
+// Apply transforms source data into REST body, query, path and header parameters.
+func Apply(source map[string]interface{}, cfg Config) (ApplyResult, error) {
+	body := make(map[string]interface{})
+	query := make(map[string]string)
+	path := make(map[string]string)
+	headers := make(map[string]string)
+
 	for _, rule := range cfg.FieldMappings {
 		key := outputKey(rule)
 		if key == "" {
 			continue
 		}
-		if strings.EqualFold(strings.TrimSpace(rule.SourceType), "static") {
-			out[key] = transformValue(rule.Value, rule.Type, rule.DataType)
-			continue
+		val, ok, err := resolveRuleValue(source, rule)
+		if err != nil {
+			return ApplyResult{}, err
 		}
-		srcKey := strings.TrimSpace(rule.Source)
-		if srcKey == "" {
-			continue
-		}
-		raw, ok := source[srcKey]
 		if !ok {
 			continue
 		}
-		out[key] = transformValue(raw, rule.Type, rule.DataType)
+		body[key] = val
 	}
-	if len(out) == 0 && len(cfg.FieldMappings) > 0 {
-		return out, fmt.Errorf("no mapped fields produced from source payload")
+
+	applyStringRules := func(rules []FieldMapping, out map[string]string) error {
+		for _, rule := range rules {
+			key := paramKey(rule)
+			if key == "" {
+				continue
+			}
+			val, ok, err := resolveRuleValue(source, rule)
+			if err != nil {
+				return err
+			}
+			if !ok {
+				continue
+			}
+			out[key] = stringifyParamValue(val)
+		}
+		return nil
 	}
-	return out, nil
+
+	if err := applyStringRules(cfg.QueryParamMappings, query); err != nil {
+		return ApplyResult{}, err
+	}
+	if err := applyStringRules(cfg.PathParamMappings, path); err != nil {
+		return ApplyResult{}, err
+	}
+	if err := applyStringRules(cfg.HeaderMappings, headers); err != nil {
+		return ApplyResult{}, err
+	}
+
+	hasRules := len(cfg.FieldMappings) > 0 ||
+		len(cfg.QueryParamMappings) > 0 ||
+		len(cfg.PathParamMappings) > 0 ||
+		len(cfg.HeaderMappings) > 0
+	if !hasRules {
+		return ApplyResult{
+			Body:        withoutRaw(source),
+			QueryParams: query,
+			PathParams:  path,
+			Headers:     headers,
+		}, nil
+	}
+	if len(body) == 0 && len(cfg.FieldMappings) > 0 {
+		return ApplyResult{}, fmt.Errorf("no mapped body fields produced from source payload")
+	}
+	return ApplyResult{
+		Body:        body,
+		QueryParams: query,
+		PathParams:  path,
+		Headers:     headers,
+	}, nil
+}
+
+func ParseDeliveryPayload(raw json.RawMessage) DeliveryPayload {
+	if len(raw) == 0 {
+		return DeliveryPayload{Body: map[string]interface{}{}}
+	}
+	var wrapped DeliveryPayload
+	if err := json.Unmarshal(raw, &wrapped); err == nil && (wrapped.Body != nil || len(wrapped.Query) > 0 || len(wrapped.Path) > 0 || len(wrapped.Headers) > 0) {
+		if wrapped.Body == nil {
+			wrapped.Body = map[string]interface{}{}
+		}
+		return wrapped
+	}
+	var body map[string]interface{}
+	if err := json.Unmarshal(raw, &body); err == nil {
+		return DeliveryPayload{Body: body}
+	}
+	return DeliveryPayload{Body: map[string]interface{}{}}
+}
+
+func resolveRuleValue(source map[string]interface{}, rule FieldMapping) (interface{}, bool, error) {
+	if strings.EqualFold(strings.TrimSpace(rule.SourceType), "static") {
+		return transformValue(rule.Value, rule.Type, rule.DataType), true, nil
+	}
+	path := strings.TrimSpace(rule.Source)
+	if path == "" {
+		return nil, false, nil
+	}
+	raw, ok := resolveSource(source, path)
+	if !ok {
+		return nil, false, nil
+	}
+	return transformValue(raw, rule.Type, rule.DataType), true, nil
+}
+
+func resolveSource(source map[string]interface{}, path string) (interface{}, bool) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, false
+	}
+
+	if raw, ok := source["_raw"]; ok {
+		var rawBytes []byte
+		switch v := raw.(type) {
+		case json.RawMessage:
+			rawBytes = v
+		case []byte:
+			rawBytes = v
+		}
+		if len(rawBytes) > 0 && (strings.HasPrefix(path, "$") || strings.Contains(path, ".")) {
+			result := gjson.GetBytes(rawBytes, toGJSONPath(path))
+			if result.Exists() {
+				return gjsonToInterface(result), true
+			}
+		}
+	}
+
+	flatKey := strings.TrimPrefix(strings.TrimPrefix(path, "$."), "$")
+	if v, ok := source[flatKey]; ok {
+		return v, true
+	}
+	if v, ok := source[path]; ok {
+		return v, true
+	}
+	return nil, false
+}
+
+func toGJSONPath(jsonPath string) string {
+	p := strings.TrimSpace(jsonPath)
+	if strings.HasPrefix(p, "$.") {
+		return p[2:]
+	}
+	if p == "$" {
+		return ""
+	}
+	return p
+}
+
+func gjsonToInterface(result gjson.Result) interface{} {
+	switch result.Type {
+	case gjson.Null:
+		return nil
+	case gjson.False:
+		return false
+	case gjson.True:
+		return true
+	case gjson.Number:
+		if strings.Contains(result.Raw, ".") {
+			return result.Float()
+		}
+		return result.Int()
+	case gjson.String:
+		return result.String()
+	case gjson.JSON:
+		var v interface{}
+		if err := json.Unmarshal([]byte(result.Raw), &v); err == nil {
+			return v
+		}
+		return result.Raw
+	default:
+		return result.Value()
+	}
+}
+
+func withoutRaw(source map[string]interface{}) map[string]interface{} {
+	out := make(map[string]interface{}, len(source))
+	for k, v := range source {
+		if k == "_raw" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }
 
 func outputKey(rule FieldMapping) string {
@@ -63,6 +252,37 @@ func outputKey(rule FieldMapping) string {
 		return t
 	}
 	return strings.TrimSpace(rule.Column)
+}
+
+func paramKey(rule FieldMapping) string {
+	if t := strings.TrimSpace(rule.Target); t != "" {
+		return t
+	}
+	return strings.TrimSpace(rule.Column)
+}
+
+func stringifyParamValue(val interface{}) string {
+	switch v := val.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	case float32:
+		return strconv.FormatFloat(float64(v), 'f', -1, 64)
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 func transformValue(raw interface{}, transformType, dataType string) interface{} {
@@ -97,20 +317,15 @@ func transformValue(raw interface{}, transformType, dataType string) interface{}
 			f, _ := v.Float64()
 			return f
 		default:
-			return raw
-		}
-	case "datetime", "timestamp":
-		switch v := raw.(type) {
-		case time.Time:
-			return v.UTC().Format(time.RFC3339Nano)
-		case string:
-			if ts, err := time.Parse(time.RFC3339Nano, v); err == nil {
-				return ts.UTC().Format(time.RFC3339Nano)
+			if f, err := strconv.ParseFloat(fmt.Sprint(raw), 64); err == nil {
+				return f
 			}
-			return v
-		default:
 			return raw
 		}
+	case "string":
+		return fmt.Sprint(raw)
+	case "datetime", "timestamp":
+		return fmt.Sprint(raw)
 	case "boolean", "bool":
 		switch v := raw.(type) {
 		case bool:
@@ -134,6 +349,6 @@ func SampleStandardPayload(deviceID string) map[string]interface{} {
 		"unit":      "kg",
 		"stable":    true,
 		"rawValue":  int64(1238420),
-		"timestamp": time.Now().UTC().Format(time.RFC3339Nano),
+		"timestamp": "2026-06-24T10:30:00Z",
 	}
 }

@@ -16,6 +16,7 @@ import (
 	"github.com/kukiat/atk-store/device_management/internal/auth"
 	destrouter "github.com/kukiat/atk-store/device_management/internal/destination/router"
 	mqttruntime "github.com/kukiat/atk-store/device_management/internal/mqtt"
+	mqttbootstrap "github.com/kukiat/atk-store/device_management/internal/mqttconnection"
 	"github.com/kukiat/atk-store/device_management/internal/retry"
 	"github.com/kukiat/atk-store/device_management/internal/websocket"
 	"github.com/kukiat/atk-store/device_management/pkg/config"
@@ -31,9 +32,12 @@ func main() {
 	destRouter := destrouter.New(database.DB)
 	wsHub := websocket.NewHub()
 
-	mqttManager := mqttruntime.NewManager(database.DB, destRouter, wsHub)
+	mqttManager := mqttruntime.NewManager(database.DB, destRouter, wsHub, wsHub)
 	if err := auth.NewServiceFromDB().BootstrapAdmin(); err != nil {
 		log.Printf("[auth] bootstrap admin: %v", err)
+	}
+	if err := mqttbootstrap.BootstrapDefault(database.DB); err != nil {
+		log.Printf("[mqtt] bootstrap default broker: %v", err)
 	}
 	go mqttManager.Start(context.Background())
 

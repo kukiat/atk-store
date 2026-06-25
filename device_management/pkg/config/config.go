@@ -35,6 +35,13 @@ type Config struct {
 	AuthEnabled    bool
 	AdminUsername  string
 	AdminPassword  string
+
+	MqttSeedName     string
+	MqttSeedHost     string
+	MqttSeedPort     int
+	MqttSeedUsername string
+	MqttSeedPassword string
+	MqttSeedUseTLS   bool
 }
 
 var App *Config
@@ -68,6 +75,13 @@ func Load() *Config {
 		AuthEnabled:    getEnv("AUTH_ENABLED", "true") == "true",
 		AdminUsername:  getEnv("ADMIN_USERNAME", "admin"),
 		AdminPassword:  getEnv("ADMIN_PASSWORD", ""),
+
+		MqttSeedName:     getEnv("MQTT_SEED_NAME", "hexdas-rabbitmq"),
+		MqttSeedHost:     getEnv("MQTT_SEED_HOST", ""),
+		MqttSeedPort:     getEnvInt("MQTT_SEED_PORT", 1883),
+		MqttSeedUsername: getEnv("MQTT_SEED_USERNAME", "rabbitmqadmin"),
+		MqttSeedPassword: getEnv("MQTT_SEED_PASSWORD", ""),
+		MqttSeedUseTLS:   getEnv("MQTT_SEED_USE_TLS", "true") == "true",
 	}
 
 	return App

@@ -1,0 +1,1 @@
+-- Mock devices are seeded in Go after MQTT bootstrap (see internal/seed/mock_devices.go).

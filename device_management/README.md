@@ -59,6 +59,9 @@ make health
 
 **Remote DB (hexdas):** ใช้ `DB_NAME=atkstore` ตาม `.env` — ไม่ต้องสร้าง database ใหม่
 
+**Schema:** ตาราง Load Cell ทั้งหมดอยู่ใน PostgreSQL schema `loadcell` (แยกจาก `public` ของแอปอื่นใน DB เดียวกัน)  
+หลัง pull/อัปเดต migration ให้รัน `make migrate` แล้ว **restart** backend (`make run`)
+
 ## Health Check
 
 ```bash
@@ -167,6 +170,26 @@ REDIS_URL=rediss://:P%40ssr3d%21@redis.hexdas.cloud:6379
 ```
 
 > Password `P@ssr3d!` ต้อง URL-encode ใน connection string: `@` → `%40`, `!` → `%21`
+
+## Web Dashboard (Step 14)
+
+```bash
+npm run dev
+# เปิด http://localhost:3000/loadcell/login
+```
+
+| Route | หน้า |
+|---|---|
+| `/loadcell` | Dashboard หลัก |
+| `/loadcell/devices` | จัดการ devices |
+| `/loadcell/monitor` | Realtime + WebSocket |
+| `/loadcell/mqtt` | MQTT connections |
+| `/loadcell/calibration` | Calibration wizard |
+| `/loadcell/commands` | สั่ง Tare/Zero/Restart |
+| `/loadcell/delivery-logs` | Delivery logs |
+| `/loadcell/users` | Users (ADMIN) |
+
+Backend ต้องรันก่อน: `cd device_management && make run`
 
 ## Development Steps
 

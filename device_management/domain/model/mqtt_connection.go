@@ -21,8 +21,23 @@ type MqttConnection struct {
 	ClientPrivateKeyEncrypted *string   `gorm:"type:text" json:"-"`
 	ConnectTimeoutSeconds    int        `gorm:"not null;default:10" json:"connect_timeout_seconds"`
 	KeepAliveSeconds         int        `gorm:"not null;default:60" json:"keep_alive_seconds"`
+	SubscribeQoS             int        `gorm:"not null;default:1" json:"subscribe_qos"`
+	PublishQoS               int        `gorm:"not null;default:1" json:"publish_qos"`
 	ReconnectIntervalSeconds int        `gorm:"not null;default:5" json:"reconnect_interval_seconds"`
+	BirthTopic               string     `gorm:"size:512;not null;default:''" json:"birth_topic"`
+	BirthPayload             string     `gorm:"type:text;not null;default:''" json:"birth_payload"`
+	BirthRetain              bool       `gorm:"not null;default:false" json:"birth_retain"`
+	BirthQoS                 int        `gorm:"not null;default:0" json:"birth_qos"`
+	CloseTopic               string     `gorm:"size:512;not null;default:''" json:"close_topic"`
+	ClosePayload             string     `gorm:"type:text;not null;default:''" json:"close_payload"`
+	CloseRetain              bool       `gorm:"not null;default:false" json:"close_retain"`
+	CloseQoS                 int        `gorm:"not null;default:0" json:"close_qos"`
+	WillTopic                string     `gorm:"size:512;not null;default:''" json:"will_topic"`
+	WillPayload              string     `gorm:"type:text;not null;default:''" json:"will_payload"`
+	WillRetain               bool       `gorm:"not null;default:false" json:"will_retain"`
+	WillQoS                  int        `gorm:"not null;default:0" json:"will_qos"`
 	Enabled                  bool       `gorm:"not null;default:true" json:"enabled"`
+	IsDefault                bool       `gorm:"not null;default:false" json:"is_default"`
 	ConnectionStatus         string     `gorm:"size:20;not null;default:offline" json:"connection_status"`
 	LastConnectedAt          *time.Time `json:"last_connected_at,omitempty"`
 	LastError                *string    `gorm:"type:text" json:"last_error,omitempty"`

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -24,22 +25,22 @@ type DeliverResult struct {
 	Message      string
 }
 
-func Deliver(db *gorm.DB, dest model.DataDestination, mapped map[string]interface{}, mapCfg mapping.Config) (DeliverResult, error) {
+func Deliver(db *gorm.DB, dest model.DataDestination, payload mapping.DeliveryPayload, mapCfg mapping.Config) (DeliverResult, error) {
 	switch strings.ToLower(strings.TrimSpace(dest.DestinationType)) {
 	case "internal_database":
-		return deliverInternalDatabase(db, mapped)
+		return deliverInternalDatabase(db, payload.Body)
 	case "rest_api", "webhook":
-		return deliverREST(dest, mapped)
+		return deliverREST(dest, payload)
 	case "postgresql", "postgres":
-		return deliverPostgreSQL(dest, mapped, mapCfg)
+		return deliverPostgreSQL(dest, payload.Body, mapCfg)
 	default:
 		return DeliverResult{}, fmt.Errorf("delivery not implemented for type %s", dest.DestinationType)
 	}
 }
 
-func deliverREST(dest model.DataDestination, mapped map[string]interface{}) (DeliverResult, error) {
-	url := strings.TrimSpace(gjson.GetBytes(dest.Config, "url").String())
-	if url == "" {
+func deliverREST(dest model.DataDestination, payload mapping.DeliveryPayload) (DeliverResult, error) {
+	targetURL := strings.TrimSpace(gjson.GetBytes(dest.Config, "url").String())
+	if targetURL == "" {
 		return DeliverResult{Success: false, Message: "config.url is required"}, nil
 	}
 	method := strings.ToUpper(strings.TrimSpace(gjson.GetBytes(dest.Config, "method").String()))
@@ -51,7 +52,21 @@ func deliverREST(dest model.DataDestination, mapped map[string]interface{}) (Del
 		contentType = "application/json"
 	}
 
-	body, err := json.Marshal(mapped)
+	targetURL = applyPathParams(targetURL, payload.Path)
+
+	if len(payload.Query) > 0 {
+		sep := "?"
+		if strings.Contains(targetURL, "?") {
+			sep = "&"
+		}
+		parts := make([]string, 0, len(payload.Query))
+		for key, val := range payload.Query {
+			parts = append(parts, fmt.Sprintf("%s=%s", url.QueryEscape(key), url.QueryEscape(val)))
+		}
+		targetURL = targetURL + sep + strings.Join(parts, "&")
+	}
+
+	body, err := json.Marshal(payload.Body)
 	if err != nil {
 		return DeliverResult{}, err
 	}
@@ -62,15 +77,19 @@ func deliverREST(dest model.DataDestination, mapped map[string]interface{}) (Del
 	}
 	client := &http.Client{Timeout: timeout}
 
-	req, err := http.NewRequest(method, url, bytes.NewReader(body))
+	req, err := http.NewRequest(method, targetURL, bytes.NewReader(body))
 	if err != nil {
 		return DeliverResult{}, err
 	}
 	req.Header.Set("Content-Type", contentType)
-	if dest.AuthConfigEncrypted != nil {
-		if err := applyHTTPAuth(req, *dest.AuthConfigEncrypted); err != nil {
-			return DeliverResult{}, err
+	for key, val := range payload.Headers {
+		name := strings.TrimSpace(key)
+		if name != "" {
+			req.Header.Set(name, val)
 		}
+	}
+	if err := configureHTTPRequest(req, dest); err != nil {
+		return DeliverResult{}, err
 	}
 
 	resp, err := client.Do(req)
@@ -194,6 +213,19 @@ func deliverInternalDatabase(db *gorm.DB, mapped map[string]interface{}) (Delive
 	return DeliverResult{Success: true, ResponseBody: resp, Message: "internal event stored"}, nil
 }
 
+func applyPathParams(targetURL string, pathParams map[string]string) string {
+	if len(pathParams) == 0 {
+		return targetURL
+	}
+	out := targetURL
+	for key, val := range pathParams {
+		escaped := url.PathEscape(val)
+		out = strings.ReplaceAll(out, "{"+key+"}", escaped)
+		out = strings.ReplaceAll(out, ":"+key, escaped)
+	}
+	return out
+}
+
 func quoteIdent(name string) string {
 	name = strings.ReplaceAll(name, `"`, `""`)
 	return `"` + name + `"`
@@ -201,12 +233,9 @@ func quoteIdent(name string) string {
 
 // Re-deliver from a stored delivery log request payload.
 func Redeliver(db *gorm.DB, dest model.DataDestination, mapCfg mapping.Config, requestPayload json.RawMessage) (DeliverResult, error) {
-	var mapped map[string]interface{}
 	if len(requestPayload) == 0 {
 		return DeliverResult{}, errors.New("request payload is empty")
 	}
-	if err := json.Unmarshal(requestPayload, &mapped); err != nil {
-		return DeliverResult{}, err
-	}
-	return Deliver(db, dest, mapped, mapCfg)
+	payload := mapping.ParseDeliveryPayload(requestPayload)
+	return Deliver(db, dest, payload, mapCfg)
 }

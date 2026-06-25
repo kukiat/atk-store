@@ -1,5 +1,5 @@
 -- MQTT broker connections (§3)
-CREATE TABLE IF NOT EXISTS mqtt_connections (
+CREATE TABLE IF NOT EXISTS loadcell.mqtt_connections (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     connection_name VARCHAR(255) NOT NULL,
 
@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS mqtt_connections (
 );
 
 CREATE INDEX IF NOT EXISTS idx_mqtt_connections_enabled
-    ON mqtt_connections(enabled);
+    ON loadcell.mqtt_connections(enabled);
 
 CREATE INDEX IF NOT EXISTS idx_mqtt_connections_status
-    ON mqtt_connections(connection_status);
+    ON loadcell.mqtt_connections(connection_status);

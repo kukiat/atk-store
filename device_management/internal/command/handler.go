@@ -18,6 +18,7 @@ type CommandHandler interface {
 	Zero(c *fiber.Ctx) error
 	Restart(c *fiber.Ctx) error
 	FactoryReset(c *fiber.Ctx) error
+	SetOutput(c *fiber.Ctx) error
 }
 
 func NewCommandHandler(service CommandService) CommandHandler {
@@ -42,6 +43,18 @@ func (h commandHandler) Restart(c *fiber.Ctx) error {
 
 func (h commandHandler) FactoryReset(c *fiber.Ctx) error {
 	return h.run(c, h.service.FactoryReset)
+}
+
+func (h commandHandler) SetOutput(c *fiber.Ctx) error {
+	var req dto.SetOutputRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
+	}
+	result, err := h.service.SetOutput(c.Params("deviceId"), req.Enabled)
+	if err != nil {
+		return c.Status(mapErr(err)).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(result)
 }
 
 func (h commandHandler) run(c *fiber.Ctx, fn func(string) (*dto.DeviceCommandResponse, error)) error {

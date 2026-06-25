@@ -1,12 +1,12 @@
 -- Load cell devices (§4)
-CREATE TABLE IF NOT EXISTS devices (
+CREATE TABLE IF NOT EXISTS loadcell.devices (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     device_id VARCHAR(100) UNIQUE NOT NULL,
     device_name VARCHAR(255) NOT NULL,
     location VARCHAR(255),
     model VARCHAR(100),
 
-    mqtt_connection_id UUID REFERENCES mqtt_connections(id) ON DELETE SET NULL,
+    mqtt_connection_id UUID REFERENCES loadcell.mqtt_connections(id) ON DELETE SET NULL,
 
     telemetry_topic VARCHAR(500) NOT NULL,
     status_topic VARCHAR(500),
@@ -32,10 +32,10 @@ CREATE TABLE IF NOT EXISTS devices (
 );
 
 CREATE INDEX IF NOT EXISTS idx_devices_mqtt_connection
-    ON devices(mqtt_connection_id);
+    ON loadcell.devices(mqtt_connection_id);
 
 CREATE INDEX IF NOT EXISTS idx_devices_status
-    ON devices(status);
+    ON loadcell.devices(status);
 
 CREATE INDEX IF NOT EXISTS idx_devices_enabled
-    ON devices(enabled);
+    ON loadcell.devices(enabled);

@@ -16,8 +16,8 @@ var DB *gorm.DB
 func Connect() *gorm.DB {
 	c := config.App
 	dsn := fmt.Sprintf(
-		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Bangkok",
-		c.DBHost, c.DBUser, c.DBPassword, c.DBName, c.DBPort, c.DBSSLMode,
+		"host=%s user=%s password=%s dbname=%s port=%s sslmode=%s TimeZone=Asia/Bangkok search_path=%s,public",
+		c.DBHost, c.DBUser, c.DBPassword, c.DBName, c.DBPort, c.DBSSLMode, LoadCellSchema,
 	)
 
 	logLevel := logger.Warn
@@ -40,7 +40,7 @@ func Connect() *gorm.DB {
 	sqlDB.SetMaxIdleConns(5)
 	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 
-	log.Println("[database] connected to PostgreSQL")
+	log.Printf("[database] connected to PostgreSQL (search_path=%s,public)", LoadCellSchema)
 	DB = db
 	return db
 }
@@ -68,9 +68,12 @@ var schemaTables = []string{
 	"delivery_logs",
 	"users",
 	"audit_logs",
+	"device_config_history",
+	"branch_destinations",
+	"device_types",
 }
 
-// SchemaReady reports whether Step 2 MVP tables exist.
+// SchemaReady reports whether loadcell schema tables exist.
 func SchemaReady() bool {
 	if DB == nil {
 		return false
@@ -79,8 +82,8 @@ func SchemaReady() bool {
 		var count int64
 		err := DB.Raw(
 			`SELECT COUNT(*) FROM information_schema.tables
-			 WHERE table_schema = 'public' AND table_name = ?`,
-			table,
+			 WHERE table_schema = ? AND table_name = ?`,
+			LoadCellSchema, table,
 		).Scan(&count).Error
 		if err != nil || count == 0 {
 			return false

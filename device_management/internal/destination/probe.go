@@ -57,10 +57,8 @@ func testRESTDestination(dest model.DataDestination) (TestResult, error) {
 	if err != nil {
 		return TestResult{}, err
 	}
-	if dest.AuthConfigEncrypted != nil {
-		if err := applyHTTPAuth(req, *dest.AuthConfigEncrypted); err != nil {
-			return TestResult{}, err
-		}
+	if err := configureHTTPRequest(req, dest); err != nil {
+		return TestResult{}, err
 	}
 
 	start := time.Now()
@@ -74,28 +72,6 @@ func testRESTDestination(dest model.DataDestination) (TestResult, error) {
 	ok := resp.StatusCode >= 200 && resp.StatusCode < 500
 	msg := fmt.Sprintf("HTTP %d", resp.StatusCode)
 	return TestResult{Success: ok, Latency: latency, Message: msg}, nil
-}
-
-func applyHTTPAuth(req *http.Request, encryptedAuth string) error {
-	raw, err := appcrypto.Decrypt(encryptedAuth)
-	if err != nil {
-		return err
-	}
-	authType := strings.ToLower(strings.TrimSpace(gjson.Get(raw, "type").String()))
-	switch authType {
-	case "", "none":
-		return nil
-	case "bearer_token":
-		token := gjson.Get(raw, "token").String()
-		req.Header.Set("Authorization", "Bearer "+token)
-	case "api_key_header":
-		req.Header.Set(gjson.Get(raw, "headerName").String(), gjson.Get(raw, "apiKey").String())
-	case "basic_auth":
-		req.SetBasicAuth(gjson.Get(raw, "username").String(), gjson.Get(raw, "password").String())
-	default:
-		return fmt.Errorf("unsupported auth type for test: %s", authType)
-	}
-	return nil
 }
 
 func LoadMetadata(dest model.DataDestination, schema, table *string) ([]string, error) {

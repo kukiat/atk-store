@@ -24,7 +24,8 @@ locate files, symbols, routes, and data structures without re-scanning the whole
 - **Source root:** `src/` (path alias `@/*` → `src/*`)
 - **Core flow:** sign in with Google → scan shelf QR → `/shelf/[id]` → add to cart → `/cart`
 - **Auth:** Google OAuth (state + PKCE + nonce + ID-token validation) · DB sessions (`atk_session` cookie, token hash at rest) · `proxy.ts` redirect guard + route-level checks
-- **Counts:** 5 DB tables · 4 pages + 4 API routes + 1 proxy
+- **Face security:** Rekognition Face Liveness → S3 reference image → Rekognition Face Collection (`IndexFaces` / `SearchFacesByImage`) · DB stores only `userId ↔ faceId` mapping
+- **Counts:** 7 DB tables · 5 pages + 7 API routes + 1 proxy
 
 ## Layer map
 

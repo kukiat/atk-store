@@ -18,7 +18,7 @@ export async function FaceEnrollmentPrompt() {
   return (
     <Link
       href="/register-face"
-      className="border-border bg-card hover:bg-accent focus-visible:ring-ring flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className="border-border bg-card hover:bg-accent focus-visible:ring-ring flex w-full items-center gap-3 rounded-lg border px-4 py-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
       aria-label="ลงทะเบียนใบหน้าเพื่อยืนยันตัวตน"
     >
       <span className="bg-primary text-primary-foreground flex size-9 shrink-0 items-center justify-center rounded-full">

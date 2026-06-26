@@ -5,6 +5,7 @@ import {
   hasSameOrigin,
   requireCurrentUser,
 } from "@/lib/auth";
+import { FaceRecognitionConfigError } from "@/lib/aws-face-recognition";
 import { LivenessConfigError } from "@/lib/aws-liveness";
 import {
   faceEnrollmentService,
@@ -16,7 +17,8 @@ const noStore = { "Cache-Control": "no-store" } as const;
 /**
  * `POST /api/face/result`  body: `{ sessionId }`
  * Reads one owned liveness result (Rekognition `Get` is called at most once per
- * request; this endpoint never polls). Returns `{ outcome, confidence? }`.
+ * request; this endpoint never polls). Returns `{ outcome, confidence?,
+ * reason?, recognition? }`.
  */
 export async function POST(request: NextRequest) {
   if (!hasSameOrigin(request)) {
@@ -47,7 +49,12 @@ export async function POST(request: NextRequest) {
       sessionId,
     );
     return NextResponse.json(
-      { outcome: decision.outcome, confidence: decision.confidence },
+      {
+        outcome: decision.outcome,
+        confidence: decision.confidence,
+        reason: decision.reason,
+        recognition: decision.recognition,
+      },
       { headers: noStore },
     );
   } catch (error) {
@@ -57,8 +64,11 @@ export async function POST(request: NextRequest) {
         { status: 404, headers: noStore },
       );
     }
-    if (error instanceof LivenessConfigError) {
-      console.error("[face/result] liveness is misconfigured");
+    if (
+      error instanceof LivenessConfigError ||
+      error instanceof FaceRecognitionConfigError
+    ) {
+      console.error("[face/result] face auth/recognition is misconfigured");
       return NextResponse.json(
         { error: "misconfigured" },
         { status: 500, headers: noStore },

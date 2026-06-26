@@ -4,25 +4,27 @@ App Router routes under `src/app`.
 
 ## Pages
 
-| Route         | File                          | Rendering      | Description                                                      |
-| ------------- | ----------------------------- | -------------- | ---------------------------------------------------------------- |
-| `/`           | `src/app/page.tsx`            | Server (async) | Landing; greets signed-in user + sign-out; links to demo shelves |
-| `/shelf/[id]` | `src/app/shelf/[id]/page.tsx` | Server (async) | Products on a shelf; `notFound()` if shelf missing               |
-| `/cart`       | `src/app/cart/page.tsx`       | Client         | Cart review; qty edit, total, disabled checkout                  |
-| `/signin`     | `src/app/signin/page.tsx`     | Server (async) | Google sign-in page; shows `?error=` messages                    |
+| Route            | File                             | Rendering      | Description                                                                            |
+| ---------------- | -------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
+| `/`              | `src/app/page.tsx`               | Server (async) | Landing; greets signed-in user + sign-out; links to demo shelves                       |
+| `/shelf/[id]`    | `src/app/shelf/[id]/page.tsx`    | Server (async) | Products on a shelf; `notFound()` if shelf missing                                     |
+| `/cart`          | `src/app/cart/page.tsx`          | Client         | Cart review; qty edit, total, disabled checkout                                        |
+| `/signin`        | `src/app/signin/page.tsx`        | Server (async) | Google sign-in page; shows `?error=` messages                                          |
 | `/register-face` | `src/app/register-face/page.tsx` | Server (async) | Gated face-enrollment page; shows already-registered state or the client liveness flow |
+| `/verify-face`   | `src/app/verify-face/page.tsx`   | Server (async) | Debug-only face verification page; requires env flag + signed-in user + face profile   |
 
 ## API
 
-| Method & Route                  | File                                        | Returns                                                                                                                                      |
-| ------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/shelf/[id]`           | `src/app/api/shelf/[id]/route.ts`           | `200` shelf+products JSON, or `404 { error }`                                                                                                |
-| `GET /api/auth/signin/google`   | `src/app/api/auth/signin/google/route.ts`   | Creates state/PKCE/nonce cookies then `302` redirects to Google OAuth                                                                        |
-| `GET /api/auth/callback/google` | `src/app/api/auth/callback/google/route.ts` | Validates state/PKCE/nonce and Google ID token → upserts verified provider identity, sets session cookie, `302` to `/` (or `/signin?error=`) |
-| `POST /api/auth/signout`        | `src/app/api/auth/signout/route.ts`         | Same-origin only; deletes session, clears cookie, `302` to `/signin`                                                                         |
-| `GET /api/face/credentials`     | `src/app/api/face/credentials/route.ts`     | Auth only; exchanges the path-scoped Google ID token cookie for short-lived `StartFaceLivenessSession`-scoped creds. `401`/`409` (reauth)/`500` |
-| `POST /api/face/session`        | `src/app/api/face/session/route.ts`         | Auth + same-origin; creates or idempotently reuses one liveness session → `{ sessionId }`. `409` already registered                          |
-| `POST /api/face/result`         | `src/app/api/face/result/route.ts`          | Auth + same-origin; reads one owned result (Rekognition `Get` at most once, never polls) → `{ outcome, confidence? }`. `404` wrong owner     |
+| Method & Route                  | File                                        | Returns                                                                                                                                                                                                          |
+| ------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/shelf/[id]`           | `src/app/api/shelf/[id]/route.ts`           | `200` shelf+products JSON, or `404 { error }`                                                                                                                                                                    |
+| `GET /api/auth/signin/google`   | `src/app/api/auth/signin/google/route.ts`   | Creates state/PKCE/nonce cookies then `302` redirects to Google OAuth                                                                                                                                            |
+| `GET /api/auth/callback/google` | `src/app/api/auth/callback/google/route.ts` | Validates state/PKCE/nonce and Google ID token → upserts verified provider identity, sets session cookie, `302` to `/` (or `/signin?error=`)                                                                     |
+| `POST /api/auth/signout`        | `src/app/api/auth/signout/route.ts`         | Same-origin only; deletes session, clears cookie, `302` to `/signin`                                                                                                                                             |
+| `GET /api/face/auth-status`     | `src/app/api/face/auth-status/route.ts`     | Auth only; cheap preflight for the path-scoped Google ID token used by Cognito bridge. No AWS calls. `200 ready`, `409 reauth`, `401 unauthorized`                                                               |
+| `GET /api/face/credentials`     | `src/app/api/face/credentials/route.ts`     | Auth only; exchanges the path-scoped Google ID token cookie for short-lived `StartFaceLivenessSession`-scoped creds. `401`/`409` (reauth)/`500`                                                                  |
+| `POST /api/face/session`        | `src/app/api/face/session/route.ts`         | Auth + same-origin; creates/reuses one liveness session for optional `{ intent: "enrollment" \| "verification" }` → `{ sessionId, intent }`. `409` already registered / not registered / another attempt pending |
+| `POST /api/face/result`         | `src/app/api/face/result/route.ts`          | Auth + same-origin; reads one owned result (Rekognition `Get` at most once, never polls), then registers/verifies in Face Collection → `{ outcome, confidence?, reason?, recognition? }`. `404` wrong owner      |
 
 ## Route protection (`src/proxy.ts`)
 
@@ -84,13 +86,53 @@ Both entry points share the same service singletons, so query + validation logic
         ▼ onAnalysisComplete
    POST /api/face/result ──► faceEnrollmentService.getAttemptResult
         (Rekognition GetFaceLivenessSessionResults ×1, never polls;
-         accepted ≥ threshold → user → registered + face_registered_at)
+         accepted ≥ threshold → SearchFacesByImage duplicate check
+         → IndexFaces → user_face_profiles + user registered)
 ```
 
 Normal attempt = 3 Rekognition calls (Create + Start + Get). A transient
 not-ready result permits at most one delayed retry (4 calls); the app never
-polls. One active attempt per user is enforced by a partial unique index plus
-idempotent reuse in the service.
+polls. Recognition calls happen only after accepted liveness: enrollment uses
+`SearchFacesByImage` to avoid duplicate collection entries, then `IndexFaces`
+only if no existing match is found. One active attempt per user is enforced by
+a partial unique index plus idempotent reuse in the service.
+
+## Face Recognition verification flow
+
+The same session/result endpoints power the debug proof page:
+
+```
+/ (Home)
+   └─ FaceVerificationDebugPrompt
+      └─ renders only when ENABLE_FACE_RECOGNITION_DEBUG=YES
+         and current user has a row in user_face_profiles
+   └─ FaceAuthStatusNotice
+      └─ checks /api/face/auth-status once; if the path-scoped Google ID token
+         is missing/expired, prompt user to sign in with Google again before
+         any camera/AWS session starts
+
+/verify-face (Server, gated by the same env + profile checks)
+   └─ FaceVerificationDebug (Client)
+      └─ press "Start verify face"
+
+POST /api/face/session { intent: "verification" }
+   └─ create/reuse liveness attempt with intent `verification`
+
+FaceLivenessDetectorCore runs as usual
+
+POST /api/face/result { sessionId }
+   └─ liveness accepted
+      → SearchFacesByImage against AWS_FACE_COLLECTION_ID
+      → map returned FaceId through user_face_profiles
+      → accepted only when matched userId === current userId
+         and similarity ≥ AWS_FACE_MATCH_THRESHOLD
+```
+
+`FACE_RECOGNITION_DEBUG_TIMEOUT_MS` defaults to 5000ms and is used as a slow-scan
+notice threshold only. The UI does not hard-unmount Amplify mid-stream because
+that can leave camera tracks/ReadableStreams in a cleanup race. Real detector,
+result, or mismatch failures still fail closed to an admin-contact state. No AWS
+call is made until the user explicitly presses the start CTA.
 
 ## Notes / gaps
 

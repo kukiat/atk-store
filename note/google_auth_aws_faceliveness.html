@@ -1,0 +1,1459 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Google Auth × AWS Face Liveness Flow</title>
+    <style>
+      :root {
+        --paper: #fffaf3;
+        --paper-soft: #f5efe4;
+        --paper-line: #ded4c2;
+        --ink: #1b1a18;
+        --muted: #686052;
+        --faint: #928776;
+        --terracotta: #b04a1a;
+        --terracotta-soft: #ead1c1;
+        --blue: #244b73;
+        --green: #3f6a4a;
+        --amber: #8a641b;
+        --rule: rgba(27, 26, 24, 0.16);
+        --rule-strong: rgba(27, 26, 24, 0.34);
+        --font-serif:
+          "Source Han Serif SC", "Noto Serif Thai", "Songti SC",
+          "Iowan Old Style", Georgia, serif;
+        --font-sans:
+          "PingFang SC", "Noto Sans Thai", "IBM Plex Sans", -apple-system,
+          BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--font-sans);
+        font-size: 16px;
+        line-height: 1.72;
+        text-wrap: pretty;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      .page {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 56px 0 72px;
+      }
+
+      .kicker {
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family: var(--font-serif);
+        line-height: 1.14;
+        margin: 0;
+        font-weight: 650;
+      }
+
+      h1 {
+        max-width: 900px;
+        margin-top: 10px;
+        font-size: clamp(2.3rem, 6vw, 5.6rem);
+        letter-spacing: -0.055em;
+      }
+
+      h2 {
+        font-size: clamp(1.55rem, 2.2vw, 2.4rem);
+        letter-spacing: -0.035em;
+      }
+
+      h3 {
+        font-size: 1.14rem;
+        letter-spacing: -0.012em;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 34px;
+        align-items: end;
+        padding-bottom: 38px;
+        border-bottom: 1px solid var(--rule-strong);
+      }
+
+      .hero-copy {
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 1.05rem;
+      }
+
+      .hero-copy strong {
+        color: var(--ink);
+      }
+
+      .summary-strip {
+        border-top: 2px solid var(--ink);
+        border-bottom: 1px solid var(--rule-strong);
+        padding: 14px 0;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0;
+        background: rgba(255, 250, 243, 0.72);
+      }
+
+      .metric {
+        padding: 0 18px;
+        border-right: 1px solid var(--rule);
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric .label {
+        display: block;
+        color: var(--muted);
+        font-size: 0.76rem;
+      }
+
+      .metric .value {
+        display: block;
+        margin-top: 3px;
+        font-family: var(--font-serif);
+        font-size: 1.35rem;
+        line-height: 1.15;
+      }
+
+      section {
+        margin-top: 54px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 22px;
+      }
+
+      .section-head p {
+        max-width: 560px;
+        color: var(--muted);
+        font-size: 0.96rem;
+      }
+
+      .actors {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .actor {
+        min-height: 194px;
+        padding: 22px 20px;
+        border-right: 1px solid var(--rule-strong);
+        background:
+          linear-gradient(to bottom, rgba(255, 255, 255, 0.45), transparent),
+          var(--paper);
+      }
+
+      .actor:last-child {
+        border-right: 0;
+      }
+
+      .mark {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 22px;
+        border: 1.5px solid currentColor;
+        border-radius: 50%;
+        font-family: var(--font-mono);
+        font-size: 0.9rem;
+      }
+
+      .actor.google {
+        color: var(--blue);
+      }
+
+      .actor.app {
+        color: var(--terracotta);
+      }
+
+      .actor.cognito {
+        color: var(--green);
+      }
+
+      .actor.aws {
+        color: var(--amber);
+      }
+
+      .actor h3 {
+        color: var(--ink);
+      }
+
+      .actor p {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .actor-title-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .info-pop {
+        position: relative;
+      }
+
+      .info-pop summary {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        color: var(--green);
+        cursor: pointer;
+        font-family: var(--font-serif);
+        font-size: 0.96rem;
+        line-height: 1;
+        list-style: none;
+        transition:
+          background 160ms ease,
+          color 160ms ease;
+      }
+
+      .info-pop summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .info-pop summary:hover,
+      .info-pop[open] summary {
+        background: var(--green);
+        color: var(--paper);
+      }
+
+      .info-panel {
+        position: absolute;
+        z-index: 10;
+        top: 38px;
+        right: 0;
+        width: min(330px, calc(100vw - 64px));
+        padding: 18px 18px 16px;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+        background: var(--paper);
+        color: var(--muted);
+        box-shadow: 0 2px 4px rgba(27, 26, 24, 0.08);
+      }
+
+      .info-panel::before {
+        content: "WHY CI?";
+        display: block;
+        margin-bottom: 9px;
+        color: var(--green);
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+      }
+
+      .info-panel p {
+        margin-top: 0;
+        font-size: 0.86rem;
+      }
+
+      .info-panel p + p {
+        margin-top: 9px;
+      }
+
+      .info-panel strong {
+        color: var(--ink);
+      }
+
+      .activity-pop summary {
+        width: auto;
+        min-width: 54px;
+        padding: 0 10px;
+        border-radius: 999px;
+        color: var(--amber);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      .activity-pop summary:hover,
+      .activity-pop[open] summary {
+        background: var(--amber);
+        color: var(--paper);
+      }
+
+      .activity-panel {
+        width: min(720px, calc(100vw - 64px));
+      }
+
+      .activity-panel::before {
+        content: "CAMERA ACTIVITY";
+        color: var(--amber);
+      }
+
+      .activity-panel .lead {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .activity-diagram {
+        margin: 16px 0 0;
+        padding: 0;
+        list-style: none;
+        counter-reset: activity;
+      }
+
+      .activity-diagram li {
+        position: relative;
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 16px;
+        padding: 0 0 16px;
+        counter-increment: activity;
+      }
+
+      .activity-diagram li::before {
+        content: counter(activity);
+        width: 32px;
+        height: 32px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--amber);
+        border-radius: 50%;
+        color: var(--amber);
+        background: var(--paper);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        z-index: 1;
+      }
+
+      .activity-step {
+        position: relative;
+        padding-top: 2px;
+        min-width: 0;
+      }
+
+      .activity-diagram li:not(:last-child) .activity-step::before {
+        content: "";
+        position: absolute;
+        top: 32px;
+        left: -35px;
+        bottom: -16px;
+        border-left: 1px solid rgba(138, 100, 27, 0.34);
+      }
+
+      .activity-step b {
+        display: block;
+        color: var(--ink);
+        font-size: 0.9rem;
+      }
+
+      .activity-step span {
+        display: block;
+        margin-top: 3px;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .activity-rule {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid var(--rule);
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .flow-board {
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .flow-row {
+        display: grid;
+        grid-template-columns: 92px repeat(4, 1fr);
+        min-height: 98px;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .flow-row:last-child {
+        border-bottom: 0;
+      }
+
+      .step-number {
+        padding: 20px 16px;
+        border-right: 1px solid var(--rule-strong);
+        font-family: var(--font-mono);
+        color: var(--terracotta);
+        font-size: 0.9rem;
+      }
+
+      .lane {
+        position: relative;
+        padding: 18px 16px;
+        border-right: 1px solid var(--rule);
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .lane:last-child {
+        border-right: 0;
+      }
+
+      .lane.active {
+        color: var(--ink);
+        background: rgba(176, 74, 26, 0.045);
+      }
+
+      .lane.active::before {
+        content: "";
+        position: absolute;
+        top: 18px;
+        left: 12px;
+        width: 5px;
+        height: calc(100% - 36px);
+        background: var(--terracotta);
+      }
+
+      .lane-content {
+        padding-left: 15px;
+      }
+
+      .lane b {
+        display: block;
+        color: var(--ink);
+        font-size: 0.95rem;
+      }
+
+      .lane small {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+      }
+
+      .token-map {
+        display: grid;
+        grid-template-columns: 1fr 56px 1fr 56px 1fr;
+        align-items: stretch;
+        gap: 0;
+      }
+
+      .token-card {
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+        padding: 24px;
+        min-height: 210px;
+        background: var(--paper);
+      }
+
+      .token-card + .token-card {
+        border-left: 1px solid var(--rule);
+      }
+
+      .token-card h3 {
+        margin-bottom: 14px;
+      }
+
+      .token-card dl {
+        margin: 0;
+        display: grid;
+        gap: 10px;
+      }
+
+      .token-card dt {
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .token-card dd {
+        margin: 1px 0 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .arrow {
+        position: relative;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .arrow::before {
+        content: "";
+        position: absolute;
+        top: 50%;
+        left: 8px;
+        right: 8px;
+        border-top: 1px solid var(--terracotta);
+      }
+
+      .arrow::after {
+        content: "";
+        position: absolute;
+        top: calc(50% - 5px);
+        right: 7px;
+        width: 10px;
+        height: 10px;
+        border-top: 1px solid var(--terracotta);
+        border-right: 1px solid var(--terracotta);
+        transform: rotate(45deg);
+        background: var(--paper);
+      }
+
+      .call-budget {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .call {
+        padding: 24px 22px;
+        border-right: 1px solid var(--rule-strong);
+        min-height: 206px;
+      }
+
+      .call:last-child {
+        border-right: 0;
+      }
+
+      .call .count {
+        font-family: var(--font-serif);
+        font-size: 3.4rem;
+        line-height: 0.9;
+        color: var(--terracotta);
+        letter-spacing: -0.05em;
+      }
+
+      .call h3 {
+        margin-top: 20px;
+      }
+
+      .call p {
+        margin-top: 9px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .sessions-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 0;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .session {
+        padding: 24px 22px;
+        border-right: 1px solid var(--rule-strong);
+        background: linear-gradient(
+          to bottom,
+          rgba(245, 239, 228, 0.7),
+          transparent
+        );
+      }
+
+      .session:last-child {
+        border-right: 0;
+      }
+
+      .session .scope {
+        display: inline-block;
+        margin-bottom: 16px;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .session ul,
+      .guardrails ul {
+        margin: 14px 0 0;
+        padding-left: 1.1em;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .bridge-note {
+        position: relative;
+        margin-top: 34px;
+        padding: 26px 28px 24px;
+        border-top: 1px solid var(--rule-strong);
+        border-bottom: 1px solid var(--rule-strong);
+        background: rgba(245, 239, 228, 0.55);
+      }
+
+      .bridge-note::before {
+        content: "TOKEN BRIDGE";
+        position: absolute;
+        top: -0.85em;
+        left: 22px;
+        padding: 0 8px;
+        background: var(--paper);
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        letter-spacing: 0.12em;
+      }
+
+      .bridge-note p {
+        max-width: 880px;
+        color: var(--muted);
+      }
+
+      .bridge-note strong {
+        color: var(--ink);
+      }
+
+      .guardrails {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .guard {
+        padding: 24px;
+        border-right: 1px solid var(--rule-strong);
+      }
+
+      .guard:last-child {
+        border-right: 0;
+      }
+
+      .mini-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 18px;
+        font-size: 0.9rem;
+      }
+
+      .mini-table th,
+      .mini-table td {
+        padding: 10px 8px;
+        border-bottom: 1px solid var(--rule);
+        text-align: left;
+        vertical-align: top;
+      }
+
+      .mini-table th {
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.07em;
+        text-transform: uppercase;
+      }
+
+      .mini-table td {
+        color: var(--muted);
+      }
+
+      footer {
+        margin-top: 58px;
+        padding-top: 18px;
+        border-top: 1px solid var(--rule-strong);
+        color: var(--faint);
+        font-size: 0.82rem;
+      }
+
+      code {
+        font-family: var(--font-mono);
+        font-size: 0.86em;
+        color: var(--ink);
+        background: rgba(176, 74, 26, 0.08);
+        padding: 0.08em 0.32em;
+      }
+
+      @media (max-width: 940px) {
+        .hero,
+        .summary-strip,
+        .actors,
+        .call-budget,
+        .sessions-grid,
+        .guardrails {
+          grid-template-columns: 1fr;
+        }
+
+        .metric,
+        .actor,
+        .call,
+        .session,
+        .guard {
+          border-right: 0;
+          border-bottom: 1px solid var(--rule);
+        }
+
+        .metric:last-child,
+        .actor:last-child,
+        .call:last-child,
+        .session:last-child,
+        .guard:last-child {
+          border-bottom: 0;
+        }
+
+        .token-map {
+          grid-template-columns: 1fr;
+        }
+
+        .arrow {
+          height: 48px;
+          border-top: 0;
+          border-bottom: 0;
+        }
+
+        .arrow::before {
+          top: 8px;
+          bottom: 8px;
+          left: 50%;
+          right: auto;
+          height: auto;
+          border-top: 0;
+          border-left: 1px solid var(--terracotta);
+        }
+
+        .arrow::after {
+          top: auto;
+          bottom: 8px;
+          right: auto;
+          left: calc(50% - 5px);
+          transform: rotate(135deg);
+        }
+
+        .flow-row {
+          grid-template-columns: 70px 1fr;
+        }
+
+        .lane {
+          display: none;
+        }
+
+        .lane.active {
+          display: block;
+          border-right: 0;
+        }
+
+        .info-panel {
+          position: fixed;
+          top: 84px;
+          right: 20px;
+          left: 20px;
+          width: auto;
+          max-height: calc(100vh - 128px);
+          overflow: auto;
+        }
+
+        .activity-panel {
+          width: auto;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .activity-diagram li {
+          grid-template-columns: 34px minmax(0, 1fr);
+          gap: 12px;
+        }
+
+        .activity-step b,
+        .activity-step span {
+          overflow-wrap: anywhere;
+        }
+      }
+
+      @media print {
+        .page {
+          width: auto;
+          padding: 24px;
+        }
+
+        section {
+          break-inside: avoid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <div class="kicker">ATK Store Identity Flow</div>
+          <h1>Google login เปิดประตู, AWS ตรวจว่าคนจริง</h1>
+        </div>
+        <p class="hero-copy">
+          ภาพนี้อธิบายว่า <strong>Google Authentication</strong>,
+          <strong>Application Session</strong>,
+          <strong>Cognito Identity Pool</strong>,
+          <strong>AWS Profile</strong> และ
+          <strong>Rekognition Face Liveness</strong>
+          ทำงานร่วมกันอย่างไร โดยแยกให้ชัดว่าอะไรอยู่ใน browser, อะไรอยู่บน
+          server และ token ไหนใช้เพื่ออะไร
+        </p>
+      </header>
+
+      <div class="summary-strip" aria-label="summary">
+        <div class="metric">
+          <span class="label">Normal liveness attempt</span>
+          <span class="value">Create ×1, Start ×1, Get ×1</span>
+        </div>
+        <div class="metric">
+          <span class="label">Browser sees</span>
+          <span class="value">sessionId + temporary AWS creds</span>
+        </div>
+        <div class="metric">
+          <span class="label">Browser never sees</span>
+          <span class="value">AWS profile, IAM secret, Google secret</span>
+        </div>
+        <div class="metric">
+          <span class="label">Region anchor</span>
+          <span class="value">ap-northeast-1</span>
+        </div>
+      </div>
+
+      <section>
+        <div class="section-head">
+          <h2>ตัวละครหลัก 4 ฝั่ง</h2>
+          <p>
+            ถ้าจำแค่นี้ก่อนก็พอ: Google บอกว่า user คือใคร, App ออก session
+            ของเราเอง, Cognito แปลง Google identity เป็น AWS temporary
+            credentials, Rekognition ทำ liveness จริง
+          </p>
+        </div>
+
+        <div class="actors">
+          <article class="actor google">
+            <div class="mark">G</div>
+            <h3>Google Authentication</h3>
+            <p>
+              ยืนยันตัวตนผู้ใช้ผ่าน OAuth/OIDC แล้วส่ง <code>id_token</code>
+              กลับมาให้ backend ตรวจ signature และ claims
+            </p>
+          </article>
+          <article class="actor app">
+            <div class="mark">APP</div>
+            <h3>Next.js App Session</h3>
+            <p>
+              หลังตรวจ Google ผ่าน server จะสร้าง <code>atk_session</code>
+              ของแอปเอง ใช้คุมว่า request นี้เป็น user คนไหน
+            </p>
+          </article>
+          <article class="actor cognito">
+            <div class="mark">CI</div>
+            <div class="actor-title-row">
+              <h3>Cognito Identity Pool</h3>
+              <details class="info-pop">
+                <summary aria-label="ทำไมต้องใช้ Cognito Identity Pool">
+                  i
+                </summary>
+                <div class="info-panel">
+                  <p>
+                    Face Liveness ฝั่ง browser ต้อง call
+                    <strong>StartFaceLivenessSession</strong> ไปที่ AWS โดยตรง
+                    แต่ user ของเรา login ด้วย Google ไม่ได้มี AWS account หรือ
+                    IAM key เป็นของตัวเอง
+                  </p>
+                  <p>
+                    Cognito Identity Pool จึงเป็นสะพานที่ AWS ไว้ใจ: เอา Google
+                    ID token ที่ผ่านการยืนยันแล้ว มาแลกเป็น
+                    <strong>temporary AWS credentials</strong>
+                    อายุสั้นและจำกัดสิทธิ์เฉพาะงานเปิดกล้อง liveness
+                  </p>
+                </div>
+              </details>
+            </div>
+            <p>
+              เป็นสะพานแลก Google ID token เป็น AWS temporary credentials ที่
+              scope ไว้ให้เริ่ม Face Liveness เท่านั้น
+            </p>
+          </article>
+          <article class="actor aws">
+            <div class="mark">AWS</div>
+            <div class="actor-title-row">
+              <h3>AWS Profile + Rekognition</h3>
+              <details class="info-pop activity-pop">
+                <summary aria-label="ดู activity diagram การเปิดกล้อง">
+                  flow
+                </summary>
+                <div class="info-panel activity-panel">
+                  <p class="lead">
+                    การเปิดกล้องไม่ได้เกิดตอนเข้าเว็บ แต่เกิดเมื่อ user ที่
+                    login แล้วกดเริ่ม และระบบมี session/credential ครบเท่านั้น
+                  </p>
+                  <ol class="activity-diagram">
+                    <li>
+                      <div class="activity-step">
+                        <b>UI แสดง CTA ลงทะเบียนใบหน้า</b>
+                        <span>
+                          เงื่อนไข: user มี <code>atk_session</code> และ
+                          <code>faceEnrollmentStatus</code> ยังไม่ใช่ registered
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <div class="activity-step">
+                        <b>user กดเริ่ม → UI ขอสร้าง session</b>
+                        <span>
+                          POST <code>/api/face/session</code>; มี
+                          <code>startingRef</code> กันกดซ้ำ ไม่ call ตอน page
+                          mount
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <div class="activity-step">
+                        <b>server ตรวจ auth + origin แล้ว Create</b>
+                        <span>
+                          เงื่อนไข: same-origin,
+                          <code>requireCurrentUser()</code>
+                          ผ่าน, env AWS ครบ; เรียก
+                          <code>CreateFaceLivenessSession</code> แค่ครั้งเดียว
+                          หรือ reuse pending session ที่ยังไม่หมดอายุ
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <div class="activity-step">
+                        <b>server ส่ง <code>sessionId</code> กลับ UI</b>
+                        <span>
+                          UI เปลี่ยน phase เป็น detecting แล้วจึง mount
+                          <code>FaceLivenessDetectorCore</code>
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <div class="activity-step">
+                        <b>detector ขอ temporary credentials</b>
+                        <span>
+                          GET <code>/api/face/credentials</code>; server ใช้
+                          Google ID token bridge ผ่าน Cognito Identity Pool
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <div class="activity-step">
+                        <b>เปิดกล้องและ Start Face Liveness</b>
+                        <span>
+                          เงื่อนไข: มี <code>sessionId</code>, region, และ
+                          temporary AWS credentials; browser จึง call
+                          <code>StartFaceLivenessSession</code>
+                        </span>
+                      </div>
+                    </li>
+                    <li>
+                      <div class="activity-step">
+                        <b>analysis complete → server อ่านผล</b>
+                        <span>
+                          POST <code>/api/face/result</code>; server call
+                          <code>GetFaceLivenessSessionResults</code> หนึ่งครั้ง
+                          และ retry ได้อีกหนึ่งครั้งเฉพาะผลยัง pending
+                        </span>
+                      </div>
+                    </li>
+                  </ol>
+                  <p class="activity-rule">
+                    กฎ call API: normal attempt =
+                    <strong>Create ×1 + Start ×1 + Get ×1</strong>; ไม่มี
+                    polling และไม่มีการเปิดกล้องอัตโนมัติ
+                  </p>
+                </div>
+              </details>
+            </div>
+            <p>
+              ฝั่ง backend ใช้ AWS Profile สำหรับ Create/Get session; ฝั่ง
+              browser ใช้ temporary credentials สำหรับ Start เท่านั้น
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Flow ตั้งแต่ login จนเปิดกล้อง</h2>
+          <p>
+            เส้นนี้คือของจริงในระบบปัจจุบัน: login ก่อน, มี session ของแอปก่อน,
+            แล้วค่อยกดเริ่มลงทะเบียนใบหน้า จึงจะเกิด AWS call
+          </p>
+        </div>
+
+        <div class="flow-board">
+          <div class="flow-row">
+            <div class="step-number">01</div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>User กดเข้าสู่ระบบด้วย Google</b>
+                <small>ไปที่ <code>/api/auth/signin/google</code></small>
+              </div>
+            </div>
+            <div class="lane">
+              <div class="lane-content">
+                <b>App สร้าง state, PKCE, nonce</b>
+                <small>เก็บใน httpOnly cookie สั้น ๆ</small>
+              </div>
+            </div>
+            <div class="lane"></div>
+            <div class="lane"></div>
+          </div>
+
+          <div class="flow-row">
+            <div class="step-number">02</div>
+            <div class="lane"></div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Google callback กลับมาที่ backend</b>
+                <small>
+                  server แลก code เป็น token แล้วตรวจ <code>id_token</code>
+                </small>
+              </div>
+            </div>
+            <div class="lane"></div>
+            <div class="lane"></div>
+          </div>
+
+          <div class="flow-row">
+            <div class="step-number">03</div>
+            <div class="lane"></div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>App ออก session ของตัวเอง</b>
+                <small>
+                  ตั้ง <code>atk_session</code> และเก็บ Google ID token แบบ
+                  path-scoped ไว้ที่ <code>/api/face</code>
+                </small>
+              </div>
+            </div>
+            <div class="lane"></div>
+            <div class="lane"></div>
+          </div>
+
+          <div class="flow-row">
+            <div class="step-number">04</div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>User เห็น prompt ให้ register ใบหน้า</b>
+                <small>ยังไม่เปิดกล้อง และยังไม่ call AWS</small>
+              </div>
+            </div>
+            <div class="lane"></div>
+            <div class="lane"></div>
+            <div class="lane"></div>
+          </div>
+
+          <div class="flow-row">
+            <div class="step-number">05</div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>User กดเริ่ม</b>
+                <small> browser POST ไป <code>/api/face/session</code> </small>
+              </div>
+            </div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Backend ใช้ AWS Profile</b>
+                <small>
+                  เรียก Rekognition
+                  <code>CreateFaceLivenessSession</code> แล้วส่ง
+                  <code>sessionId</code> กลับ
+                </small>
+              </div>
+            </div>
+            <div class="lane"></div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Rekognition สร้าง liveness session</b>
+                <small>single-use, อายุสั้น ประมาณ 3 นาที</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-row">
+            <div class="step-number">06</div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Detector ขอ credentials</b>
+                <small>GET <code>/api/face/credentials</code></small>
+              </div>
+            </div>
+            <div class="lane"></div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Cognito bridge</b>
+                <small>
+                  ใช้ Google ID token เป็น <code>Logins</code>
+                  เพื่อออก AWS temporary credentials
+                </small>
+              </div>
+            </div>
+            <div class="lane"></div>
+          </div>
+
+          <div class="flow-row">
+            <div class="step-number">07</div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Browser เปิดกล้องและ stream</b>
+                <small>
+                  Amplify detector ใช้ <code>sessionId</code> + temporary
+                  credentials เพื่อ call <code>StartFaceLivenessSession</code>
+                </small>
+              </div>
+            </div>
+            <div class="lane"></div>
+            <div class="lane"></div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Rekognition วิเคราะห์ liveness</b>
+                <small>อาจบันทึก reference/audit image ไป S3 Tokyo</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="flow-row">
+            <div class="step-number">08</div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Analysis complete</b>
+                <small>
+                  browser แจ้ง backend ที่ <code>/api/face/result</code>
+                </small>
+              </div>
+            </div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>Backend ตัดสินผล</b>
+                <small>
+                  เรียก <code>GetFaceLivenessSessionResults</code> หนึ่งครั้ง,
+                  เทียบ threshold, update user flag
+                </small>
+              </div>
+            </div>
+            <div class="lane"></div>
+            <div class="lane active">
+              <div class="lane-content">
+                <b>ได้ confidence + reference image</b>
+                <small
+                  >ยังไม่ใช่ face vector และยังไม่ใช่ face recognition</small
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Token bridge: เอา ID จาก Google ไปเกี่ยวกับ AWS ยังไง</h2>
+          <p>
+            จุดที่มักงงคือ Google ไม่ได้ “login เข้า AWS console” ให้ user;
+            Google เป็นหลักฐาน identity ที่ Cognito Identity Pool เชื่อถือ
+          </p>
+        </div>
+
+        <div class="token-map">
+          <article class="token-card">
+            <h3>1. Google ID token</h3>
+            <dl>
+              <div>
+                <dt>ได้จาก</dt>
+                <dd>OAuth callback หลัง user login Google สำเร็จ</dd>
+              </div>
+              <div>
+                <dt>บอกอะไร</dt>
+                <dd>
+                  <code>sub</code>, email, email_verified, issuer, audience,
+                  expiry
+                </dd>
+              </div>
+              <div>
+                <dt>ใครตรวจ</dt>
+                <dd>backend ตรวจ signature/claims ก่อนใช้</dd>
+              </div>
+            </dl>
+          </article>
+          <div class="arrow" aria-hidden="true"></div>
+          <article class="token-card">
+            <h3>2. App session</h3>
+            <dl>
+              <div>
+                <dt>cookie</dt>
+                <dd><code>atk_session</code> เป็น opaque httpOnly cookie</dd>
+              </div>
+              <div>
+                <dt>DB</dt>
+                <dd>เก็บเฉพาะ SHA-256 hash ของ token</dd>
+              </div>
+              <div>
+                <dt>หน้าที่</dt>
+                <dd>ยืนยันว่า request นี้เป็น user row ไหนในระบบเรา</dd>
+              </div>
+            </dl>
+          </article>
+          <div class="arrow" aria-hidden="true"></div>
+          <article class="token-card">
+            <h3>3. AWS temporary credentials</h3>
+            <dl>
+              <div>
+                <dt>ได้จาก</dt>
+                <dd>
+                  Cognito <code>GetId</code> +
+                  <code>GetCredentialsForIdentity</code>
+                </dd>
+              </div>
+              <div>
+                <dt>ผูกกับ</dt>
+                <dd>Google provider key <code>accounts.google.com</code></dd>
+              </div>
+              <div>
+                <dt>ใช้ทำอะไร</dt>
+                <dd>
+                  ให้ browser call เฉพาะ
+                  <code>StartFaceLivenessSession</code>
+                </dd>
+              </div>
+            </dl>
+          </article>
+        </div>
+
+        <div class="bridge-note">
+          <p>
+            ใน code ปัจจุบัน backend เก็บ Google ID token ไว้ใน cookie
+            <strong><code>atk_g_idt</code></strong> แบบ httpOnly และจำกัด path
+            แค่ <strong><code>/api/face</code></strong> ดังนั้น JavaScript ฝั่ง
+            browser อ่าน token นี้ไม่ได้โดยตรง แต่ request ไป endpoint face จะพา
+            cookie นี้ไปด้วยให้ backend ใช้แลก credentials กับ Cognito
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>session มี 3 ชนิด อย่าปนกัน</h2>
+          <p>
+            คำว่า session ใน flow นี้ไม่ได้หมายถึงอย่างเดียวกันทั้งหมด
+            ตรงนี้แยกไว้ให้ดูง่าย
+          </p>
+        </div>
+
+        <div class="sessions-grid">
+          <article class="session">
+            <span class="scope">Application session</span>
+            <h3><code>atk_session</code></h3>
+            <ul>
+              <li>บอกว่า user login อยู่กับแอปเรา</li>
+              <li>ใช้กับทุก protected page/API</li>
+              <li>server ตรวจจาก DB session hash</li>
+            </ul>
+          </article>
+          <article class="session">
+            <span class="scope">Liveness session</span>
+            <h3><code>sessionId</code></h3>
+            <ul>
+              <li>สร้างโดย Rekognition</li>
+              <li>ใช้ครั้งเดียวกับการเปิดกล้องหนึ่ง attempt</li>
+              <li>หมดอายุสั้น ประมาณ 3 นาที</li>
+            </ul>
+          </article>
+          <article class="session">
+            <span class="scope">AWS credential session</span>
+            <h3>temporary keys</h3>
+            <ul>
+              <li>ออกโดย Cognito Identity Pool</li>
+              <li>มี access key, secret, session token แบบชั่วคราว</li>
+              <li>จำกัดสิทธิ์ไว้สำหรับ detector</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>API call budget: ทำยังไงไม่ให้เรียกรัว</h2>
+          <p>
+            เป้าคือหนึ่ง attempt ที่ดีควรมี AWS liveness call เท่าที่จำเป็น
+            และไม่เริ่มเองจนกว่า user จะกด CTA
+          </p>
+        </div>
+
+        <div class="call-budget">
+          <article class="call">
+            <div class="count">1</div>
+            <h3>CreateFaceLivenessSession</h3>
+            <p>
+              server เรียกเมื่อ user กดเริ่มเท่านั้น ถ้ามี pending attempt
+              ที่ยังไม่หมดอายุ จะ reuse session เดิมแทนการสร้างใหม่
+            </p>
+          </article>
+          <article class="call">
+            <div class="count">1</div>
+            <h3>StartFaceLivenessSession</h3>
+            <p>
+              browser detector เรียกเองตอนเปิดกล้อง โดยใช้ sessionId และ
+              temporary credentials จาก Cognito
+            </p>
+          </article>
+          <article class="call">
+            <div class="count">1</div>
+            <h3>GetFaceLivenessSessionResults</h3>
+            <p>
+              server เรียกหลัง detector แจ้งว่า analysis complete เท่านั้น
+              ปกติไม่ poll; ถ้า pending อนุญาต retry หน่วงเวลาได้อีกหนึ่งครั้ง
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>AWS Profile อยู่ตรงไหน</h2>
+          <p>
+            AWS Profile เป็นของ backend/local developer เท่านั้น ไม่ใช่ของ
+            browser และไม่ใช่ของ customer ที่ login Google
+          </p>
+        </div>
+
+        <div class="guardrails">
+          <article class="guard">
+            <h3>Backend side</h3>
+            <ul>
+              <li>
+                local ใช้ <code>AWS_PROFILE=atk-store-dev</code>
+                ผ่าน AWS SDK default provider chain
+              </li>
+              <li>
+                ใช้เรียก <code>CreateFaceLivenessSession</code> และ
+                <code>GetFaceLivenessSessionResults</code>
+              </li>
+              <li>
+                production ควรเปลี่ยนเป็น IAM role ของ server/VPS
+                ที่จำกัดสิทธิ์แทน profile file
+              </li>
+            </ul>
+          </article>
+          <article class="guard">
+            <h3>Browser side</h3>
+            <ul>
+              <li>ไม่ควรมี IAM access key หรือ secret access key ถาวร</li>
+              <li>ได้ temporary credentials เฉพาะตอนจะเปิดกล้อง liveness</li>
+              <li>
+                credentials ควรมีสิทธิ์เฉพาะ
+                <code>rekognition:StartFaceLivenessSession</code>
+              </li>
+            </ul>
+          </article>
+        </div>
+
+        <table class="mini-table" aria-label="who uses what">
+          <thead>
+            <tr>
+              <th>สิ่งที่ใช้</th>
+              <th>ใครถือ</th>
+              <th>เอาไว้ทำอะไร</th>
+              <th>ส่งให้ browser ไหม</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>GOOGLE_CLIENT_SECRET</code></td>
+              <td>backend</td>
+              <td>แลก OAuth code เป็น token</td>
+              <td>ไม่ส่ง</td>
+            </tr>
+            <tr>
+              <td><code>AWS_PROFILE</code></td>
+              <td>backend local machine</td>
+              <td>ให้ AWS SDK หา credential สำหรับ Create/Get</td>
+              <td>ไม่ส่ง</td>
+            </tr>
+            <tr>
+              <td><code>atk_session</code></td>
+              <td>browser cookie + DB hash</td>
+              <td>session ของแอปเรา</td>
+              <td>เป็น httpOnly cookie</td>
+            </tr>
+            <tr>
+              <td><code>atk_g_idt</code></td>
+              <td>browser cookie path <code>/api/face</code></td>
+              <td>ให้ backend แลก Cognito credentials</td>
+              <td>ส่งเฉพาะ request ไป <code>/api/face</code>, JS อ่านไม่ได้</td>
+            </tr>
+            <tr>
+              <td>temporary AWS credentials</td>
+              <td>browser detector</td>
+              <td>เรียก StartFaceLivenessSession</td>
+              <td>ส่งเฉพาะแบบอายุสั้นและ scope แคบ</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>ได้อะไรจาก liveness และยังไม่ได้อะไร</h2>
+          <p>
+            ขั้นนี้พิสูจน์ว่า “คนจริงอยู่หน้ากล้อง” ยังไม่ใช่การจำแนกว่า
+            “คนนี้คือนาย A”
+          </p>
+        </div>
+
+        <div class="guardrails">
+          <article class="guard">
+            <h3>ได้จาก Face Liveness</h3>
+            <ul>
+              <li>status เช่น succeeded, failed, expired</li>
+              <li>confidence score เพื่อเทียบ threshold</li>
+              <li>reference image / audit image ใน S3 ถ้าตั้งค่า output</li>
+              <li>flag ใน user table ว่า registered หรือยัง</li>
+            </ul>
+          </article>
+          <article class="guard">
+            <h3>ยังไม่ได้ในรอบนี้</h3>
+            <ul>
+              <li>ยังไม่สร้าง face vector เองในระบบเรา</li>
+              <li>ยังไม่สร้าง Rekognition Face Collection</li>
+              <li>ยังไม่ทำ IndexFaces หรือ SearchFacesByImage</li>
+              <li>ยังไม่รู้ว่าเป็น “นาย A” จนกว่าจะเพิ่ม recognition phase</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        อ้างอิงจาก implementation ปัจจุบันใน
+        <code>src/app/api/auth/*</code>, <code>src/app/api/face/*</code>,
+        <code>src/lib/aws-liveness.ts</code>,
+        <code>src/services/face-enrollment.service.ts</code> และ AWS Rekognition
+        docs ที่เก็บใน <code>tmp/pdfs/rekognition-dg.pdf</code> /
+        <code>tmp/pdfs/rekognition-outline.txt</code>.
+      </footer>
+    </main>
+  </body>
+</html>

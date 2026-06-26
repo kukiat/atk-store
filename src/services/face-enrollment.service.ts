@@ -11,7 +11,12 @@ import {
 import { and, desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { faceLivenessAttempts, users } from "@/db/schema";
+import {
+  type FaceLivenessAttempt,
+  type FaceLivenessIntent,
+  faceLivenessAttempts,
+  users,
+} from "@/db/schema";
 import {
   getCognitoIdentityClient,
   getLivenessConfig,
@@ -22,16 +27,36 @@ import { createOpaqueToken } from "@/lib/auth-tokens";
 import {
   attemptStatusForOutcome,
   decideLivenessOutcome,
-  enrollmentStatusForOutcome,
   isAttemptReusable,
   type LivenessDecision,
   type RekognitionLivenessStatus,
 } from "@/lib/liveness-state";
+import {
+  FaceAlreadyBelongsToAnotherUserError,
+  FaceCouldNotBeIndexedError,
+  FaceReferenceImageMissingError,
+  faceRecognitionService,
+  type FaceRegistrationResult,
+} from "@/services/face-recognition.service";
 
 export class FaceAlreadyRegisteredError extends Error {
   constructor() {
     super("Face is already registered for this user");
     this.name = "FaceAlreadyRegisteredError";
+  }
+}
+
+export class FaceNotRegisteredError extends Error {
+  constructor() {
+    super("Face is not registered for this user");
+    this.name = "FaceNotRegisteredError";
+  }
+}
+
+export class LivenessAttemptInProgressError extends Error {
+  constructor() {
+    super("A different liveness attempt is already in progress");
+    this.name = "LivenessAttemptInProgressError";
   }
 }
 
@@ -58,6 +83,21 @@ export type DetectorCredentials = {
   expiration?: string;
 };
 
+export type FaceAttemptResult = LivenessDecision & {
+  reason?:
+    | "face_already_registered"
+    | "face_not_indexed"
+    | "face_mismatch"
+    | "face_not_registered";
+  recognition?: {
+    outcome: "registered" | "verified" | "mismatch";
+    faceId?: string;
+    matchedUserId?: number | null;
+    similarity?: number | null;
+    source?: FaceRegistrationResult["source"];
+  };
+};
+
 function isUniqueViolation(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -70,7 +110,8 @@ function isUniqueViolation(error: unknown): boolean {
 /**
  * Face-enrollment business logic. Keeps every privileged or costly decision on
  * the server: it creates at most one live attempt per user, never polls
- * Rekognition, and only marks a user registered on an accepted backend result.
+ * Rekognition, and only marks a user registered after liveness passes and a
+ * Rekognition face profile is indexed.
  */
 class FaceEnrollmentService {
   /**
@@ -122,6 +163,7 @@ class FaceEnrollmentService {
    */
   async createOrReuseAttempt(
     userId: number,
+    intent: FaceLivenessIntent = "enrollment",
   ): Promise<{ sessionId: string; reused: boolean }> {
     const [user] = await db
       .select({ status: users.faceEnrollmentStatus })
@@ -130,7 +172,12 @@ class FaceEnrollmentService {
       .limit(1);
 
     if (!user) throw new LivenessAttemptNotFoundError();
-    if (user.status === "registered") throw new FaceAlreadyRegisteredError();
+    if (intent === "enrollment" && user.status === "registered") {
+      throw new FaceAlreadyRegisteredError();
+    }
+    if (intent === "verification" && user.status !== "registered") {
+      throw new FaceNotRegisteredError();
+    }
 
     const now = new Date();
     const [existing] = await db
@@ -146,8 +193,11 @@ class FaceEnrollmentService {
       .limit(1);
 
     if (existing) {
-      if (isAttemptReusable(existing, now)) {
+      if (isAttemptReusable(existing, now) && existing.intent === intent) {
         return { sessionId: existing.sessionId, reused: true };
+      }
+      if (isAttemptReusable(existing, now)) {
+        throw new LivenessAttemptInProgressError();
       }
       // Stale in-flight attempt: retire it so the active-attempt index frees up.
       await db
@@ -183,6 +233,7 @@ class FaceEnrollmentService {
         userId,
         sessionId: SessionId,
         clientRequestToken,
+        intent,
         status: "pending",
         expiresAt,
       });
@@ -205,10 +256,12 @@ class FaceEnrollmentService {
       throw error;
     }
 
-    await db
-      .update(users)
-      .set({ faceEnrollmentStatus: "pending", updatedAt: now })
-      .where(eq(users.id, userId));
+    if (intent === "enrollment") {
+      await db
+        .update(users)
+        .set({ faceEnrollmentStatus: "pending", updatedAt: now })
+        .where(eq(users.id, userId));
+    }
 
     return { sessionId: SessionId, reused: false };
   }
@@ -216,12 +269,13 @@ class FaceEnrollmentService {
   /**
    * Read a single owned liveness result. Calls Rekognition `Get` exactly once
    * per invocation (never polls); terminal attempts return their stored result
-   * without any AWS call. Marks the user registered only on an accepted result.
+   * without any AWS call. Enrollment marks the user registered only after the
+   * accepted liveness image is indexed into the Rekognition collection.
    */
   async getAttemptResult(
     userId: number,
     sessionId: string,
-  ): Promise<LivenessDecision> {
+  ): Promise<FaceAttemptResult> {
     const [attempt] = await db
       .select()
       .from(faceLivenessAttempts)
@@ -234,10 +288,7 @@ class FaceEnrollmentService {
     }
 
     if (attempt.status !== "pending") {
-      return {
-        outcome: attempt.status === "succeeded" ? "accepted" : "rejected",
-        confidence: attempt.confidence ?? undefined,
-      };
+      return this.getStoredAttemptResult(attempt);
     }
 
     const config = getLivenessConfig();
@@ -257,13 +308,214 @@ class FaceEnrollmentService {
 
     const now = new Date();
     const referenceS3Key = result.ReferenceImage?.S3Object?.Name ?? null;
+    const terminalStatus = attemptStatusForOutcome(decision.outcome);
 
     await db
       .update(faceLivenessAttempts)
       .set({
-        status: attemptStatusForOutcome(decision.outcome),
+        status: terminalStatus,
         confidence: decision.confidence ?? null,
         referenceS3Key,
+        updatedAt: now,
+      })
+      .where(eq(faceLivenessAttempts.id, attempt.id));
+
+    const terminalAttempt: FaceLivenessAttempt = {
+      ...attempt,
+      status: terminalStatus,
+      confidence: decision.confidence ?? null,
+      referenceS3Key,
+      updatedAt: now,
+    };
+
+    if (decision.outcome === "rejected") {
+      if (attempt.intent === "enrollment") {
+        await db
+          .update(users)
+          .set({
+            faceEnrollmentStatus: "not_registered",
+            faceRegisteredAt: null,
+            updatedAt: now,
+          })
+          .where(eq(users.id, userId));
+      }
+
+      return decision;
+    }
+
+    return this.completeAcceptedAttempt(terminalAttempt);
+  }
+
+  private async getStoredAttemptResult(
+    attempt: FaceLivenessAttempt,
+  ): Promise<FaceAttemptResult> {
+    if (attempt.status !== "succeeded") {
+      return {
+        outcome: "rejected",
+        confidence: attempt.confidence ?? undefined,
+      };
+    }
+
+    switch (attempt.recognitionOutcome) {
+      case "registered":
+        return {
+          outcome: "accepted",
+          confidence: attempt.confidence ?? undefined,
+          recognition: {
+            outcome: "registered",
+            faceId: attempt.matchedFaceId ?? undefined,
+            matchedUserId: attempt.matchedUserId,
+            similarity: attempt.faceSimilarity,
+          },
+        };
+      case "verified":
+        return {
+          outcome: "accepted",
+          confidence: attempt.confidence ?? undefined,
+          recognition: {
+            outcome: "verified",
+            faceId: attempt.matchedFaceId ?? undefined,
+            matchedUserId: attempt.matchedUserId,
+            similarity: attempt.faceSimilarity,
+          },
+        };
+      case "duplicate":
+        return {
+          outcome: "rejected",
+          confidence: attempt.confidence ?? undefined,
+          reason: "face_already_registered",
+        };
+      case "not_indexed":
+        return {
+          outcome: "rejected",
+          confidence: attempt.confidence ?? undefined,
+          reason: "face_not_indexed",
+        };
+      case "mismatch":
+        return {
+          outcome: "rejected",
+          confidence: attempt.confidence ?? undefined,
+          reason: "face_mismatch",
+          recognition: {
+            outcome: "mismatch",
+            faceId: attempt.matchedFaceId ?? undefined,
+            matchedUserId: attempt.matchedUserId,
+            similarity: attempt.faceSimilarity,
+          },
+        };
+      default:
+        // Recover from a previous request that stored the terminal liveness
+        // result but crashed before writing recognition metadata.
+        return this.completeAcceptedAttempt(attempt);
+    }
+  }
+
+  private async completeAcceptedAttempt(
+    attempt: FaceLivenessAttempt,
+  ): Promise<FaceAttemptResult> {
+    if (attempt.intent === "verification") {
+      return this.completeVerificationAttempt(attempt);
+    }
+
+    return this.completeEnrollmentAttempt(attempt);
+  }
+
+  private async completeEnrollmentAttempt(
+    attempt: FaceLivenessAttempt,
+  ): Promise<FaceAttemptResult> {
+    try {
+      const registration =
+        await faceRecognitionService.registerFaceFromAttempt(attempt);
+      const now = new Date();
+
+      await db
+        .update(faceLivenessAttempts)
+        .set({
+          recognitionOutcome: "registered",
+          matchedFaceId: registration.profile.faceId,
+          matchedUserId: attempt.userId,
+          faceSimilarity: registration.similarity ?? null,
+          updatedAt: now,
+        })
+        .where(eq(faceLivenessAttempts.id, attempt.id));
+
+      await db
+        .update(users)
+        .set({
+          faceEnrollmentStatus: "registered",
+          faceRegisteredAt: now,
+          updatedAt: now,
+        })
+        .where(eq(users.id, attempt.userId));
+
+      return {
+        outcome: "accepted",
+        confidence: attempt.confidence ?? undefined,
+        recognition: {
+          outcome: "registered",
+          faceId: registration.profile.faceId,
+          matchedUserId: attempt.userId,
+          similarity: registration.similarity ?? null,
+          source: registration.source,
+        },
+      };
+    } catch (error) {
+      if (error instanceof FaceAlreadyBelongsToAnotherUserError) {
+        return this.rejectRecognizedAttempt(attempt, "duplicate");
+      }
+      if (
+        error instanceof FaceCouldNotBeIndexedError ||
+        error instanceof FaceReferenceImageMissingError
+      ) {
+        return this.rejectRecognizedAttempt(attempt, "not_indexed");
+      }
+      throw error;
+    }
+  }
+
+  private async completeVerificationAttempt(
+    attempt: FaceLivenessAttempt,
+  ): Promise<FaceAttemptResult> {
+    const verification = await faceRecognitionService.verifyFaceFromAttempt(
+      attempt.userId,
+      attempt,
+    );
+    const now = new Date();
+
+    await db
+      .update(faceLivenessAttempts)
+      .set({
+        recognitionOutcome: verification.outcome,
+        matchedFaceId: verification.matchedFaceId,
+        matchedUserId: verification.matchedUserId,
+        faceSimilarity: verification.similarity,
+        updatedAt: now,
+      })
+      .where(eq(faceLivenessAttempts.id, attempt.id));
+
+    return {
+      outcome: verification.outcome === "verified" ? "accepted" : "rejected",
+      confidence: attempt.confidence ?? undefined,
+      reason: verification.outcome === "verified" ? undefined : "face_mismatch",
+      recognition: {
+        outcome: verification.outcome,
+        faceId: verification.matchedFaceId ?? undefined,
+        matchedUserId: verification.matchedUserId,
+        similarity: verification.similarity,
+      },
+    };
+  }
+
+  private async rejectRecognizedAttempt(
+    attempt: FaceLivenessAttempt,
+    outcome: "duplicate" | "not_indexed",
+  ): Promise<FaceAttemptResult> {
+    const now = new Date();
+
+    await db
+      .update(faceLivenessAttempts)
+      .set({
+        recognitionOutcome: outcome,
         updatedAt: now,
       })
       .where(eq(faceLivenessAttempts.id, attempt.id));
@@ -271,13 +523,20 @@ class FaceEnrollmentService {
     await db
       .update(users)
       .set({
-        faceEnrollmentStatus: enrollmentStatusForOutcome(decision.outcome),
-        faceRegisteredAt: decision.outcome === "accepted" ? now : null,
+        faceEnrollmentStatus: "not_registered",
+        faceRegisteredAt: null,
         updatedAt: now,
       })
-      .where(eq(users.id, userId));
+      .where(eq(users.id, attempt.userId));
 
-    return decision;
+    return {
+      outcome: "rejected",
+      confidence: attempt.confidence ?? undefined,
+      reason:
+        outcome === "duplicate"
+          ? "face_already_registered"
+          : "face_not_indexed",
+    };
   }
 }
 

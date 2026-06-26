@@ -1,7 +1,4 @@
-import type {
-  FaceEnrollmentStatus,
-  LivenessAttemptStatus,
-} from "@/db/schema";
+import type { LivenessAttemptStatus } from "@/db/schema";
 
 /**
  * Pure liveness state-machine logic, free of AWS, DB, and `server-only` so it
@@ -66,21 +63,9 @@ export function isAttemptReusable(
   attempt: { status: LivenessAttemptStatus; expiresAt: Date },
   now: Date = new Date(),
 ): boolean {
-  return attempt.status === "pending" && attempt.expiresAt.getTime() > now.getTime();
-}
-
-/** The user-facing enrollment flag implied by a decision. */
-export function enrollmentStatusForOutcome(
-  outcome: LivenessOutcome,
-): FaceEnrollmentStatus {
-  switch (outcome) {
-    case "accepted":
-      return "registered";
-    case "pending":
-      return "pending";
-    case "rejected":
-      return "not_registered";
-  }
+  return (
+    attempt.status === "pending" && attempt.expiresAt.getTime() > now.getTime()
+  );
 }
 
 /**

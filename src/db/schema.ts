@@ -30,7 +30,7 @@ export const authMethodEnum = pgEnum("auth_method", [
  *
  * - `not_registered`: never accepted (or a previous attempt failed/expired).
  * - `pending`: an attempt is in flight.
- * - `registered`: a liveness attempt was accepted by the backend.
+ * - `registered`: a liveness attempt passed and a face profile was indexed.
  */
 export const faceEnrollmentStatusEnum = pgEnum("face_enrollment_status", [
   "not_registered",
@@ -49,6 +49,29 @@ export const livenessAttemptStatusEnum = pgEnum("liveness_attempt_status", [
   "failed",
   "expired",
   "cancelled",
+]);
+
+/**
+ * Why a Face Liveness attempt exists. Enrollment attempts can create/update a
+ * face profile after liveness passes; verification attempts only search the
+ * existing collection and must never index a new face.
+ */
+export const faceLivenessIntentEnum = pgEnum("face_liveness_intent", [
+  "enrollment",
+  "verification",
+]);
+
+/**
+ * Server-side recognition decision attached to a liveness attempt. This keeps
+ * repeated result reads idempotent: once a terminal recognition decision is
+ * stored, the API can return it without another Rekognition search/index call.
+ */
+export const faceRecognitionOutcomeEnum = pgEnum("face_recognition_outcome", [
+  "registered",
+  "verified",
+  "mismatch",
+  "duplicate",
+  "not_indexed",
 ]);
 
 /**
@@ -119,11 +142,20 @@ export const faceLivenessAttempts = pgTable(
     sessionId: text("session_id").notNull().unique(),
     // Idempotency token passed to CreateFaceLivenessSession.
     clientRequestToken: text("client_request_token").notNull(),
+    // Whether this liveness session is for first-time enrollment or later verify.
+    intent: faceLivenessIntentEnum("intent").notNull().default("enrollment"),
     status: livenessAttemptStatusEnum("status").notNull().default("pending"),
     // Rekognition confidence (0-100); null until a result is read.
     confidence: doublePrecision("confidence"),
     // S3 key of the verified reference image in the private output bucket.
     referenceS3Key: text("reference_s3_key"),
+    // Recognition metadata, set only after liveness reaches a terminal result.
+    recognitionOutcome: faceRecognitionOutcomeEnum("recognition_outcome"),
+    matchedFaceId: text("matched_face_id"),
+    matchedUserId: integer("matched_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    faceSimilarity: doublePrecision("face_similarity"),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -140,9 +172,47 @@ export const faceLivenessAttempts = pgTable(
   ],
 );
 
-export const usersRelations = relations(users, ({ many }) => ({
+/**
+ * A face indexed in an Amazon Rekognition collection and owned by one app user.
+ *
+ * The collection stores AWS-managed facial features; this table deliberately
+ * stores only business metadata and the IDs Rekognition returns. It is not a
+ * vector database and does not contain raw face embeddings.
+ */
+export const userFaceProfiles = pgTable(
+  "user_face_profiles",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id").notNull(),
+    faceId: text("face_id").notNull(),
+    imageId: text("image_id"),
+    externalImageId: text("external_image_id").notNull(),
+    confidence: doublePrecision("confidence"),
+    referenceS3Key: text("reference_s3_key"),
+    livenessAttemptId: integer("liveness_attempt_id").references(
+      () => faceLivenessAttempts.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("user_face_profiles_user_id_unique").on(table.userId),
+    uniqueIndex("user_face_profiles_face_id_unique").on(table.faceId),
+  ],
+);
+
+export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
   faceLivenessAttempts: many(faceLivenessAttempts),
+  faceProfile: one(userFaceProfiles),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -158,6 +228,24 @@ export const faceLivenessAttemptsRelations = relations(
     user: one(users, {
       fields: [faceLivenessAttempts.userId],
       references: [users.id],
+    }),
+    matchedUser: one(users, {
+      fields: [faceLivenessAttempts.matchedUserId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const userFaceProfilesRelations = relations(
+  userFaceProfiles,
+  ({ one }) => ({
+    user: one(users, {
+      fields: [userFaceProfiles.userId],
+      references: [users.id],
+    }),
+    livenessAttempt: one(faceLivenessAttempts, {
+      fields: [userFaceProfiles.livenessAttemptId],
+      references: [faceLivenessAttempts.id],
     }),
   }),
 );
@@ -237,6 +325,8 @@ export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
 export type FaceLivenessAttempt = typeof faceLivenessAttempts.$inferSelect;
 export type NewFaceLivenessAttempt = typeof faceLivenessAttempts.$inferInsert;
+export type UserFaceProfile = typeof userFaceProfiles.$inferSelect;
+export type NewUserFaceProfile = typeof userFaceProfiles.$inferInsert;
 
 /** Union of supported sign-in channels, e.g. "google" | "line" | … */
 export type AuthMethod = (typeof authMethodEnum.enumValues)[number];
@@ -248,3 +338,11 @@ export type FaceEnrollmentStatus =
 /** Lifecycle state of a single liveness attempt. */
 export type LivenessAttemptStatus =
   (typeof livenessAttemptStatusEnum.enumValues)[number];
+
+/** Intent of a single liveness attempt. */
+export type FaceLivenessIntent =
+  (typeof faceLivenessIntentEnum.enumValues)[number];
+
+/** Stored recognition decision for a terminal liveness attempt. */
+export type FaceRecognitionOutcome =
+  (typeof faceRecognitionOutcomeEnum.enumValues)[number];

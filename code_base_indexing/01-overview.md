@@ -76,16 +76,22 @@ yet (that's the `TODO(order)` extension point).
 - Face Liveness (browser): `NEXT_PUBLIC_AWS_LIVENESS_REGION`,
   `NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID` (Identity Pool federates Google for
   `StartFaceLivenessSession`-scoped temporary credentials).
+- Face Recognition (server): `AWS_FACE_COLLECTION_ID`, `AWS_FACE_MATCH_THRESHOLD`.
+  The Rekognition Face Collection stores AWS-managed face features; the app DB
+  stores only returned IDs and ownership metadata.
 
-## Face Liveness enrollment
+## Face Liveness + Face Recognition enrollment
 
 - **Goal:** prove a signed-in customer is a real person via Amazon Rekognition
-  Face Liveness, then mark them `registered`. No Face Collection / recognition yet.
+  Face Liveness, then index the accepted reference image into the Rekognition
+  Face Collection and mark them `registered`.
 - **Minimal calls:** a normal attempt makes exactly 3 Rekognition calls
   (backend `CreateFaceLivenessSession`, browser `StartFaceLivenessSession`,
-  backend `GetFaceLivenessSessionResults`). The app never polls; a transient
-  not-ready result allows at most one delayed retry (4 calls). One active attempt
-  per user (partial unique index + idempotent reuse).
+  backend `GetFaceLivenessSessionResults`). Recognition calls are gated behind
+  accepted liveness only: enrollment performs `SearchFacesByImage` to avoid
+  duplicates, then `IndexFaces` only when no existing match is found. The app
+  never polls; a transient not-ready result allows at most one delayed retry.
+  One active attempt per user (partial unique index + idempotent reuse).
 - **Credential bridge:** the OAuth callback stashes the verified Google ID token
   in a path-scoped (`/api/face`) httpOnly cookie; `GET /api/face/credentials`
   exchanges it through the Cognito Identity Pool for short-lived, detector-scoped
@@ -94,7 +100,13 @@ yet (that's the `TODO(order)` extension point).
   users; `/register-face` requires an explicit start and never auto-launches the
   camera or creates an AWS session.
 - **Data:** `users.face_enrollment_status` is the server-authoritative flag the UI
-  reads; `face_liveness_attempts` holds per-attempt metadata (no raw biometrics).
+  reads; `face_liveness_attempts` holds per-attempt liveness + recognition
+  decisions; `user_face_profiles` maps app users to Rekognition `FaceId`s. The DB
+  does not store face vectors.
+- **Verification-ready:** `POST /api/face/session` accepts optional
+  `{ intent: "verification" }`; `POST /api/face/result` searches the collection
+  and returns accepted only when the matched `FaceId` maps back to the signed-in
+  user at the configured threshold.
 
 ## Authentication
 

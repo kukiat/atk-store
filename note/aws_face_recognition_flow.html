@@ -1,0 +1,1565 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AWS Face Recognition Flow</title>
+    <style>
+      :root {
+        --paper: #fffaf3;
+        --paper-soft: #f5efe4;
+        --paper-deep: #eee4d4;
+        --ink: #1b1a18;
+        --muted: #6a6255;
+        --faint: #9a8e7b;
+        --rule: rgba(27, 26, 24, 0.16);
+        --rule-strong: rgba(27, 26, 24, 0.34);
+        --terracotta: #b04a1a;
+        --blue: #244b73;
+        --green: #3f6a4a;
+        --amber: #8a641b;
+        --red: #8f3f2f;
+        --font-serif:
+          "Source Han Serif SC", "Noto Serif Thai", "Songti SC",
+          "Iowan Old Style", Georgia, serif;
+        --font-sans:
+          "PingFang SC", "Noto Sans Thai", "IBM Plex Sans", -apple-system,
+          BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--font-sans);
+        font-size: 16px;
+        line-height: 1.74;
+        text-wrap: pretty;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      button {
+        font: inherit;
+      }
+
+      code {
+        padding: 0.08em 0.28em;
+        background: rgba(176, 74, 26, 0.08);
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 0.86em;
+      }
+
+      .page {
+        width: min(1220px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 56px 0 72px;
+      }
+
+      .kicker {
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3,
+      h4 {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--font-serif);
+        font-weight: 650;
+        line-height: 1.16;
+      }
+
+      h1 {
+        max-width: 950px;
+        margin-top: 10px;
+        font-size: clamp(2.4rem, 6vw, 5.6rem);
+        letter-spacing: -0.055em;
+      }
+
+      h2 {
+        font-size: clamp(1.55rem, 2.2vw, 2.35rem);
+        letter-spacing: -0.035em;
+      }
+
+      h3 {
+        font-size: 1.18rem;
+        letter-spacing: -0.012em;
+      }
+
+      h4 {
+        font-family: var(--font-sans);
+        font-size: 0.9rem;
+        letter-spacing: 0.02em;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.12fr 0.88fr;
+        gap: 34px;
+        align-items: end;
+        padding-bottom: 38px;
+        border-bottom: 1px solid var(--rule-strong);
+      }
+
+      .hero-copy {
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 1.04rem;
+      }
+
+      .hero-copy strong {
+        color: var(--ink);
+      }
+
+      .legend {
+        border-top: 2px solid var(--ink);
+        border-bottom: 1px solid var(--rule-strong);
+      }
+
+      .legend-row {
+        display: grid;
+        grid-template-columns: 0.58fr 1fr;
+        gap: 18px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .legend-row:last-child {
+        border-bottom: 0;
+      }
+
+      .legend dt {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 0.77rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .legend dd {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .summary-strip {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        margin-top: 26px;
+        border-top: 2px solid var(--ink);
+        border-bottom: 1px solid var(--rule-strong);
+      }
+
+      .metric {
+        min-height: 108px;
+        padding: 15px 18px;
+        border-right: 1px solid var(--rule);
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric .label {
+        display: block;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .metric .value {
+        display: block;
+        margin-top: 8px;
+        font-family: var(--font-serif);
+        font-size: 1.28rem;
+        line-height: 1.18;
+      }
+
+      .metric .note {
+        display: block;
+        margin-top: 8px;
+        color: var(--faint);
+        font-size: 0.78rem;
+        line-height: 1.45;
+      }
+
+      section {
+        margin-top: 54px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 22px;
+      }
+
+      .section-head p {
+        max-width: 620px;
+        color: var(--muted);
+        font-size: 0.96rem;
+      }
+
+      .actor-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .actor {
+        min-height: 220px;
+        padding: 22px 18px;
+        border-right: 1px solid var(--rule-strong);
+        background: var(--paper);
+      }
+
+      .actor:last-child {
+        border-right: 0;
+      }
+
+      .mark {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 20px;
+        border: 1.5px solid currentColor;
+        border-radius: 50%;
+        font-family: var(--font-mono);
+        font-size: 0.85rem;
+      }
+
+      .actor.ui {
+        color: var(--terracotta);
+      }
+
+      .actor.server {
+        color: var(--blue);
+      }
+
+      .actor.s3 {
+        color: var(--green);
+      }
+
+      .actor.rek {
+        color: var(--amber);
+      }
+
+      .actor.db {
+        color: var(--red);
+      }
+
+      .actor p {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .pill-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border: 1px solid currentColor;
+        padding: 2px 8px;
+        color: inherit;
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .map {
+        display: grid;
+        grid-template-columns: 1fr 1.08fr 1fr;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .map-panel {
+        min-height: 300px;
+        padding: 24px;
+        border-right: 1px solid var(--rule-strong);
+      }
+
+      .map-panel:last-child {
+        border-right: 0;
+      }
+
+      .map-panel p {
+        margin-top: 12px;
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      .vault {
+        position: relative;
+        min-height: 178px;
+        margin-top: 24px;
+        border-top: 1px solid var(--rule-strong);
+        border-bottom: 1px solid var(--rule-strong);
+        display: grid;
+        place-items: center;
+      }
+
+      .vault::before,
+      .vault::after {
+        content: "";
+        position: absolute;
+        top: 18px;
+        bottom: 18px;
+        width: 1px;
+        background: var(--rule);
+      }
+
+      .vault::before {
+        left: 34%;
+      }
+
+      .vault::after {
+        right: 34%;
+      }
+
+      .vault strong {
+        max-width: 220px;
+        text-align: center;
+        font-family: var(--font-serif);
+        font-size: 1.4rem;
+        line-height: 1.2;
+      }
+
+      .no-store {
+        margin-top: 18px;
+        padding-top: 14px;
+        border-top: 1px solid var(--rule);
+        color: var(--red);
+        font-family: var(--font-mono);
+        font-size: 0.74rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .flow-control {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .switch {
+        border: 1px solid var(--rule-strong);
+        background: transparent;
+        color: var(--muted);
+        cursor: pointer;
+        padding: 7px 12px;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .switch.active {
+        border-color: var(--ink);
+        background: var(--ink);
+        color: var(--paper);
+      }
+
+      .journey {
+        display: none;
+      }
+
+      .journey.active {
+        display: block;
+      }
+
+      .timeline {
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 118px 1fr 260px;
+        gap: 22px;
+        padding: 22px 0;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .step:last-child {
+        border-bottom: 0;
+      }
+
+      .step-no {
+        display: flex;
+        align-items: start;
+        justify-content: center;
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+      }
+
+      .step-no span {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+      }
+
+      .step-main h3 {
+        margin-bottom: 8px;
+      }
+
+      .step-main p {
+        color: var(--muted);
+      }
+
+      .step-side {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      .step-side strong {
+        color: var(--ink);
+      }
+
+      .call {
+        display: block;
+        margin-bottom: 5px;
+        color: var(--blue);
+        font-family: var(--font-mono);
+        font-size: 0.76rem;
+      }
+
+      .split-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .split-panel {
+        padding: 24px;
+        border-right: 1px solid var(--rule-strong);
+      }
+
+      .split-panel:last-child {
+        border-right: 0;
+      }
+
+      .split-panel p {
+        margin-top: 10px;
+        color: var(--muted);
+      }
+
+      .db-table {
+        margin-top: 18px;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .db-row {
+        display: grid;
+        grid-template-columns: 0.85fr 1.1fr 1.05fr;
+        gap: 16px;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .db-row:last-child {
+        border-bottom: 0;
+      }
+
+      .db-row.header {
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .db-row div {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .db-row strong {
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 0.84rem;
+        font-weight: 500;
+      }
+
+      .rule-book {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .rule {
+        min-height: 250px;
+        padding: 22px 18px;
+        border-right: 1px solid var(--rule-strong);
+      }
+
+      .rule:last-child {
+        border-right: 0;
+      }
+
+      .rule .num {
+        display: block;
+        margin-bottom: 26px;
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.76rem;
+      }
+
+      .rule p {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .decision {
+        display: grid;
+        grid-template-columns: 0.8fr 1fr 0.8fr;
+        align-items: stretch;
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .decision-box {
+        padding: 24px;
+        border-right: 1px solid var(--rule-strong);
+      }
+
+      .decision-box:last-child {
+        border-right: 0;
+      }
+
+      .decision-box.center {
+        display: grid;
+        place-items: center;
+        background: var(--paper-soft);
+      }
+
+      .decision-circle {
+        width: min(280px, 100%);
+        aspect-ratio: 1;
+        display: grid;
+        place-items: center;
+        border: 2px solid var(--ink);
+        border-radius: 50%;
+        padding: 24px;
+        text-align: center;
+      }
+
+      .decision-circle span {
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .decision-circle strong {
+        display: block;
+        margin-top: 8px;
+        font-family: var(--font-serif);
+        font-size: 1.34rem;
+        line-height: 1.18;
+      }
+
+      .decision-box p {
+        margin-top: 12px;
+        color: var(--muted);
+      }
+
+      .checklist {
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .check {
+        display: grid;
+        grid-template-columns: 180px 1fr 240px;
+        gap: 18px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--rule);
+      }
+
+      .check:last-child {
+        border-bottom: 0;
+      }
+
+      .status {
+        color: var(--green);
+        font-family: var(--font-mono);
+        font-size: 0.73rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .status.todo {
+        color: var(--terracotta);
+      }
+
+      .status.later {
+        color: var(--faint);
+      }
+
+      .check strong {
+        font-family: var(--font-serif);
+        font-size: 1.04rem;
+      }
+
+      .check p,
+      .check .owner {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .quote {
+        margin-top: 42px;
+        padding: 28px 0 0;
+        border-top: 1px solid var(--rule-strong);
+        color: var(--muted);
+        font-family: var(--font-serif);
+        font-size: clamp(1.25rem, 2vw, 1.75rem);
+        font-style: italic;
+        line-height: 1.45;
+      }
+
+      .quote cite {
+        display: block;
+        margin-top: 12px;
+        color: var(--faint);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        font-style: normal;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .info-button {
+        width: 31px;
+        height: 31px;
+        display: inline-grid;
+        place-items: center;
+        border: 1px solid currentColor;
+        border-radius: 50%;
+        background: transparent;
+        color: var(--green);
+        cursor: pointer;
+        font-family: var(--font-serif);
+        font-size: 1rem;
+        line-height: 1;
+      }
+
+      .info-target {
+        display: none;
+        margin-top: 18px;
+        padding-top: 16px;
+        border-top: 1px solid var(--rule-strong);
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .info-target.open {
+        display: block;
+      }
+
+      .source-note {
+        margin-top: 18px;
+        color: var(--faint);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .map,
+        .split-grid,
+        .decision {
+          grid-template-columns: 1fr;
+        }
+
+        .legend {
+          margin-top: 10px;
+        }
+
+        .summary-strip,
+        .actor-grid,
+        .rule-book {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .map-panel,
+        .split-panel,
+        .decision-box {
+          border-right: 0;
+          border-bottom: 1px solid var(--rule-strong);
+        }
+
+        .map-panel:last-child,
+        .split-panel:last-child,
+        .decision-box:last-child {
+          border-bottom: 0;
+        }
+
+        .step {
+          grid-template-columns: 72px 1fr;
+        }
+
+        .step-side {
+          grid-column: 2;
+        }
+
+        .check {
+          grid-template-columns: 120px 1fr;
+        }
+
+        .check .owner {
+          grid-column: 2;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .page {
+          width: min(100% - 28px, 1220px);
+          padding-top: 36px;
+        }
+
+        .summary-strip,
+        .actor-grid,
+        .rule-book {
+          grid-template-columns: 1fr;
+        }
+
+        .metric,
+        .actor,
+        .rule {
+          border-right: 0;
+          border-bottom: 1px solid var(--rule);
+        }
+
+        .metric:last-child,
+        .actor:last-child,
+        .rule:last-child {
+          border-bottom: 0;
+        }
+
+        .section-head {
+          display: block;
+        }
+
+        .section-head p,
+        .flow-control {
+          margin-top: 12px;
+        }
+
+        .legend-row,
+        .db-row,
+        .step,
+        .check {
+          grid-template-columns: 1fr;
+        }
+
+        .step-no {
+          justify-content: start;
+        }
+
+        .step-side,
+        .check .owner {
+          grid-column: auto;
+        }
+      }
+
+      @media print {
+        .switch,
+        .info-button {
+          display: none;
+        }
+
+        .journey {
+          display: block;
+          margin-bottom: 28px;
+        }
+
+        .info-target {
+          display: block;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <div class="kicker">ATK STORE · FACE RECOGNITION NOTE</div>
+          <h1>AWS Face Recognition Flow</h1>
+          <p class="hero-copy">
+            เอกสารนี้อธิบายว่าหลังจาก Face Liveness ผ่านแล้ว ระบบจะเอารูป
+            reference ไปทำ <strong>IndexFaces</strong> และ
+            <strong>SearchFacesByImage</strong> อย่างไร โดยไม่เก็บ vector
+            ใบหน้าไว้ในฐานข้อมูลของเราเอง
+          </p>
+        </div>
+
+        <dl class="legend">
+          <div class="legend-row">
+            <dt>Region</dt>
+            <dd>Tokyo · <code>ap-northeast-1</code></dd>
+          </div>
+          <div class="legend-row">
+            <dt>Collection</dt>
+            <dd><code>atk-store-face-collection-dev</code></dd>
+          </div>
+          <div class="legend-row">
+            <dt>Storage rule</dt>
+            <dd>DB เก็บ mapping; AWS Collection เก็บ face features</dd>
+          </div>
+          <div class="legend-row">
+            <dt>Source</dt>
+            <dd><code>tmp/pdfs/rekognition-dg.pdf</code></dd>
+          </div>
+        </dl>
+      </header>
+
+      <div class="summary-strip" aria-label="implementation readiness summary">
+        <div class="metric">
+          <span class="label">Liveness</span>
+          <span class="value">ผ่านก่อนเสมอ</span>
+          <span class="note"
+            >กันการใช้รูปนิ่งหรือ replay ก่อนเข้าสู่ recognition</span
+          >
+        </div>
+        <div class="metric">
+          <span class="label">Index</span>
+          <span class="value">AWS เก็บ vector</span>
+          <span class="note"
+            >เราได้ <code>FaceId</code> กลับมา ไม่ได้ vector</span
+          >
+        </div>
+        <div class="metric">
+          <span class="label">Verify</span>
+          <span class="value">Search by image</span>
+          <span class="note">ได้ match + similarity แล้ว backend ตัดสินผล</span>
+        </div>
+        <div class="metric">
+          <span class="label">DB</span>
+          <span class="value">สมุดทะเบียน</span>
+          <span class="note"
+            >ผูก <code>userId</code> กับ <code>faceId</code></span
+          >
+        </div>
+      </div>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <div class="kicker">Actors</div>
+            <h2>ใครทำหน้าที่อะไร</h2>
+          </div>
+          <p>
+            Recognition flow แยกความรับผิดชอบชัดเจน: UI ขอ consent, backend
+            เป็นคนตัดสิน, S3 ถือรูป reference ชั่ว/ถาวรตาม policy, Rekognition
+            ถือ face index, DB ถือ mapping ของธุรกิจเรา
+          </p>
+        </div>
+
+        <div class="actor-grid">
+          <article class="actor ui">
+            <div class="mark">UI</div>
+            <h3>Next.js UI</h3>
+            <p>
+              แสดง CTA ให้ register/verify ใบหน้า และเปิดกล้องเฉพาะเมื่อ user
+              login แล้วกดเริ่มเอง
+            </p>
+            <div class="pill-row">
+              <span class="pill">consent</span>
+              <span class="pill">camera</span>
+            </div>
+          </article>
+
+          <article class="actor server">
+            <div class="mark">BE</div>
+            <h3>Backend</h3>
+            <p>
+              สร้าง liveness session, อ่านผล, ดึง reference image, แล้วเรียก
+              recognition API ด้วย AWS profile หรือ IAM role
+            </p>
+            <div class="pill-row">
+              <span class="pill">policy</span>
+              <span class="pill">decision</span>
+            </div>
+          </article>
+
+          <article class="actor s3">
+            <div class="mark">S3</div>
+            <h3>S3 Tokyo</h3>
+            <p>
+              เก็บ reference image จาก Face Liveness เช่น
+              <code>face-liveness/.../reference.jpg</code>
+            </p>
+            <div class="pill-row">
+              <span class="pill">private</span>
+              <span class="pill">source image</span>
+            </div>
+          </article>
+
+          <article class="actor rek">
+            <div class="mark">REK</div>
+            <h3>Rekognition</h3>
+            <p>
+              <code>IndexFaces</code> เพื่อเพิ่ม face เข้า collection และ
+              <code>SearchFacesByImage</code> เพื่อค้นหา match
+            </p>
+            <div class="pill-row">
+              <span class="pill">collection</span>
+              <span class="pill">similarity</span>
+            </div>
+          </article>
+
+          <article class="actor db">
+            <div class="mark">DB</div>
+            <h3>Database</h3>
+            <p>
+              เก็บสถานะ register และ mapping ระหว่าง user ในระบบกับ
+              <code>FaceId</code> ที่ AWS ส่งกลับมา
+            </p>
+            <div class="pill-row">
+              <span class="pill">mapping</span>
+              <span class="pill">audit</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <div class="kicker">Mental model</div>
+            <h2>Vector อยู่ที่ไหนกันแน่</h2>
+          </div>
+          <button
+            class="info-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="vector-info"
+            data-toggle="vector-info"
+          >
+            i
+          </button>
+        </div>
+
+        <div class="map">
+          <article class="map-panel">
+            <h3>Input image</h3>
+            <p>
+              รูปที่ผ่าน liveness แล้วถูกใช้เป็น source สำหรับ
+              <code>IndexFaces</code> หรือ <code>SearchFacesByImage</code>
+            </p>
+            <div class="vault">
+              <strong>reference image from liveness</strong>
+            </div>
+            <div class="no-store">รูปจริงอยู่ใน private S3 bucket</div>
+          </article>
+
+          <article class="map-panel">
+            <h3>Face Collection</h3>
+            <p>
+              Rekognition extract facial features แล้วเก็บไว้ใน collection ภายใน
+              AWS ตาม behavior ของ <code>IndexFaces</code>
+            </p>
+            <div class="vault">
+              <strong>AWS-managed face features</strong>
+            </div>
+            <div class="no-store">เราอ่าน vector จริงออกมาไม่ได้</div>
+          </article>
+
+          <article class="map-panel">
+            <h3>Application DB</h3>
+            <p>
+              DB ของเราไม่ใช่ vector database ใน flow นี้
+              มันเป็นทะเบียนที่บอกว่า face record ไหนเป็นของ user ไหน
+            </p>
+            <div class="vault">
+              <strong>userId ↔ faceId mapping</strong>
+            </div>
+            <div class="no-store">เก็บ metadata ไม่เก็บ vector</div>
+          </article>
+        </div>
+
+        <div class="info-target" id="vector-info">
+          ตาม Rekognition Developer Guide ส่วน collection และ
+          <code>IndexFaces</code>: API จะ detect face จากรูป JPEG/PNG, extract
+          facial features, เพิ่มเข้า collection และส่ง metadata เช่น
+          <code>FaceId</code>, <code>ImageId</code>,
+          <code>ExternalImageId</code>, bounding box และ confidence กลับมา
+          แต่ไม่ได้ให้ application ดึง face vector ออกมาเก็บเอง
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <div class="kicker">Two journeys</div>
+            <h2>Register กับ Verify ไม่ใช่ API เดียวกัน</h2>
+          </div>
+          <div class="flow-control" role="tablist" aria-label="Flow selector">
+            <button
+              class="switch active"
+              type="button"
+              role="tab"
+              aria-selected="true"
+              data-flow="register"
+            >
+              Register face
+            </button>
+            <button
+              class="switch"
+              type="button"
+              role="tab"
+              aria-selected="false"
+              data-flow="verify"
+            >
+              Verify identity
+            </button>
+          </div>
+        </div>
+
+        <div class="journey active" data-journey="register">
+          <div class="timeline">
+            <article class="step">
+              <div class="step-no"><span>01</span></div>
+              <div class="step-main">
+                <h3>User login แล้วกด Register face</h3>
+                <p>
+                  UI เช็กว่า user มี session ของ app แล้ว และ
+                  <code>faceEnrollmentStatus</code> ยังไม่ใช่
+                  <code>registered</code> จึงแสดง CTA แบบไม่รบกวน navbar
+                </p>
+              </div>
+              <aside class="step-side">
+                <strong>ไม่ call AWS</strong><br />
+                แค่ render จากสถานะ user ใน DB
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>02</span></div>
+              <div class="step-main">
+                <h3>Backend สร้าง Face Liveness session</h3>
+                <p>
+                  เมื่อ user กดเริ่มจริง ๆ UI ค่อยเรียก
+                  <code>POST /api/face/session</code> แล้ว backend เรียก
+                  <code>CreateFaceLivenessSession</code>
+                </p>
+              </div>
+              <aside class="step-side">
+                <span class="call">BE → Rekognition</span>
+                ใช้ AWS profile local หรือ IAM role บน production
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>03</span></div>
+              <div class="step-main">
+                <h3>Frontend เปิดกล้องและ stream liveness</h3>
+                <p>
+                  ตัว detector ใช้ Cognito Identity Pool เพื่อแลก Google ID
+                  token เป็น temporary AWS credential สำหรับ
+                  <code>StartFaceLivenessSession</code> เท่านั้น
+                </p>
+              </div>
+              <aside class="step-side">
+                <span class="call">FE → Cognito → Rekognition</span>
+                credential สั้นและ scope แคบ ไม่ใช่ access key ถาวร
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>04</span></div>
+              <div class="step-main">
+                <h3>Backend อ่านผล liveness หนึ่งครั้งต่อ request</h3>
+                <p>
+                  <code>GET /api/face/result</code> เรียก
+                  <code>GetFaceLivenessSessionResults</code> แล้วเก็บ
+                  <code>referenceS3Key</code> ถ้า outcome accepted
+                </p>
+              </div>
+              <aside class="step-side">
+                <span class="call">BE → Rekognition</span>
+                ไม่ poll รัว ๆ; terminal result ถูก cache ใน DB
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>05</span></div>
+              <div class="step-main">
+                <h3>IndexFaces เพิ่มใบหน้าเข้า collection</h3>
+                <p>
+                  Backend ใช้ reference image จาก S3 แล้วเรียก
+                  <code>IndexFaces</code> กับ
+                  <code>atk-store-face-collection-dev</code> โดยส่ง
+                  <code>ExternalImageId</code> เป็น stable app identifier
+                </p>
+              </div>
+              <aside class="step-side">
+                <span class="call">BE → S3 → Rekognition</span>
+                ควรใช้ <code>QualityFilter</code> และตรวจว่ามีหน้าเดียว
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>06</span></div>
+              <div class="step-main">
+                <h3>DB เก็บ FaceId mapping</h3>
+                <p>
+                  เมื่อ AWS ส่ง <code>FaceId</code> และ
+                  <code>ImageId</code> กลับมา backend ค่อยอัปเดต DB ว่า user
+                  คนนี้ register face แล้ว
+                </p>
+              </div>
+              <aside class="step-side">
+                <strong>DB write</strong><br />
+                <code>userId</code>, <code>collectionId</code>,
+                <code>faceId</code>, <code>registeredAt</code>
+              </aside>
+            </article>
+          </div>
+        </div>
+
+        <div class="journey" data-journey="verify">
+          <div class="timeline">
+            <article class="step">
+              <div class="step-no"><span>01</span></div>
+              <div class="step-main">
+                <h3>User ต้องผ่าน app auth ก่อน</h3>
+                <p>
+                  Verify identity ไม่เริ่มจากกล้องเปล่า ๆ แต่เริ่มจาก session
+                  ของ app เพื่อรู้ว่า request นี้เป็นของใคร และป้องกัน anonymous
+                  probe
+                </p>
+              </div>
+              <aside class="step-side">
+                <strong>Auth gate</strong><br />
+                ใช้ <code>atk_session</code> ของระบบเรา
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>02</span></div>
+              <div class="step-main">
+                <h3>ทำ Face Liveness ใหม่</h3>
+                <p>
+                  ทุกครั้งที่ verify สำคัญ ควรมี liveness ใหม่ก่อน search
+                  เพื่อให้รูปที่จะเทียบเป็นภาพจากมนุษย์จริง ณ session นั้น
+                </p>
+              </div>
+              <aside class="step-side">
+                <span class="call">Create → Start → Get</span>
+                flow เดิม แต่ intent คือ verify ไม่ใช่ enrollment
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>03</span></div>
+              <div class="step-main">
+                <h3>SearchFacesByImage ใน collection</h3>
+                <p>
+                  Backend ส่ง reference image ที่ผ่าน liveness เข้า
+                  <code>SearchFacesByImage</code> พร้อม threshold สูง เช่น
+                  <code>99</code> สำหรับ identity verification
+                </p>
+              </div>
+              <aside class="step-side">
+                <span class="call">BE → Rekognition</span>
+                ผลลัพธ์คือ candidate faces และ similarity score
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>04</span></div>
+              <div class="step-main">
+                <h3>Backend map FaceId กลับเป็น user</h3>
+                <p>
+                  ถ้า match ที่ดีที่สุดมี <code>FaceId</code> อยู่ใน DB และ
+                  similarity ผ่าน threshold ระบบจึงรู้ว่าใบหน้านี้คือ user คนไหน
+                </p>
+              </div>
+              <aside class="step-side">
+                <strong>DB lookup</strong><br />
+                <code>FaceId</code> → <code>userId</code>
+              </aside>
+            </article>
+
+            <article class="step">
+              <div class="step-no"><span>05</span></div>
+              <div class="step-main">
+                <h3>ตัดสินผลแบบ server-authoritative</h3>
+                <p>
+                  ผลสุดท้ายไม่ควรให้ frontend ตัดสินเอง Backend ต้องรวมผล
+                  liveness, face match, ownership และ policy เช่น retry limit
+                </p>
+              </div>
+              <aside class="step-side">
+                <strong>Decision</strong><br />
+                accepted, rejected, review, locked
+              </aside>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <div class="kicker">Data contract</div>
+            <h2>ตารางที่ควรเพิ่มสำหรับ recognition</h2>
+          </div>
+          <p>
+            ตารางเดิมมี <code>face_liveness_attempts</code> แล้ว แต่ recognition
+            ต้องมีอีกชั้นเพื่อเก็บ face record ที่ AWS collection สร้างให้
+          </p>
+        </div>
+
+        <div class="split-grid">
+          <article class="split-panel">
+            <h3>มีอยู่แล้ว</h3>
+            <p>
+              <code>users.faceEnrollmentStatus</code> ใช้บอก UI ว่าควรเตือนให้
+              register หน้าไหม และ
+              <code>face_liveness_attempts.referenceS3Key</code>
+              ใช้ชี้ไปยังรูป reference หลัง liveness ผ่าน
+            </p>
+            <div class="db-table">
+              <div class="db-row header">
+                <div>field</div>
+                <div>meaning</div>
+                <div>used by</div>
+              </div>
+              <div class="db-row">
+                <div><strong>faceEnrollmentStatus</strong></div>
+                <div>not_registered / pending / registered</div>
+                <div>Navbar prompt, registration guard</div>
+              </div>
+              <div class="db-row">
+                <div><strong>referenceS3Key</strong></div>
+                <div>S3 key ของ reference image</div>
+                <div>IndexFaces / SearchFacesByImage source</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="split-panel">
+            <h3>ควรเพิ่ม</h3>
+            <p>
+              แนะนำแยกเป็น table เช่น <code>user_face_profiles</code>
+              เพื่อรองรับ delete/re-index/audit ในอนาคตโดยไม่ยัดทุกอย่างลง
+              <code>users</code>
+            </p>
+            <div class="db-table">
+              <div class="db-row header">
+                <div>field</div>
+                <div>meaning</div>
+                <div>rule</div>
+              </div>
+              <div class="db-row">
+                <div><strong>userId</strong></div>
+                <div>เจ้าของ face record</div>
+                <div>unique ถ้า 1 user มี 1 face profile</div>
+              </div>
+              <div class="db-row">
+                <div><strong>collectionId</strong></div>
+                <div>เช่น atk-store-face-collection-dev</div>
+                <div>ช่วยแยก dev/prod</div>
+              </div>
+              <div class="db-row">
+                <div><strong>faceId</strong></div>
+                <div>ID จาก Rekognition</div>
+                <div>unique และใช้ map ตอน verify</div>
+              </div>
+              <div class="db-row">
+                <div><strong>imageId</strong></div>
+                <div>ID ของรูปที่ AWS index</div>
+                <div>audit/debug</div>
+              </div>
+              <div class="db-row">
+                <div><strong>externalImageId</strong></div>
+                <div>app-defined reference</div>
+                <div>ไม่ควรใช้ email ตรง ๆ ถ้าห่วง privacy</div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <div class="kicker">API economy</div>
+            <h2>กฎลดการ call API โดยไม่ลดความน่าเชื่อถือ</h2>
+          </div>
+          <button
+            class="info-button"
+            type="button"
+            aria-expanded="false"
+            aria-controls="liveness-first"
+            data-toggle="liveness-first"
+          >
+            i
+          </button>
+        </div>
+
+        <div class="rule-book">
+          <article class="rule">
+            <span class="num">RULE 01</span>
+            <h3>ไม่เปิดกล้องจาก page load</h3>
+            <p>
+              UI แสดง CTA ก่อนเสมอ และเริ่ม session เมื่อ user กดเท่านั้น
+              ลดทั้งค่าใช้จ่ายและ false start
+            </p>
+          </article>
+          <article class="rule">
+            <span class="num">RULE 02</span>
+            <h3>หนึ่ง intent หนึ่ง liveness session</h3>
+            <p>
+              Register หนึ่งครั้งใช้หนึ่ง session; verify หนึ่งครั้งใช้หนึ่ง
+              session ไม่สร้างใหม่ระหว่างยัง pending
+            </p>
+          </article>
+          <article class="rule">
+            <span class="num">RULE 03</span>
+            <h3>IndexFaces เฉพาะหลัง accepted</h3>
+            <p>
+              ถ้า liveness ไม่ผ่าน ห้ามเอารูปไป index เพื่อลด noise ใน
+              collection และลด API ที่ไม่จำเป็น
+            </p>
+          </article>
+          <article class="rule">
+            <span class="num">RULE 04</span>
+            <h3>SearchFacesByImage เฉพาะจุดเสี่ยง</h3>
+            <p>
+              ไม่ search ทุกหน้า ใช้เมื่อ register กัน duplicate หรือเมื่อ flow
+              ต้อง verify identity จริง
+            </p>
+          </article>
+        </div>
+
+        <div class="info-target" id="liveness-first">
+          เหตุผลที่ต้องเอา liveness มาก่อน recognition: face recognition ตอบว่า
+          “รูปนี้คล้ายใครใน collection”
+          แต่ไม่ได้ตอบว่ารูปนั้นมาจากคนจริงหน้ากล้องในเวลานั้นหรือไม่ ดังนั้น
+          flow ที่ปลอดภัยกว่าคือ liveness accepted ก่อน แล้วค่อย
+          <code>IndexFaces</code> หรือ <code>SearchFacesByImage</code>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <div class="kicker">Backend decision</div>
+            <h2>จุดที่ backend ต้องตัดสิน</h2>
+          </div>
+          <p>
+            Frontend แสดงผลได้ แต่ไม่ควรเป็นเจ้าของความจริงของ identity
+            เพราะผลจาก AWS ต้องถูกรวมกับ session ownership และ DB policy
+          </p>
+        </div>
+
+        <div class="decision">
+          <article class="decision-box">
+            <h3>Accepted</h3>
+            <p>
+              liveness score ผ่าน threshold และ face match similarity ผ่านค่า
+              เช่น <code>AWS_FACE_MATCH_THRESHOLD=99</code>
+            </p>
+          </article>
+          <article class="decision-box center">
+            <div class="decision-circle">
+              <div>
+                <span>server authority</span>
+                <strong>รวมผลจาก AWS + DB + app session</strong>
+              </div>
+            </div>
+          </article>
+          <article class="decision-box">
+            <h3>Rejected or review</h3>
+            <p>
+              liveness failed, no face found, multiple faces, similarity ต่ำ,
+              FaceId ไม่อยู่ใน DB, หรือ match เป็น user คนอื่น
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <div class="kicker">Implementation checklist</div>
+            <h2>จาก resource พร้อม ไปสู่ code พร้อม</h2>
+          </div>
+          <p>
+            ตอนนี้ resource หลักพร้อมแล้ว เหลือ implementation ที่ต้องคุม state,
+            DB และ AWS call ให้เป็นระบบ
+          </p>
+        </div>
+
+        <div class="checklist">
+          <div class="check">
+            <div class="status">ready</div>
+            <div>
+              <strong>Face Collection</strong>
+              <p>
+                <code>atk-store-face-collection-dev</code> อยู่ที่ Tokyo แล้ว
+              </p>
+            </div>
+            <div class="owner">AWS resource</div>
+          </div>
+          <div class="check">
+            <div class="status">ready</div>
+            <div>
+              <strong>Liveness reference image</strong>
+              <p>
+                result flow ปัจจุบันเก็บ <code>referenceS3Key</code>
+                หลัง accepted แล้ว
+              </p>
+            </div>
+            <div class="owner">existing backend</div>
+          </div>
+          <div class="check">
+            <div class="status todo">next</div>
+            <div>
+              <strong>Recognition env</strong>
+              <p>
+                ใช้ <code>AWS_FACE_COLLECTION_ID</code> และเพิ่ม
+                <code>AWS_FACE_MATCH_THRESHOLD</code>
+              </p>
+            </div>
+            <div class="owner">config</div>
+          </div>
+          <div class="check">
+            <div class="status todo">next</div>
+            <div>
+              <strong>DB schema</strong>
+              <p>
+                เพิ่ม table สำหรับ <code>userId ↔ faceId</code> และ metadata จาก
+                <code>IndexFaces</code>
+              </p>
+            </div>
+            <div class="owner">migration</div>
+          </div>
+          <div class="check">
+            <div class="status todo">next</div>
+            <div>
+              <strong>Register service</strong>
+              <p>
+                หลัง liveness accepted: get S3 object แล้ว
+                <code>IndexFaces</code> เข้า collection
+              </p>
+            </div>
+            <div class="owner">backend</div>
+          </div>
+          <div class="check">
+            <div class="status todo">next</div>
+            <div>
+              <strong>Verify service</strong>
+              <p>
+                หลัง liveness accepted: <code>SearchFacesByImage</code>, inspect
+                similarity, แล้ว map <code>FaceId</code> กลับเป็น user
+              </p>
+            </div>
+            <div class="owner">backend</div>
+          </div>
+          <div class="check">
+            <div class="status later">prod</div>
+            <div>
+              <strong>Least-privilege IAM</strong>
+              <p>
+                local admin ใช้ dev ได้ แต่ production ควรเป็น role/policy
+                จำกัดเฉพาะ S3 และ Rekognition actions ที่จำเป็น
+              </p>
+            </div>
+            <div class="owner">security</div>
+          </div>
+        </div>
+
+        <p class="quote">
+          Face Collection ไม่ใช่ที่เก็บรูป และ DB ของเราไม่ใช่ที่เก็บ vector.
+          ระบบที่ถูกคือให้ AWS ถือ face features ส่วนเราเก็บแค่ mapping และ
+          business decision.
+          <cite>Rekognition notes · IndexFaces / SearchFacesByImage</cite>
+        </p>
+
+        <p class="source-note">
+          Local sources consulted: tmp/pdfs/rekognition-outline.txt,
+          tmp/pdfs/rekognition-dg.pdf; current app schema: src/db/schema.ts;
+          liveness service: src/services/face-enrollment.service.ts
+        </p>
+      </section>
+    </main>
+
+    <script>
+      const switches = Array.from(document.querySelectorAll("[data-flow]"));
+      const journeys = Array.from(document.querySelectorAll("[data-journey]"));
+
+      switches.forEach((button) => {
+        button.addEventListener("click", () => {
+          const flow = button.dataset.flow;
+
+          switches.forEach((item) => {
+            const active = item === button;
+            item.classList.toggle("active", active);
+            item.setAttribute("aria-selected", String(active));
+          });
+
+          journeys.forEach((journey) => {
+            journey.classList.toggle(
+              "active",
+              journey.dataset.journey === flow,
+            );
+          });
+        });
+      });
+
+      document.querySelectorAll("[data-toggle]").forEach((button) => {
+        button.addEventListener("click", () => {
+          const target = document.getElementById(button.dataset.toggle);
+          if (!target) return;
+
+          const open = target.classList.toggle("open");
+          button.setAttribute("aria-expanded", String(open));
+        });
+      });
+    </script>
+  </body>
+</html>

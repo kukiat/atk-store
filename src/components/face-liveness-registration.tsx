@@ -45,6 +45,7 @@ export function FaceLivenessRegistration({
   const [phase, setPhase] = useState<Phase>("intro");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   // Guards against duplicate session creation from rapid taps / re-renders.
   const startingRef = useRef(false);
 
@@ -84,6 +85,7 @@ export function FaceLivenessRegistration({
         return;
       }
       const { sessionId: id } = (await res.json()) as { sessionId: string };
+      setRejectionReason(null);
       setSessionId(id);
       setPhase("detecting");
     } catch {
@@ -112,11 +114,13 @@ export function FaceLivenessRegistration({
         const data = (await res.json()) as {
           outcome: "accepted" | "rejected" | "pending";
           confidence?: number;
+          reason?: string;
         };
 
         if (data.outcome === "pending") continue;
 
         setConfidence(data.confidence ?? null);
+        setRejectionReason(data.reason ?? null);
         setPhase(data.outcome === "accepted" ? "accepted" : "rejected");
         if (data.outcome === "accepted") router.refresh();
         return;
@@ -154,11 +158,15 @@ export function FaceLivenessRegistration({
     return (
       <Result
         icon={<XCircle className="size-12 text-destructive" />}
-        title="ยืนยันใบหน้าไม่สำเร็จ"
-        description="กรุณาตรวจสอบแสงสว่างและตำแหน่งใบหน้า แล้วลองใหม่อีกครั้ง"
+        title={getRejectedTitle(rejectionReason)}
+        description={getRejectedDescription(rejectionReason)}
         debug={debugMode ? <ConfidenceBadge confidence={confidence} /> : null}
         action={
-          <Button onClick={() => resetTo(setPhase, setSessionId)} size="lg" className="w-full">
+          <Button
+            onClick={() => resetTo(setPhase, setSessionId)}
+            size="lg"
+            className="w-full"
+          >
             ลองใหม่อีกครั้ง
           </Button>
         }
@@ -173,7 +181,11 @@ export function FaceLivenessRegistration({
         title="เซสชันหมดอายุ"
         description="กรุณาเข้าสู่ระบบอีกครั้งเพื่อลงทะเบียนใบหน้า"
         action={
-          <Button render={<Link href="/api/auth/signin/google" />} size="lg" className="w-full">
+          <Button
+            render={<Link href="/api/auth/signin/google" />}
+            size="lg"
+            className="w-full"
+          >
             เข้าสู่ระบบอีกครั้ง
           </Button>
         }
@@ -188,7 +200,11 @@ export function FaceLivenessRegistration({
         title="เกิดข้อผิดพลาด"
         description="ไม่สามารถดำเนินการได้ในขณะนี้ กรุณาลองใหม่อีกครั้ง"
         action={
-          <Button onClick={() => resetTo(setPhase, setSessionId)} size="lg" className="w-full">
+          <Button
+            onClick={() => resetTo(setPhase, setSessionId)}
+            size="lg"
+            className="w-full"
+          >
             ลองใหม่อีกครั้ง
           </Button>
         }
@@ -257,6 +273,26 @@ function resetTo(
   setPhase("intro");
 }
 
+function getRejectedTitle(reason: string | null) {
+  if (reason === "face_already_registered") return "ใบหน้านี้ถูกลงทะเบียนแล้ว";
+  if (reason === "face_not_indexed") return "ยังลงทะเบียนใบหน้าไม่ได้";
+  if (reason === "face_mismatch") return "ใบหน้าไม่ตรงกับบัญชีนี้";
+  return "ยืนยันใบหน้าไม่สำเร็จ";
+}
+
+function getRejectedDescription(reason: string | null) {
+  if (reason === "face_already_registered") {
+    return "ระบบพบว่าใบหน้านี้มีอยู่ใน Face Collection แล้ว กรุณาติดต่อผู้ดูแลหากคิดว่าเป็นข้อผิดพลาด";
+  }
+  if (reason === "face_not_indexed") {
+    return "ระบบยืนยัน liveness ได้แล้ว แต่รูปอ้างอิงยังไม่เหมาะสำหรับทำ face recognition กรุณาลองใหม่ในที่แสงสว่างเพียงพอ";
+  }
+  if (reason === "face_mismatch") {
+    return "ใบหน้าที่ตรวจพบไม่ตรงกับใบหน้าที่ลงทะเบียนไว้สำหรับบัญชีนี้";
+  }
+  return "กรุณาตรวจสอบแสงสว่างและตำแหน่งใบหน้า แล้วลองใหม่อีกครั้ง";
+}
+
 function Result({
   icon,
   title,
@@ -289,8 +325,8 @@ function Result({
 
 type ConfidenceTier = {
   label: string;
-  bar: string;    // Tailwind bg color for the filled bar
-  badge: string;  // Tailwind text + border classes for the pill
+  bar: string; // Tailwind bg color for the filled bar
+  badge: string; // Tailwind text + border classes for the pill
 };
 
 function getConfidenceTier(score: number): ConfidenceTier {

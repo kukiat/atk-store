@@ -11,6 +11,7 @@ App Router routes under `src/app`.
 | `/cart`          | `src/app/cart/page.tsx`          | Client         | Cart review; qty edit, total, disabled checkout                                        |
 | `/signin`        | `src/app/signin/page.tsx`        | Server (async) | Google sign-in page; shows `?error=` messages                                          |
 | `/register-face` | `src/app/register-face/page.tsx` | Server (async) | Gated face-enrollment page; shows already-registered state or the client liveness flow |
+| `/verify-face`   | `src/app/verify-face/page.tsx`   | Server (async) | Debug-only face verification page; requires env flag + signed-in user + face profile   |
 
 ## API
 
@@ -20,6 +21,7 @@ App Router routes under `src/app`.
 | `GET /api/auth/signin/google`   | `src/app/api/auth/signin/google/route.ts`   | Creates state/PKCE/nonce cookies then `302` redirects to Google OAuth                                                                                                                                            |
 | `GET /api/auth/callback/google` | `src/app/api/auth/callback/google/route.ts` | Validates state/PKCE/nonce and Google ID token → upserts verified provider identity, sets session cookie, `302` to `/` (or `/signin?error=`)                                                                     |
 | `POST /api/auth/signout`        | `src/app/api/auth/signout/route.ts`         | Same-origin only; deletes session, clears cookie, `302` to `/signin`                                                                                                                                             |
+| `GET /api/face/auth-status`     | `src/app/api/face/auth-status/route.ts`     | Auth only; cheap preflight for the path-scoped Google ID token used by Cognito bridge. No AWS calls. `200 ready`, `409 reauth`, `401 unauthorized`                                                               |
 | `GET /api/face/credentials`     | `src/app/api/face/credentials/route.ts`     | Auth only; exchanges the path-scoped Google ID token cookie for short-lived `StartFaceLivenessSession`-scoped creds. `401`/`409` (reauth)/`500`                                                                  |
 | `POST /api/face/session`        | `src/app/api/face/session/route.ts`         | Auth + same-origin; creates/reuses one liveness session for optional `{ intent: "enrollment" \| "verification" }` → `{ sessionId, intent }`. `409` already registered / not registered / another attempt pending |
 | `POST /api/face/result`         | `src/app/api/face/result/route.ts`          | Auth + same-origin; reads one owned result (Rekognition `Get` at most once, never polls), then registers/verifies in Face Collection → `{ outcome, confidence?, reason?, recognition? }`. `404` wrong owner      |
@@ -97,12 +99,24 @@ a partial unique index plus idempotent reuse in the service.
 
 ## Face Recognition verification flow
 
-The same session/result endpoints are verification-ready:
+The same session/result endpoints power the debug proof page:
 
 ```
+/ (Home)
+   └─ FaceVerificationDebugPrompt
+      └─ renders only when ENABLE_FACE_RECOGNITION_DEBUG=YES
+         and current user has a row in user_face_profiles
+   └─ FaceAuthStatusNotice
+      └─ checks /api/face/auth-status once; if the path-scoped Google ID token
+         is missing/expired, prompt user to sign in with Google again before
+         any camera/AWS session starts
+
+/verify-face (Server, gated by the same env + profile checks)
+   └─ FaceVerificationDebug (Client)
+      └─ press "Start verify face"
+
 POST /api/face/session { intent: "verification" }
-   └─ requires current user already has `faceEnrollmentStatus = registered`
-      → create/reuse liveness attempt with intent `verification`
+   └─ create/reuse liveness attempt with intent `verification`
 
 FaceLivenessDetectorCore runs as usual
 
@@ -113,6 +127,12 @@ POST /api/face/result { sessionId }
       → accepted only when matched userId === current userId
          and similarity ≥ AWS_FACE_MATCH_THRESHOLD
 ```
+
+`FACE_RECOGNITION_DEBUG_TIMEOUT_MS` defaults to 5000ms and is used as a slow-scan
+notice threshold only. The UI does not hard-unmount Amplify mid-stream because
+that can leave camera tracks/ReadableStreams in a cleanup race. Real detector,
+result, or mismatch failures still fail closed to an admin-contact state. No AWS
+call is made until the user explicitly presses the start CTA.
 
 ## Notes / gaps
 

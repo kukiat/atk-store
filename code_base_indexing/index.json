@@ -78,6 +78,12 @@
       "purpose": "Validated Face Collection config and match threshold"
     },
     {
+      "path": "src/lib/face-token.ts",
+      "kind": "server-only",
+      "exports": ["getFaceTokenStatus"],
+      "purpose": "Cheap Google ID token expiry preflight for face credential bridge UX"
+    },
+    {
       "path": "src/lib/liveness-state.ts",
       "kind": "pure-util",
       "exports": [
@@ -124,6 +130,12 @@
       "purpose": "Google ID token cookie to Cognito detector credentials"
     },
     {
+      "path": "src/app/api/face/auth-status/route.ts",
+      "kind": "route-handler",
+      "exports": ["GET"],
+      "purpose": "No-AWS face auth preflight for app session plus path-scoped Google ID token freshness"
+    },
+    {
       "path": "src/app/api/face/session/route.ts",
       "kind": "route-handler",
       "exports": ["POST"],
@@ -142,10 +154,43 @@
       "purpose": "Explicit-start camera UI for enrollment; shows liveness and recognition outcomes"
     },
     {
+      "path": "src/components/face-auth-status-notice.tsx",
+      "kind": "client-component",
+      "exports": ["FaceAuthStatusNotice"],
+      "purpose": "Home-page no-AWS preflight notice for expired face credential bridge token"
+    },
+    {
       "path": "src/components/face-enrollment-prompt.tsx",
       "kind": "server-component",
       "exports": ["FaceEnrollmentPrompt"],
       "purpose": "Quiet post-login prompt driven by users.faceEnrollmentStatus"
+    },
+    {
+      "path": "src/components/face-verification-debug-prompt.tsx",
+      "kind": "server-component",
+      "exports": ["FaceVerificationDebugPrompt"],
+      "purpose": "Debug-only verify CTA gated by ENABLE_FACE_RECOGNITION_DEBUG and user_face_profiles"
+    },
+    {
+      "path": "src/components/face-verification-debug.tsx",
+      "kind": "client-component",
+      "exports": ["FaceVerificationDebug"],
+      "purpose": "Explicit-start face verification proof UI with env-configured slow-scan notice and success profile display"
+    },
+    {
+      "path": "src/lib/face-camera-cleanup.ts",
+      "kind": "client-hook",
+      "exports": ["stopFaceCameraStreams", "useFaceCameraCleanup"],
+      "purpose": "Best-effort cleanup for Amplify-owned camera streams on completion, unmount, and pagehide"
+    },
+    {
+      "path": "src/lib/use-suppress-readable-stream-cancel-error.ts",
+      "kind": "client-hook",
+      "exports": [
+        "useSuppressReadableStreamCancelError",
+        "ReadableStreamCancelErrorSilencer"
+      ],
+      "purpose": "Suppress known Amplify ReadableStream cancel cleanup noise globally and while camera sessions are active"
     }
   ],
   "routes": {
@@ -170,6 +215,11 @@
         "path": "/register-face",
         "file": "src/app/register-face/page.tsx",
         "rendering": "server"
+      },
+      {
+        "path": "/verify-face",
+        "file": "src/app/verify-face/page.tsx",
+        "rendering": "server"
       }
     ],
     "api": [
@@ -192,6 +242,11 @@
         "method": "POST",
         "path": "/api/auth/signout",
         "file": "src/app/api/auth/signout/route.ts"
+      },
+      {
+        "method": "GET",
+        "path": "/api/face/auth-status",
+        "file": "src/app/api/face/auth-status/route.ts"
       },
       {
         "method": "GET",
@@ -290,7 +345,9 @@
     "NEXT_PUBLIC_AWS_LIVENESS_REGION",
     "NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID",
     "AWS_FACE_COLLECTION_ID",
-    "AWS_FACE_MATCH_THRESHOLD"
+    "AWS_FACE_MATCH_THRESHOLD",
+    "ENABLE_FACE_RECOGNITION_DEBUG",
+    "FACE_RECOGNITION_DEBUG_TIMEOUT_MS"
   ],
   "todos": [
     {

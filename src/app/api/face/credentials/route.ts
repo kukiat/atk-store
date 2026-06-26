@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuthenticationRequiredError, requireCurrentUser } from "@/lib/auth";
 import { GOOGLE_ID_TOKEN_COOKIE } from "@/lib/auth-shared";
 import { LivenessConfigError } from "@/lib/aws-liveness";
+import { getFaceTokenStatus } from "@/lib/face-token";
 import {
   CredentialBridgeError,
   faceEnrollmentService,
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   }
 
   const googleIdToken = request.cookies.get(GOOGLE_ID_TOKEN_COOKIE)?.value;
-  if (!googleIdToken) {
+  if (!googleIdToken || !getFaceTokenStatus(googleIdToken).ready) {
     return NextResponse.json(
       { error: "reauth_required" },
       { status: 409, headers: noStore },

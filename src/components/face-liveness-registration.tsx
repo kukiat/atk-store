@@ -12,6 +12,11 @@ import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  stopFaceCameraStreams,
+  useFaceCameraCleanup,
+} from "@/lib/face-camera-cleanup";
+import { useSuppressReadableStreamCancelError } from "@/lib/use-suppress-readable-stream-cancel-error";
 import { cn } from "@/lib/utils";
 
 const REGION = process.env.NEXT_PUBLIC_AWS_LIVENESS_REGION ?? "";
@@ -49,6 +54,9 @@ export function FaceLivenessRegistration({
   // Guards against duplicate session creation from rapid taps / re-renders.
   const startingRef = useRef(false);
 
+  useSuppressReadableStreamCancelError(Boolean(sessionId));
+  useFaceCameraCleanup(Boolean(sessionId));
+
   const credentialProvider = useCallback<AwsCredentialProvider>(async () => {
     const res = await fetch("/api/face/credentials", { cache: "no-store" });
     if (!res.ok) {
@@ -74,6 +82,18 @@ export function FaceLivenessRegistration({
     startingRef.current = true;
     setPhase("starting");
     try {
+      const authStatus = await fetch("/api/face/auth-status", {
+        cache: "no-store",
+      });
+      if (authStatus.status === 401 || authStatus.status === 409) {
+        setPhase("reauth");
+        return;
+      }
+      if (!authStatus.ok) {
+        setPhase("error");
+        return;
+      }
+
       const res = await fetch("/api/face/session", { method: "POST" });
       if (res.status === 409) {
         // Already registered elsewhere — reflect server truth.
@@ -108,6 +128,8 @@ export function FaceLivenessRegistration({
           body: JSON.stringify({ sessionId: id }),
         });
         if (!res.ok) {
+          stopFaceCameraStreams();
+          setSessionId(null);
           setPhase("error");
           return;
         }
@@ -121,12 +143,16 @@ export function FaceLivenessRegistration({
 
         setConfidence(data.confidence ?? null);
         setRejectionReason(data.reason ?? null);
+        stopFaceCameraStreams();
+        setSessionId(null);
         setPhase(data.outcome === "accepted" ? "accepted" : "rejected");
         if (data.outcome === "accepted") router.refresh();
         return;
       }
 
       // Still pending after the single retry.
+      stopFaceCameraStreams();
+      setSessionId(null);
       setPhase("error");
     },
     [router],
@@ -135,6 +161,7 @@ export function FaceLivenessRegistration({
   const handleAnalysisComplete = useCallback(async () => {
     if (!sessionId) return;
     setPhase("checking");
+    stopFaceCameraStreams();
     await readResult(sessionId);
   }, [sessionId, readResult]);
 
@@ -229,6 +256,8 @@ export function FaceLivenessRegistration({
           region={REGION}
           onAnalysisComplete={handleAnalysisComplete}
           onError={() => {
+            stopFaceCameraStreams();
+            setSessionId(null);
             setPhase((p) => (p === "reauth" ? p : "error"));
           }}
           config={{ credentialProvider }}

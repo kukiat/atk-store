@@ -79,6 +79,9 @@ yet (that's the `TODO(order)` extension point).
 - Face Recognition (server): `AWS_FACE_COLLECTION_ID`, `AWS_FACE_MATCH_THRESHOLD`.
   The Rekognition Face Collection stores AWS-managed face features; the app DB
   stores only returned IDs and ownership metadata.
+- Face Recognition debug proof: `ENABLE_FACE_RECOGNITION_DEBUG=YES` reveals the
+  `/verify-face` CTA only for users with a `user_face_profiles` row.
+  `FACE_RECOGNITION_DEBUG_TIMEOUT_MS` defaults to 5000ms.
 
 ## Face Liveness + Face Recognition enrollment
 
@@ -95,10 +98,15 @@ yet (that's the `TODO(order)` extension point).
 - **Credential bridge:** the OAuth callback stashes the verified Google ID token
   in a path-scoped (`/api/face`) httpOnly cookie; `GET /api/face/credentials`
   exchanges it through the Cognito Identity Pool for short-lived, detector-scoped
-  credentials. The browser never receives an IAM key or the backend AWS profile.
+  credentials. `GET /api/face/auth-status` is a cheap no-AWS preflight that lets
+  Home/camera UI detect an expired face token before creating a liveness session.
+  The browser never receives an IAM key or the backend AWS profile.
 - **UX:** `FaceEnrollmentPrompt` shows a quiet nudge for `not_registered`/`pending`
   users; `/register-face` requires an explicit start and never auto-launches the
-  camera or creates an AWS session.
+  camera or creates an AWS session. `FaceVerificationDebugPrompt` is hidden unless
+  explicitly enabled and the signed-in user already has a face profile.
+  `FaceAuthStatusNotice` shows a Home-page reauth prompt when the app session is
+  still valid but the Google ID token used for the face credential bridge expired.
 - **Data:** `users.face_enrollment_status` is the server-authoritative flag the UI
   reads; `face_liveness_attempts` holds per-attempt liveness + recognition
   decisions; `user_face_profiles` maps app users to Rekognition `FaceId`s. The DB
@@ -106,7 +114,12 @@ yet (that's the `TODO(order)` extension point).
 - **Verification-ready:** `POST /api/face/session` accepts optional
   `{ intent: "verification" }`; `POST /api/face/result` searches the collection
   and returns accepted only when the matched `FaceId` maps back to the signed-in
-  user at the configured threshold.
+  user at the configured threshold. `/verify-face` is the debug proof page for
+  this path; it shows the current user's avatar/email/name after a verified match.
+  The debug timeout is now a slow-scan notice only: the UI does not hard-unmount
+  Amplify mid-stream because that can leave camera tracks/ReadableStreams in a
+  bad cleanup race. Real mismatch/detector/result failures still fail closed to
+  an admin-contact state.
 
 ## Authentication
 

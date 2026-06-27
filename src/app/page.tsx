@@ -1,10 +1,11 @@
-import { BriefcaseBusiness, LogOut, QrCode, ScanLine } from "lucide-react";
+import { QrCode, ScanLine } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { FaceAuthStatusNotice } from "@/components/face-auth-status-notice";
 import { FaceEnrollmentPrompt } from "@/components/face-enrollment-prompt";
 import { FaceVerificationDebugPrompt } from "@/components/face-verification-debug-prompt";
+import { HomeNav } from "@/components/home-nav";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { getPermissions } from "@/lib/permissions";
@@ -18,32 +19,14 @@ export default async function HomePage() {
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-8 px-6 py-16 text-center">
-      <div className="absolute inset-x-0 top-0 mx-auto flex w-full max-w-md items-center justify-between gap-2 px-4 py-3">
-        <span className="text-muted-foreground truncate text-sm">
-          สวัสดี,{" "}
-          <span className="text-foreground font-medium">
-            {user.name ?? user.email}
-          </span>
-        </span>
-        <div className="flex shrink-0 items-center gap-1">
-          {permissions.canAccessAdmin ? (
-            <Button
-              render={<Link href="/admin/users" />}
-              variant="ghost"
-              size="icon-sm"
-              aria-label="เปิด back office"
-            >
-              <BriefcaseBusiness className="size-4" />
-            </Button>
-          ) : null}
-          <form action="/api/auth/signout" method="post">
-            <Button type="submit" variant="ghost" size="sm">
-              <LogOut className="size-4" />
-              ออกจากระบบ
-            </Button>
-          </form>
-        </div>
-      </div>
+      <HomeNav
+        canAccessAdmin={permissions.canAccessAdmin}
+        user={{
+          name: user.name,
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+        }}
+      />
 
       <FaceEnrollmentPrompt />
 

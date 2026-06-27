@@ -3,14 +3,16 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
+import { getPermissions } from "@/lib/permissions";
 import { faceRecognitionService } from "@/services/face-recognition.service";
+import { roleService } from "@/services/role.service";
 
 /**
  * Debug-only entry point for proving the face recognition flow end-to-end.
  *
  * This intentionally renders only when:
  * - ENABLE_FACE_RECOGNITION_DEBUG=YES
- * - the current user is signed in
+ * - the current user is signed in as admin/super_admin
  * - the current user already has a row in user_face_profiles
  *
  * Rendering this component never calls AWS. It only checks local app state and
@@ -22,6 +24,9 @@ export async function FaceVerificationDebugPrompt() {
 
   const user = await getCurrentUser();
   if (!user || user.faceEnrollmentStatus !== "registered") return null;
+
+  const roleCodes = await roleService.getRoleCodesForUser(user.id);
+  if (!getPermissions(roleCodes).canAccessAdmin) return null;
 
   const profile = await faceRecognitionService.getProfileByUserId(user.id);
   if (!profile) return null;

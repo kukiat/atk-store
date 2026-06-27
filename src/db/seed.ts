@@ -7,7 +7,7 @@
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 
-import { products, shelfProducts, shelves } from "./schema";
+import { products, roles, shelfProducts, shelves } from "./schema";
 
 process.loadEnvFile();
 
@@ -19,7 +19,9 @@ if (!connectionString) {
 }
 
 const client = postgres(connectionString, { max: 1 });
-const db = drizzle(client, { schema: { products, shelfProducts, shelves } });
+const db = drizzle(client, {
+  schema: { products, roles, shelfProducts, shelves },
+});
 
 const SHELVES = [
   { id: "A12", name: "ชั้นชุดตรวจ ATK", location: "โซนหน้าร้าน แถว A" },
@@ -71,6 +73,15 @@ const PRODUCTS = [
 
 async function main() {
   console.log("Seeding database...");
+
+  await db
+    .insert(roles)
+    .values([
+      { code: "client", name: "Client" },
+      { code: "admin", name: "Admin" },
+      { code: "super_admin", name: "Super Admin" },
+    ])
+    .onConflictDoNothing();
 
   // Idempotent reset so re-running gives a clean dataset.
   await db.delete(shelfProducts);

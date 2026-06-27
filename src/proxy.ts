@@ -5,10 +5,11 @@ import { PUBLIC_PATHS, SESSION_COOKIE, SIGN_IN_PATH } from "@/lib/auth-shared";
 /**
  * Optimistic auth gate (runs before every matched route):
  *   - no session  + protected route  → redirect to the sign-in page
- *   - has session + sign-in page      → redirect to the homepage
  *
  * This is a fast cookie-presence check only. The real (database-backed) check
  * happens in `getCurrentUser()` inside Server Components / Route Handlers.
+ * Do not redirect public pages based only on cookie presence: a stale cookie
+ * would otherwise bounce between `/signin` and `/` forever.
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -19,10 +20,6 @@ export function proxy(request: NextRequest) {
 
   if (!hasSession && !isPublic) {
     return NextResponse.redirect(new URL(SIGN_IN_PATH, request.url));
-  }
-
-  if (hasSession && isPublic) {
-    return NextResponse.redirect(new URL("/", request.url));
   }
 
   return NextResponse.next();

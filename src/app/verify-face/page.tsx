@@ -5,7 +5,9 @@ import { redirect } from "next/navigation";
 import { FaceVerificationDebug } from "@/components/face-verification-debug";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
+import { getPermissions } from "@/lib/permissions";
 import { faceRecognitionService } from "@/services/face-recognition.service";
+import { roleService } from "@/services/role.service";
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
@@ -16,6 +18,9 @@ export default async function VerifyFacePage() {
 
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
+
+  const roleCodes = await roleService.getRoleCodesForUser(user.id);
+  if (!getPermissions(roleCodes).canAccessAdmin) redirect("/");
 
   const profile = await faceRecognitionService.getProfileByUserId(user.id);
   if (!profile) redirect("/");

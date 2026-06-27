@@ -2,8 +2,7 @@ import { relations, sql } from "drizzle-orm";
 import {
   doublePrecision,
   integer,
-  pgEnum,
-  pgTable,
+  jsonb,
   primaryKey,
   serial,
   text,
@@ -11,16 +10,32 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import db_schema from "./db_schema";
+
 /**
  * How a user authenticated. `google` is live today; the other values are
  * pre-declared so new sign-in channels can be added without a schema change.
  */
-export const authMethodEnum = pgEnum("auth_method", [
+export const authMethodEnum = db_schema.enum("auth_method", [
   "google",
   "facebook",
   "line",
   "apple",
   "credentials",
+]);
+
+/** Operational account state, separate from authorization roles. */
+export const userAccountStatusEnum = db_schema.enum("user_account_status", [
+  "active",
+  "blocked",
+  "disabled",
+]);
+
+/** Pending role grants let super admins invite staff before first sign-in. */
+export const roleGrantStatusEnum = db_schema.enum("role_grant_status", [
+  "pending",
+  "accepted",
+  "revoked",
 ]);
 
 /**
@@ -32,7 +47,7 @@ export const authMethodEnum = pgEnum("auth_method", [
  * - `pending`: an attempt is in flight.
  * - `registered`: a liveness attempt passed and a face profile was indexed.
  */
-export const faceEnrollmentStatusEnum = pgEnum("face_enrollment_status", [
+export const faceEnrollmentStatusEnum = db_schema.enum("face_enrollment_status", [
   "not_registered",
   "pending",
   "registered",
@@ -43,7 +58,7 @@ export const faceEnrollmentStatusEnum = pgEnum("face_enrollment_status", [
  * Terminal states (`succeeded`, `failed`, `expired`, `cancelled`) are never
  * re-used; a new attempt must be created explicitly.
  */
-export const livenessAttemptStatusEnum = pgEnum("liveness_attempt_status", [
+export const livenessAttemptStatusEnum = db_schema.enum("liveness_attempt_status", [
   "pending",
   "succeeded",
   "failed",
@@ -56,7 +71,7 @@ export const livenessAttemptStatusEnum = pgEnum("liveness_attempt_status", [
  * face profile after liveness passes; verification attempts only search the
  * existing collection and must never index a new face.
  */
-export const faceLivenessIntentEnum = pgEnum("face_liveness_intent", [
+export const faceLivenessIntentEnum = db_schema.enum("face_liveness_intent", [
   "enrollment",
   "verification",
 ]);
@@ -66,7 +81,7 @@ export const faceLivenessIntentEnum = pgEnum("face_liveness_intent", [
  * repeated result reads idempotent: once a terminal recognition decision is
  * stored, the API can return it without another Rekognition search/index call.
  */
-export const faceRecognitionOutcomeEnum = pgEnum("face_recognition_outcome", [
+export const faceRecognitionOutcomeEnum = db_schema.enum("face_recognition_outcome", [
   "registered",
   "verified",
   "mismatch",
@@ -78,7 +93,7 @@ export const faceRecognitionOutcomeEnum = pgEnum("face_recognition_outcome", [
  * An enrolled user. One row per person, keyed by email. `authMethod` records
  * which channel they last signed in with so we can support multiple providers.
  */
-export const users = pgTable(
+export const users = db_schema.table(
   "users",
   {
     id: serial("id").primaryKey(),
@@ -94,6 +109,11 @@ export const users = pgTable(
       .notNull()
       .default("not_registered"),
     faceRegisteredAt: timestamp("face_registered_at", { withTimezone: true }),
+    accountStatus: userAccountStatusEnum("account_status")
+      .notNull()
+      .default("active"),
+    disabledUntil: timestamp("disabled_until", { withTimezone: true }),
+    disabledReason: text("disabled_reason"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -110,11 +130,92 @@ export const users = pgTable(
   ],
 );
 
+/** Coarse-grained platform roles. Permissions are derived in app code. */
+export const roles = db_schema.table("roles", {
+  id: serial("id").primaryKey(),
+  code: text("code").notNull().unique(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+/** Users may carry multiple roles as the platform grows. */
+export const userRoles = db_schema.table(
+  "user_roles",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    roleId: integer("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+    assignedByUserId: integer("assigned_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.userId, table.roleId] })],
+);
+
+/**
+ * Email-based staff grants. A grant can exist before the Google account signs
+ * in; on sign-in, matching pending grants are accepted and converted to roles.
+ */
+export const roleGrants = db_schema.table(
+  "role_grants",
+  {
+    id: serial("id").primaryKey(),
+    email: text("email").notNull(),
+    roleId: integer("role_id")
+      .notNull()
+      .references(() => roles.id, { onDelete: "cascade" }),
+    status: roleGrantStatusEnum("status").notNull().default("pending"),
+    invitedByUserId: integer("invited_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    acceptedByUserId: integer("accepted_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    acceptedAt: timestamp("accepted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("role_grants_email_role_pending_unique")
+      .on(table.email, table.roleId)
+      .where(sql`${table.status} = 'pending'`),
+  ],
+);
+
+/** Immutable back-office trail for sensitive admin actions. */
+export const adminAuditLogs = db_schema.table("admin_audit_logs", {
+  id: serial("id").primaryKey(),
+  actorUserId: integer("actor_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  targetUserId: integer("target_user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  action: text("action").notNull(),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 /**
  * A server-side login session. `id` stores a SHA-256 hash of the opaque token
  * in the user's httpOnly cookie; rows are removed on logout or expiry.
  */
-export const sessions = pgTable("sessions", {
+export const sessions = db_schema.table("sessions", {
   id: text("id").primaryKey(),
   userId: integer("user_id")
     .notNull()
@@ -131,7 +232,7 @@ export const sessions = pgTable("sessions", {
  * It deliberately stores no raw selfie video and no long-lived AWS credentials;
  * `referenceS3Key` points at the private Tokyo output object, not its bytes.
  */
-export const faceLivenessAttempts = pgTable(
+export const faceLivenessAttempts = db_schema.table(
   "face_liveness_attempts",
   {
     id: serial("id").primaryKey(),
@@ -179,7 +280,7 @@ export const faceLivenessAttempts = pgTable(
  * stores only business metadata and the IDs Rekognition returns. It is not a
  * vector database and does not contain raw face embeddings.
  */
-export const userFaceProfiles = pgTable(
+export const userFaceProfiles = db_schema.table(
   "user_face_profiles",
   {
     id: serial("id").primaryKey(),
@@ -212,7 +313,62 @@ export const userFaceProfiles = pgTable(
 export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
   faceLivenessAttempts: many(faceLivenessAttempts),
+  userRoles: many(userRoles),
+  sentRoleGrants: many(roleGrants, { relationName: "roleGrantInviter" }),
+  acceptedRoleGrants: many(roleGrants, { relationName: "roleGrantAcceptor" }),
+  auditEvents: many(adminAuditLogs, { relationName: "auditActor" }),
+  targetedAuditEvents: many(adminAuditLogs, { relationName: "auditTarget" }),
   faceProfile: one(userFaceProfiles),
+}));
+
+export const rolesRelations = relations(roles, ({ many }) => ({
+  userRoles: many(userRoles),
+  roleGrants: many(roleGrants),
+}));
+
+export const userRolesRelations = relations(userRoles, ({ one }) => ({
+  user: one(users, {
+    fields: [userRoles.userId],
+    references: [users.id],
+  }),
+  role: one(roles, {
+    fields: [userRoles.roleId],
+    references: [roles.id],
+  }),
+  assignedBy: one(users, {
+    fields: [userRoles.assignedByUserId],
+    references: [users.id],
+  }),
+}));
+
+export const roleGrantsRelations = relations(roleGrants, ({ one }) => ({
+  role: one(roles, {
+    fields: [roleGrants.roleId],
+    references: [roles.id],
+  }),
+  invitedBy: one(users, {
+    fields: [roleGrants.invitedByUserId],
+    references: [users.id],
+    relationName: "roleGrantInviter",
+  }),
+  acceptedBy: one(users, {
+    fields: [roleGrants.acceptedByUserId],
+    references: [users.id],
+    relationName: "roleGrantAcceptor",
+  }),
+}));
+
+export const adminAuditLogsRelations = relations(adminAuditLogs, ({ one }) => ({
+  actor: one(users, {
+    fields: [adminAuditLogs.actorUserId],
+    references: [users.id],
+    relationName: "auditActor",
+  }),
+  target: one(users, {
+    fields: [adminAuditLogs.targetUserId],
+    references: [users.id],
+    relationName: "auditTarget",
+  }),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -254,7 +410,7 @@ export const userFaceProfilesRelations = relations(
  * A physical smart shelf in the store.
  * `id` is the human-readable code encoded in the shelf QR (e.g. "A12").
  */
-export const shelves = pgTable("shelves", {
+export const shelves = db_schema.table("shelves", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   location: text("location"),
@@ -267,7 +423,7 @@ export const shelves = pgTable("shelves", {
  * A product in the catalog. Prices are stored as integer minor units
  * (satang) to avoid floating-point money bugs.
  */
-export const products = pgTable("products", {
+export const products = db_schema.table("products", {
   id: serial("id").primaryKey(),
   sku: text("sku").notNull().unique(),
   name: text("name").notNull(),
@@ -284,7 +440,7 @@ export const products = pgTable("products", {
  * Many-to-many join between shelves and products.
  * A product can live on several shelves; `position` orders it on a shelf.
  */
-export const shelfProducts = pgTable(
+export const shelfProducts = db_schema.table(
   "shelf_products",
   {
     shelfId: text("shelf_id")
@@ -323,6 +479,10 @@ export type ShelfProduct = typeof shelfProducts.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;
+export type Role = typeof roles.$inferSelect;
+export type UserRole = typeof userRoles.$inferSelect;
+export type RoleGrant = typeof roleGrants.$inferSelect;
+export type AdminAuditLog = typeof adminAuditLogs.$inferSelect;
 export type FaceLivenessAttempt = typeof faceLivenessAttempts.$inferSelect;
 export type NewFaceLivenessAttempt = typeof faceLivenessAttempts.$inferInsert;
 export type UserFaceProfile = typeof userFaceProfiles.$inferSelect;
@@ -330,6 +490,13 @@ export type NewUserFaceProfile = typeof userFaceProfiles.$inferInsert;
 
 /** Union of supported sign-in channels, e.g. "google" | "line" | … */
 export type AuthMethod = (typeof authMethodEnum.enumValues)[number];
+
+/** Operational account state. */
+export type UserAccountStatus =
+  (typeof userAccountStatusEnum.enumValues)[number];
+
+/** Email grant lifecycle. */
+export type RoleGrantStatus = (typeof roleGrantStatusEnum.enumValues)[number];
 
 /** Server-authoritative face-enrollment state used by the UI prompt. */
 export type FaceEnrollmentStatus =

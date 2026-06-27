@@ -11,6 +11,7 @@ import {
   type User,
 } from "@/db/schema";
 import { createOpaqueToken, hashSessionToken } from "@/lib/auth-tokens";
+import { roleService } from "@/services/role.service";
 
 /** How long a login session stays valid. */
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
@@ -27,6 +28,13 @@ export class OAuthIdentityConflictError extends Error {
   constructor() {
     super("This email is already linked to a different sign-in identity");
     this.name = "OAuthIdentityConflictError";
+  }
+}
+
+export class AccountNotActiveError extends Error {
+  constructor() {
+    super("This account cannot sign in");
+    this.name = "AccountNotActiveError";
   }
 }
 
@@ -72,6 +80,8 @@ class UserService {
         .where(eq(users.id, existingByProvider.id))
         .returning();
 
+      await roleService.syncRolesAfterSignIn(updatedUser.id, updatedUser.email);
+      await this.assertAccountCanUseApp(updatedUser);
       return updatedUser;
     }
 
@@ -97,6 +107,7 @@ class UserService {
       })
       .returning();
 
+    await roleService.syncRolesAfterSignIn(user.id, user.email);
     return user;
   }
 
@@ -136,12 +147,46 @@ class UserService {
       return null;
     }
 
+    if (!(await this.canAccountUseApp(found.user))) {
+      return null;
+    }
+
     return found.user;
   }
 
   /** Remove a single session (logout). */
   async deleteSession(token: string): Promise<void> {
     await db.delete(sessions).where(eq(sessions.id, hashSessionToken(token)));
+  }
+
+  private async assertAccountCanUseApp(user: User): Promise<void> {
+    if (!(await this.canAccountUseApp(user))) {
+      throw new AccountNotActiveError();
+    }
+  }
+
+  private async canAccountUseApp(user: User): Promise<boolean> {
+    if (user.accountStatus === "active") return true;
+    if (user.accountStatus === "blocked") return false;
+
+    if (
+      user.accountStatus === "disabled" &&
+      user.disabledUntil &&
+      user.disabledUntil.getTime() <= Date.now()
+    ) {
+      await db
+        .update(users)
+        .set({
+          accountStatus: "active",
+          disabledUntil: null,
+          disabledReason: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+      return true;
+    }
+
+    return false;
   }
 }
 

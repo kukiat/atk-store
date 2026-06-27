@@ -28,8 +28,17 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="th" className={`${notoSansThai.variable} h-full antialiased`}>
+    <html
+      lang="th"
+      suppressHydrationWarning
+      className={`${notoSansThai.variable} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col font-sans">
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("atk_theme");var d=t==="dark";document.documentElement.classList.toggle("dark",d);document.documentElement.style.colorScheme=d?"dark":"light"}catch(e){}`,
+          }}
+        />
         <ReadableStreamCancelErrorSilencer />
         {children}
       </body>

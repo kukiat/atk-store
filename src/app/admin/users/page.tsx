@@ -92,8 +92,70 @@ export default async function AdminUsersPage() {
             ดูสถานะบัญชี, role, และการลงทะเบียนใบหน้าของผู้ใช้
           </CardDescription>
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full min-w-[780px] text-left text-sm">
+        <CardContent>
+          <div className="grid gap-3 md:hidden">
+            {users.map((item) => (
+              <div
+                key={item.user.id}
+                className="border-border bg-background grid gap-3 rounded-lg border p-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-medium">
+                    {item.user.name ?? "No name"}
+                  </p>
+                  <p className="text-muted-foreground truncate text-xs">
+                    {item.user.email}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <MobileFact label="Role">
+                    <Badge variant="outline">
+                      {getHighestRole(item.roleCodes)}
+                    </Badge>
+                  </MobileFact>
+                  <MobileFact label="Status">
+                    <Badge variant={statusVariant(item.user.accountStatus)}>
+                      {item.user.accountStatus}
+                    </Badge>
+                  </MobileFact>
+                  <MobileFact label="Face">
+                    <span className="flex min-w-0 items-center gap-2">
+                      {item.faceProfile ? (
+                        <ShieldCheck className="size-4 shrink-0 text-green-600" />
+                      ) : (
+                        <UserX className="text-muted-foreground size-4 shrink-0" />
+                      )}
+                      <span className="truncate">
+                        {item.user.faceEnrollmentStatus}
+                      </span>
+                    </span>
+                  </MobileFact>
+                  <MobileFact label="Last login">
+                    <span className="tabular-nums">
+                      {formatDate(item.user.lastLoginAt)}
+                    </span>
+                  </MobileFact>
+                </div>
+                {item.user.disabledUntil ? (
+                  <p className="text-muted-foreground flex items-center gap-1 text-xs">
+                    <Clock className="size-3" />
+                    {formatDate(item.user.disabledUntil)}
+                  </p>
+                ) : null}
+                <Button
+                  render={<Link href={`/admin/users/${item.user.id}`} />}
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                >
+                  View
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[780px] text-left text-sm">
             <thead className="text-muted-foreground border-b text-xs">
               <tr>
                 <th className="py-2 pr-3 font-medium">User</th>
@@ -158,9 +220,25 @@ export default async function AdminUsersPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
+          </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function MobileFact({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0">
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <div className="mt-1 min-w-0">{children}</div>
     </div>
   );
 }

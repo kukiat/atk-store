@@ -19,8 +19,8 @@ export default async function AdminLayout({
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-6 sm:px-6">
-      <header className="flex flex-col gap-4 border-b pb-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
+      <header className="flex flex-col gap-4 border-b pb-4 md:flex-row md:items-center md:justify-between">
         <div className="space-y-1">
           <div className="text-muted-foreground flex items-center gap-2 text-sm">
             <ShieldCheck className="size-4" />
@@ -28,12 +28,16 @@ export default async function AdminLayout({
           </div>
           <h1 className="text-balance text-2xl font-bold">User management</h1>
         </div>
-        <div className="flex gap-2">
-          <Button render={<Link href="/" />} variant="outline">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
+          <Button render={<Link href="/" />} variant="outline" className="w-full sm:w-auto">
             <ArrowLeft className="size-4" />
             Home
           </Button>
-          <Button render={<Link href="/admin/users" />} variant="secondary">
+          <Button
+            render={<Link href="/admin/users" />}
+            variant="secondary"
+            className="w-full sm:w-auto"
+          >
             <Users className="size-4" />
             Users
           </Button>

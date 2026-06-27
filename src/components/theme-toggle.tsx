@@ -13,12 +13,14 @@ function applyTheme(mode: ThemeMode) {
 }
 
 export function ThemeToggle() {
-  const [mode, setMode] = useState<ThemeMode>(() => {
-    if (typeof window === "undefined") return "light";
-    return window.localStorage.getItem("atk_theme") === "dark"
+  const [mode, setMode] = useState<ThemeMode>("light");
+
+  useEffect(() => {
+    const stored = window.localStorage.getItem("atk_theme") === "dark"
       ? "dark"
       : "light";
-  });
+    window.requestAnimationFrame(() => setMode(stored));
+  }, []);
 
   useEffect(() => {
     applyTheme(mode);

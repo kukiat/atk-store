@@ -73,7 +73,7 @@ export default async function AdminUserDetailPage({
         </Badge>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="grid gap-6">
           <Card>
             <CardHeader>
@@ -121,12 +121,21 @@ export default async function AdminUserDetailPage({
             <CardContent className="grid gap-3 text-sm">
               {detail.faceProfile ? (
                 <>
-                  <Info label="Collection" value={detail.faceProfile.collectionId} />
-                  <Info label="FaceId" value={detail.faceProfile.faceId} />
-                  <Info label="ImageId" value={detail.faceProfile.imageId ?? "-"} />
+                  <Info
+                    label="Collection"
+                    value={detail.faceProfile.collectionId}
+                    wrap
+                  />
+                  <Info label="FaceId" value={detail.faceProfile.faceId} wrap />
+                  <Info
+                    label="ImageId"
+                    value={detail.faceProfile.imageId ?? "-"}
+                    wrap
+                  />
                   <Info
                     label="Reference S3 key"
                     value={detail.faceProfile.referenceS3Key ?? "-"}
+                    wrap
                   />
                 </>
               ) : (
@@ -141,40 +150,76 @@ export default async function AdminUserDetailPage({
             <CardHeader>
               <CardTitle>Recent liveness attempts</CardTitle>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
+            <CardContent>
               {detail.attempts.length > 0 ? (
-                <table className="w-full min-w-[680px] text-left text-sm">
-                  <thead className="text-muted-foreground border-b text-xs">
-                    <tr>
-                      <th className="py-2 pr-3 font-medium">Created</th>
-                      <th className="py-2 pr-3 font-medium">Intent</th>
-                      <th className="py-2 pr-3 font-medium">Status</th>
-                      <th className="py-2 pr-3 font-medium">Confidence</th>
-                      <th className="py-2 pr-3 font-medium">Recognition</th>
-                      <th className="py-2 font-medium">Similarity</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y">
+                <>
+                  <div className="grid gap-3 sm:hidden">
                     {detail.attempts.map((attempt) => (
-                      <tr key={attempt.id}>
-                        <td className="py-2 pr-3 tabular-nums">
-                          {formatDate(attempt.createdAt)}
-                        </td>
-                        <td className="py-2 pr-3">{attempt.intent}</td>
-                        <td className="py-2 pr-3">{attempt.status}</td>
-                        <td className="py-2 pr-3 tabular-nums">
-                          {attempt.confidence?.toFixed(2) ?? "-"}
-                        </td>
-                        <td className="py-2 pr-3">
-                          {attempt.recognitionOutcome ?? "-"}
-                        </td>
-                        <td className="py-2 tabular-nums">
-                          {attempt.faceSimilarity?.toFixed(2) ?? "-"}
-                        </td>
-                      </tr>
+                      <div
+                        key={attempt.id}
+                        className="border-border grid gap-3 rounded-lg border p-3 text-sm"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{attempt.intent}</span>
+                          <Badge variant="outline">{attempt.status}</Badge>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <Info
+                            label="Created"
+                            value={formatDate(attempt.createdAt)}
+                          />
+                          <Info
+                            label="Confidence"
+                            value={attempt.confidence?.toFixed(2) ?? "-"}
+                          />
+                          <Info
+                            label="Recognition"
+                            value={attempt.recognitionOutcome ?? "-"}
+                          />
+                          <Info
+                            label="Similarity"
+                            value={attempt.faceSimilarity?.toFixed(2) ?? "-"}
+                          />
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+
+                  <div className="hidden overflow-x-auto sm:block">
+                    <table className="w-full min-w-[680px] text-left text-sm">
+                      <thead className="text-muted-foreground border-b text-xs">
+                        <tr>
+                          <th className="py-2 pr-3 font-medium">Created</th>
+                          <th className="py-2 pr-3 font-medium">Intent</th>
+                          <th className="py-2 pr-3 font-medium">Status</th>
+                          <th className="py-2 pr-3 font-medium">Confidence</th>
+                          <th className="py-2 pr-3 font-medium">Recognition</th>
+                          <th className="py-2 font-medium">Similarity</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {detail.attempts.map((attempt) => (
+                          <tr key={attempt.id}>
+                            <td className="py-2 pr-3 tabular-nums">
+                              {formatDate(attempt.createdAt)}
+                            </td>
+                            <td className="py-2 pr-3">{attempt.intent}</td>
+                            <td className="py-2 pr-3">{attempt.status}</td>
+                            <td className="py-2 pr-3 tabular-nums">
+                              {attempt.confidence?.toFixed(2) ?? "-"}
+                            </td>
+                            <td className="py-2 pr-3">
+                              {attempt.recognitionOutcome ?? "-"}
+                            </td>
+                            <td className="py-2 tabular-nums">
+                              {attempt.faceSimilarity?.toFixed(2) ?? "-"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               ) : (
                 <p className="text-muted-foreground">
                   ยังไม่มี liveness attempt
@@ -206,7 +251,7 @@ export default async function AdminUserDetailPage({
                           placeholder="Policy violation"
                         />
                       </label>
-                      <Button type="submit" variant="destructive">
+                    <Button type="submit" variant="destructive" className="w-full">
                         <Ban className="size-4" />
                         Block user
                       </Button>
@@ -240,7 +285,7 @@ export default async function AdminUserDetailPage({
                         placeholder="Temporary restriction"
                       />
                     </label>
-                    <Button type="submit" variant="outline">
+                    <Button type="submit" variant="outline" className="w-full">
                       <TimerOff className="size-4" />
                       Temporarily disable
                     </Button>
@@ -308,15 +353,25 @@ function Info({
   label,
   value,
   children,
+  wrap = false,
 }: {
   label: string;
   value?: React.ReactNode;
   children?: React.ReactNode;
+  wrap?: boolean;
 }) {
   return (
     <div className="min-w-0">
       <p className="text-muted-foreground text-xs">{label}</p>
-      <div className="truncate text-sm font-medium">{children ?? value}</div>
+      <div
+        className={
+          wrap
+            ? "break-all text-sm font-medium"
+            : "truncate text-sm font-medium"
+        }
+      >
+        {children ?? value}
+      </div>
     </div>
   );
 }

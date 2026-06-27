@@ -15,6 +15,7 @@ import {
   verifyGoogleIdToken,
 } from "@/lib/google-id-token";
 import {
+  AccountNotActiveError,
   OAuthIdentityConflictError,
   userService,
 } from "@/services/user.service";
@@ -121,6 +122,10 @@ export async function GET(request: NextRequest) {
   } catch (cause) {
     if (cause instanceof OAuthIdentityConflictError) {
       return redirectToSignIn(request, "account_conflict");
+    }
+
+    if (cause instanceof AccountNotActiveError) {
+      return redirectToSignIn(request, "account_blocked");
     }
 
     if (cause instanceof GoogleIdTokenValidationError) {

@@ -1,7 +1,9 @@
 import { AlertCircle, ScanLine, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/auth";
 
 // Where the Google OAuth flow begins. After Google authenticates the user it
 // redirects back to the configured callback: /api/auth/callback/google
@@ -14,6 +16,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_identity: "ไม่สามารถยืนยันบัญชี Google ได้ กรุณาลองใหม่",
   account_conflict:
     "อีเมลนี้เชื่อมกับบัญชี Google อื่นอยู่ กรุณาติดต่อผู้ดูแลระบบ",
+  account_blocked: "บัญชีนี้ถูกระงับการใช้งาน กรุณาติดต่อผู้ดูแลระบบ",
   access_denied: "คุณยกเลิกการเข้าสู่ระบบด้วย Google",
 };
 
@@ -45,6 +48,9 @@ export default async function SignInPage({
 }: {
   searchParams: Promise<{ error?: string }>;
 }) {
+  const user = await getCurrentUser();
+  if (user) redirect("/");
+
   const { error } = await searchParams;
   const errorMessage = error
     ? (ERROR_MESSAGES[error] ?? "เข้าสู่ระบบไม่สำเร็จ กรุณาลองใหม่อีกครั้ง")

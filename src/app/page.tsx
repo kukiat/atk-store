@@ -1,4 +1,4 @@
-import { LogOut, QrCode, ScanLine } from "lucide-react";
+import { BriefcaseBusiness, LogOut, QrCode, ScanLine } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -7,10 +7,14 @@ import { FaceEnrollmentPrompt } from "@/components/face-enrollment-prompt";
 import { FaceVerificationDebugPrompt } from "@/components/face-verification-debug-prompt";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
+import { getPermissions } from "@/lib/permissions";
+import { roleService } from "@/services/role.service";
 
 export default async function HomePage() {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
+  const roleCodes = await roleService.getRoleCodesForUser(user.id);
+  const permissions = getPermissions(roleCodes);
 
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col items-center justify-center gap-8 px-6 py-16 text-center">
@@ -21,12 +25,24 @@ export default async function HomePage() {
             {user.name ?? user.email}
           </span>
         </span>
-        <form action="/api/auth/signout" method="post">
-          <Button type="submit" variant="ghost" size="sm" className="shrink-0">
-            <LogOut className="size-4" />
-            ออกจากระบบ
-          </Button>
-        </form>
+        <div className="flex shrink-0 items-center gap-1">
+          {permissions.canAccessAdmin ? (
+            <Button
+              render={<Link href="/admin/users" />}
+              variant="ghost"
+              size="icon-sm"
+              aria-label="เปิด back office"
+            >
+              <BriefcaseBusiness className="size-4" />
+            </Button>
+          ) : null}
+          <form action="/api/auth/signout" method="post">
+            <Button type="submit" variant="ghost" size="sm">
+              <LogOut className="size-4" />
+              ออกจากระบบ
+            </Button>
+          </form>
+        </div>
       </div>
 
       <FaceEnrollmentPrompt />

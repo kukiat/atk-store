@@ -1,0 +1,1 @@
+bunx drizzle-kit generate --config=drizzle.config.ts && bunx drizzle-kit migrate --config=drizzle.config.ts

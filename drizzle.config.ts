@@ -12,4 +12,5 @@ export default defineConfig({
   },
   verbose: true,
   strict: true,
+  schemaFilter: process.env.DATABASE_SCHEMA!,
 });

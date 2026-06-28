@@ -15,6 +15,13 @@
       "when": 1782551567664,
       "tag": "0001_far_toxin",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782642428114,
+      "tag": "0002_fearless_norman_osborn",
+      "breakpoints": true
     }
   ]
 }

@@ -154,32 +154,289 @@ SCB, KBank, Krungsri, BBL, KTB — ค่าธรรมเนียมต่ำ
 - เงินเข้าตรง, ค่าธรรมเนียมต่ำ
 - เพิ่ม `card` ทีหลังได้เพราะ provider interface รองรับอยู่แล้ว
 
-### หลักออกแบบ API ให้ "ใช้งานง่าย"
+### หลักการออกแบบ
 
-1. **flow สั้นที่สุด — 3 จังหวะพอ:** `POST /payments` (สร้าง+ขอ QR) → `GET /payments/:id` (poll) → `POST /webhooks/:bank` (callback)
-2. **ฝั่งร้านค้ารู้แค่ "จ่ายสำเร็จยัง"** — ซ่อน ref1/ref2, reconcile, format QR ไว้หลัง adapter
-3. **Idempotency-Key** กันสร้าง charge ซ้ำจาก network timeout
-4. **Status ใช้คำกลาง** (`pending/succeeded/failed/expired`) ไม่ leak ศัพท์ของแบงก์
-5. **Error shape เดียว** — `{ "error": { "code": "...", "message": "..." } }`
+1. **แยก 2 ฝั่งให้ขาด** — อย่ารวมเป็น flow เดียว
+   - *ฝั่ง client* (frontend ร้านค้าเรียก): `POST /payments` → `GET /payments/:id`
+   - *ฝั่ง webhook ขาเข้า* (ธนาคารยิงเข้ามา): `POST /webhooks/:provider`
+   - **webhook คือ source of truth** ของ status — การ poll แค่อ่าน state ที่ webhook (หรือ reconcile job) เขียนไว้ ไม่ใช่ตัวตัดสินผล
+2. **ฝั่งร้านค้ารู้แค่ "จ่ายสำเร็จยัง"** — ซ่อน ref1/ref2, reconcile, format QR, ศัพท์ของแบงก์ ไว้หลัง adapter
+3. **เงินเป็น integer สตางค์เสมอ** — `amount: 10000` = 100.00 บาท ห้ามใช้ทศนิยม/float (กัน rounding) สอดคล้องกับ `priceCents` ในโค้ดปัจจุบัน
+4. **Idempotency-Key** ผ่าน HTTP header กันสร้าง charge ซ้ำจาก network timeout/retry
+5. **Status ใช้คำกลาง** ไม่ leak ศัพท์ของแบงก์ — `pending / succeeded / failed / expired / canceled`
+6. **Error shape เดียว** — `{ "error": { "code": "...", "message": "..." } }`
+   > ⚠️ ต่างจาก route เดิมในโปรเจกต์ที่คืน `{ "error": "ข้อความ" }` (string เปล่า) — payment endpoint ตั้งใจใช้แบบ `{ code, message }` เพื่อให้ client แยก error ด้วย `code` ได้ ค่อย migrate route อื่นตามทีหลัง
+
+### 5.1 API ฝั่ง client
+
+#### `POST /payments` — สร้าง payment + ขอ QR
+
+Headers:
+
+```
+Content-Type: application/json
+Idempotency-Key: 6f9c1e7a-...        # UUID ฝั่ง client gen เอง (บังคับ)
+```
+
+Request body:
+
+```json
+{
+  "amount": 10000,
+  "currency": "THB",
+  "method": "promptpay",
+  "reference": "order_123"
+}
+```
+
+| field | type | หมายเหตุ |
+|-------|------|----------|
+| `amount` | integer | หน่วย**สตางค์** (10000 = 100.00 บาท) ต้อง > 0 |
+| `currency` | string | `"THB"` (hardcode สำหรับ POC แต่คงฟิลด์ไว้) |
+| `method` | enum | `"promptpay"` \| `"card"` (POC ใช้ `promptpay`) |
+| `reference` | string | เลขอ้างอิงฝั่งร้าน (เช่น order id) ใช้ตอน reconcile |
+
+Response `201 Created`:
+
+```json
+{
+  "id": "pay_2a9f...",
+  "status": "pending",
+  "amount": 10000,
+  "currency": "THB",
+  "method": "promptpay",
+  "reference": "order_123",
+  "qrPayload": "00020101021229370016A0000006770101110213...",
+  "actionUrl": null,
+  "expiresAt": "2026-06-28T10:15:00Z",
+  "createdAt": "2026-06-28T10:00:00Z"
+}
+```
+
+- `qrPayload` — EMVCo string เอาไป render เป็น QR (มีเฉพาะ `method=promptpay`)
+- `actionUrl` — URL redirect (สำหรับ `method=card`/3DS ในอนาคต; promptpay จะเป็น `null`)
+- มี `qrPayload` **หรือ** `actionUrl` อย่างใดอย่างหนึ่งเสมอ ตาม method
+
+#### `GET /payments/:id` — poll สถานะ
+
+Response `200 OK`: หน้าตา object เดียวกับด้านบน โดย `status` จะอัปเดตตามผลจริง
+
+```json
+{ "id": "pay_2a9f...", "status": "succeeded", "amount": 10000, "...": "..." }
+```
+
+แนะนำให้ client poll ทุก ~2–3 วินาที จนเจอ status สุดท้าย หรือเลย `expiresAt`
+
+#### Lifecycle ของ status
+
+```
+pending ──(webhook: จ่ายสำเร็จ)──► succeeded   (terminal)
+   │
+   ├────(webhook: จ่ายไม่ผ่าน)────► failed      (terminal)
+   ├────(เลย expiresAt)──────────► expired     (terminal)
+   └────(ยกเลิกก่อนจ่าย)─────────► canceled    (terminal)
+```
+
+| status | ความหมาย |
+|--------|----------|
+| `pending` | สร้างแล้ว รอลูกค้าสแกนจ่าย |
+| `succeeded` | จ่ายสำเร็จ ยืนยันจาก webhook/reconcile แล้ว |
+| `failed` | จ่ายไม่ผ่าน (ถูกปฏิเสธ/error ฝั่งแบงก์) |
+| `expired` | หมดอายุ QR ก่อนจ่าย |
+| `canceled` | ยกเลิกโดยร้าน/ระบบก่อนจ่าย |
+
+> เผื่ออนาคต (card): `processing`, `requires_action` (รอ 3DS) — ยังไม่ใช้ใน POC
+
+### 5.2 Webhook ขาเข้า (ธนาคาร → เซิร์ฟเวอร์เรา)
+
+#### `POST /webhooks/:provider`
+
+ไม่ใช่ flow ที่ client เรียก — เป็นช่องที่ provider ยิง callback เข้ามา ลำดับการทำงานในเซิร์ฟเวอร์:
+
+```
+1. อ่าน raw body (ห้าม parse JSON ก่อน) → verifySignature
+   - signature ไม่ผ่าน → 401 ทันที ไม่แตะ state
+2. parseWebhook(rawBody) → NormalizedEvent (map provider id → payment + status กลาง)
+3. อัปเดต payment แบบ idempotent
+   - event ซ้ำ (เคยเห็น eventId/charge นี้แล้ว) → no-op
+   - status เป็น terminal อยู่แล้ว → ไม่ทับซ้ำ
+4. ตอบ 200 เร็วที่สุด (งานหนักโยนไป background ถ้ามี)
+```
+
+- ตอบ **`200`** เมื่อรับ event ไว้แล้ว (แม้จะ no-op) เพื่อให้ provider หยุด retry
+- ตอบ **`401`** เมื่อ signature ไม่ผ่าน, **`400`** เมื่อ body parse ไม่ได้
+
+### 5.3 Error shape (ทุก endpoint ฝั่ง client)
+
+```json
+{ "error": { "code": "payment_not_found", "message": "No payment with id pay_..." } }
+```
+
+| HTTP | `code` ตัวอย่าง | เมื่อไหร่ |
+|------|----------------|----------|
+| 400 | `invalid_request` | body ผิด format / `amount` ≤ 0 |
+| 404 | `payment_not_found` | `GET` id ที่ไม่มี |
+| 409 | `idempotency_conflict` | `Idempotency-Key` เดิม แต่ body ต่างจากครั้งแรก |
+| 422 | `unsupported_method` | `method` ที่ provider ไม่รองรับ |
+| 502 | `provider_error` | provider/แบงก์ตอบ error |
+
+#### พฤติกรรม Idempotency
+
+- `Idempotency-Key` เดิม + body **เหมือนเดิม** → คืน response เดิม (ไม่สร้าง charge ใหม่)
+- `Idempotency-Key` เดิม + body **ต่าง** → `409 idempotency_conflict`
+- เก็บ key ไว้ ~24 ชม. (POC เก็บใน DB ตาราง payment ได้เลย)
 
 ---
 
 ## 6. map กับโปรเจกต์
 
-โครงปัจจุบันรองรับทุกแบบผ่าน `PaymentProvider` interface — ต่างกันแค่ adapter:
+ฝั่ง API ที่ client เรียก (section 5.1) **เหมือนกันหมดทุก provider** — business code ไม่รู้จัก provider เฉพาะราย ความต่างทั้งหมดถูกซ่อนหลัง `PaymentProvider` interface เดียว
 
-| แบบ | สิ่งที่ต้องเขียน | สถานะ |
-|-----|----------------|-------|
-| ทดสอบ | `src/providers/mock/` | ✅ มีแล้ว |
+### 6.1 `PaymentProvider` interface
+
+```ts
+// src/providers/types.ts
+export type PaymentMethod = "promptpay" | "card";
+
+export type PaymentStatus =
+  | "pending"
+  | "succeeded"
+  | "failed"
+  | "expired"
+  | "canceled";
+
+export interface CreateChargeInput {
+  /** จำนวนเงินหน่วยสตางค์ (integer) */
+  amount: number;
+  currency: "THB";
+  method: PaymentMethod;
+  /** อ้างอิงฝั่งร้าน ใช้ตอน reconcile */
+  reference: string;
+}
+
+export interface ChargeResult {
+  /** id ฝั่ง provider ใช้ map ตอน webhook กลับมา */
+  providerChargeId: string;
+  /** EMVCo string สำหรับ promptpay; null เมื่อเป็น redirect */
+  qrPayload: string | null;
+  /** URL redirect สำหรับ card/3DS; null เมื่อเป็น promptpay */
+  actionUrl: string | null;
+  expiresAt: Date;
+}
+
+/** ผลลัพธ์หลัง parse webhook ดิบ ให้เป็นภาษากลางของระบบ */
+export interface NormalizedEvent {
+  /** id ของ event กัน process ซ้ำ (idempotent) */
+  eventId: string;
+  providerChargeId: string;
+  status: PaymentStatus;
+}
+
+export interface PaymentProvider {
+  /** สร้าง charge → คืน qrPayload หรือ actionUrl */
+  createCharge(input: CreateChargeInput): Promise<ChargeResult>;
+  /** ตรวจ signature บน raw webhook body (ก่อน parse) */
+  verifySignature(rawBody: string, headers: Headers): boolean;
+  /** แปลง callback ดิบ → NormalizedEvent (status กลาง) */
+  parseWebhook(rawBody: string): NormalizedEvent;
+}
+```
+
+> ⚠️ `verifySignature` ใน POC สมมติว่าเป็น HMAC บน raw body (Omise เป็นแบบนี้) แต่ของจริงแต่ละแบงก์ต่างกัน — SCB/KBank อาจใช้ mTLS / JWT / IP allowlist ไม่ใช่ HMAC ล้วน เพราะรับ `headers` เข้ามาด้วย แต่ละ adapter จึงเลือกวิธี verify เองได้
+
+### 6.2 adapter ที่ต้องเขียน
+
+| แบบ | โฟลเดอร์ | สถานะ |
+|-----|----------|-------|
+| ทดสอบ (mock) | `src/providers/mock/` | ต้องเขียน — เริ่มที่นี่ก่อน |
 | A (Omise) | `src/providers/omise/` | ต้องเขียน |
 | C (SCB) | `src/providers/scb/` | ต้องเขียน |
 
-แต่ละ adapter:
-- `createCharge` → คืน `qrPayload` (PromptPay) หรือ `actionUrl` (redirect)
-- `verifySignature` → ตรวจ HMAC บน raw webhook body
-- `parseWebhook` → แปลง callback เป็น `NormalizedEvent` (status กลาง)
+แต่ละ adapter implement แค่ 3 เมธอดของ `PaymentProvider` ส่วน route (`POST /payments`, `GET /payments/:id`, `POST /webhooks/:provider`) เขียนครั้งเดียวใช้ร่วมกัน — เลือก adapter ตาม `:provider` หรือ config
 
-ฝั่ง API ที่ลูกค้าเรียก **เหมือนกันทุกเจ้า** — business code ไม่รู้จัก provider เฉพาะราย
+### 6.3 Database schema
+
+ตาราง `payments` ตารางเดียวเก็บครบทั้ง lifecycle + idempotency เดินตาม convention เดิมในโปรเจกต์ (เงิน integer สตางค์, status enum + terminal states, partial/unique index, `withTimezone` timestamps) โดยยืมแม่แบบจาก `faceLivenessAttempts` ที่มี pattern เกือบเหมือนกัน
+
+```ts
+// src/db/schema.ts (เพิ่มต่อจากตารางเดิม)
+
+/** Channel ที่ลูกค้าจ่าย — pre-declare เผื่อเพิ่มทีหลังโดยไม่ต้อง migrate enum */
+export const paymentMethodEnum = db_schema.enum("payment_method", [
+  "promptpay",
+  "card",
+]);
+
+/**
+ * Lifecycle ของ payment หนึ่งรายการ. Terminal states
+ * (`succeeded`, `failed`, `expired`, `canceled`) ห้าม transition ออก;
+ * webhook คือ source of truth ที่ขับ status นี้.
+ */
+export const paymentStatusEnum = db_schema.enum("payment_status", [
+  "pending",
+  "succeeded",
+  "failed",
+  "expired",
+  "canceled",
+]);
+
+export const payments = db_schema.table(
+  "payments",
+  {
+    // public id ที่โผล่ใน API (เช่น "pay_2a9f..."); meaningful จึงใช้ text PK
+    id: text("id").primaryKey(),
+    // adapter ที่ใช้ ("mock" | "omise" | "scb") — เลือกตอนรับ webhook ด้วย
+    provider: text("provider").notNull(),
+    // charge id ฝั่ง provider; null จนกว่า createCharge สำเร็จ ใช้ map webhook กลับ
+    providerChargeId: text("provider_charge_id"),
+    // จำนวนเงินหน่วยสตางค์ (integer) — เหมือน products.priceCents กัน float bug
+    amount: integer("amount").notNull(),
+    currency: text("currency").notNull().default("THB"),
+    method: paymentMethodEnum("method").notNull(),
+    status: paymentStatusEnum("status").notNull().default("pending"),
+    // เลขอ้างอิงฝั่งร้าน (order id) ใช้ตอน reconcile
+    reference: text("reference").notNull(),
+    // Idempotency-Key จาก client header — กันสร้าง charge ซ้ำ
+    idempotencyKey: text("idempotency_key").notNull(),
+    // EMVCo QR string (promptpay) หรือ redirect url (card) — อย่างใดอย่างหนึ่ง
+    qrPayload: text("qr_payload"),
+    actionUrl: text("action_url"),
+    // id ของ webhook event ล่าสุดที่ process แล้ว — กัน process event ซ้ำ
+    lastEventId: text("last_event_id"),
+    // payload ดิบ/metadata จาก provider ไว้ debug & audit
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // Idempotency-Key เดิม → คืน payment เดิม (กันสร้างซ้ำจาก retry)
+    uniqueIndex("payments_idempotency_key_unique").on(table.idempotencyKey),
+    // map webhook (provider + charge id) กลับมาที่ payment ได้แบบ unique
+    uniqueIndex("payments_provider_charge_unique").on(
+      table.provider,
+      table.providerChargeId,
+    ),
+  ],
+);
+
+export type Payment = typeof payments.$inferSelect;
+export type NewPayment = typeof payments.$inferInsert;
+export type PaymentMethod = (typeof paymentMethodEnum.enumValues)[number];
+export type PaymentStatus = (typeof paymentStatusEnum.enumValues)[number];
+```
+
+หมายเหตุการออกแบบ:
+
+- **text PK `pay_...`** (ไม่ใช่ `serial`) เพราะ id โผล่ใน API และต้องเดายาก — เดินตาม pattern `sessions.id` / `shelves.id` ที่ใช้ text PK เมื่อ id มีความหมาย
+- **`idempotencyKey` unique ทั้งตาราง** (ไม่ใช่ partial เหมือน face) เพราะ key ต้องกันซ้ำตลอดอายุ ไม่ใช่แค่ตอน in-flight
+- **`(provider, providerChargeId)` unique** — webhook map กลับ payment ผ่านคู่นี้; ใส่ provider ด้วยกัน charge id ชนข้าม provider
+- **`lastEventId`** ทำให้ webhook idempotent: เห็น event เดิม → no-op
+- `PaymentMethod` / `PaymentStatus` types ตรงกับ `src/providers/types.ts` ใน section 6.1 (single source ฝั่ง enum คือ DB)
 
 ---
 

@@ -1,0 +1,109 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="หน้า-1" id="LOQBua9kEPNs6xOmc-6T">
+    <mxGraphModel dx="2101" dy="719" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="84QksBsU2HhS8z8TEo_k-1" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="360" width="730" x="60" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-2" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;rounded=0;fontSize=20;" value="Store" vertex="1">
+          <mxGeometry height="40" width="126" x="351" y="50" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-3" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Entrance" vertex="1">
+          <mxGeometry height="60" width="120" x="60" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-4" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Exit" vertex="1">
+          <mxGeometry height="60" width="120" x="670" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-5" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Shelf A" vertex="1">
+          <mxGeometry height="170" width="120" x="200" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-6" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="" vertex="1">
+          <mxGeometry height="170" width="120" x="365" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-7" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="Shelf C" vertex="1">
+          <mxGeometry height="170" width="120" x="550" y="140" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-11" edge="1" parent="1" source="84QksBsU2HhS8z8TEo_k-8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="84QksBsU2HhS8z8TEo_k-10">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-8" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" value="Cam1" vertex="1">
+          <mxGeometry height="40" width="40" x="100" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-13" edge="1" parent="1" source="84QksBsU2HhS8z8TEo_k-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="84QksBsU2HhS8z8TEo_k-12">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-9" parent="1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" value="Cam2" vertex="1">
+          <mxGeometry height="40" width="40" x="710" y="370" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-10" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=#001DBC;fillColor=#0050ef;align=left;verticalAlign=middle;rounded=0;fontSize=15;fontColor=#ffffff;" value="1. Track ลูกค้าเข้า&lt;div&gt;2. get info&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="180" x="-255" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-12" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=#001DBC;fillColor=#0050ef;align=left;verticalAlign=middle;rounded=0;fontSize=15;fontColor=#ffffff;" value="1. Track ลูกค้าออก&lt;div&gt;2. หักเงิน&lt;/div&gt;" vertex="1">
+          <mxGeometry height="40" width="160" x="980" y="520" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-15" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="B3" vertex="1">
+          <mxGeometry height="60" width="50" x="370" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-16" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="B4" vertex="1">
+          <mxGeometry height="60" width="50" x="427" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-17" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="B1" vertex="1">
+          <mxGeometry height="60" width="50" x="371.5" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-18" parent="1" style="rounded=0;whiteSpace=wrap;html=1;" value="B2" vertex="1">
+          <mxGeometry height="60" width="50" x="428.5" y="150" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-32" edge="1" parent="1" source="84QksBsU2HhS8z8TEo_k-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.25;entryY=0;entryDx=0;entryDy=0;" target="84QksBsU2HhS8z8TEo_k-27">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="260" y="360" />
+              <mxPoint x="352" y="360" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-36" edge="1" parent="1" source="84QksBsU2HhS8z8TEo_k-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" target="84QksBsU2HhS8z8TEo_k-35">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="260" y="360" />
+              <mxPoint x="-165" y="360" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-22" parent="1" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Unicons_Line_vol_5-2967/qrcode-scan-838.svg" value="" vertex="1">
+          <mxGeometry height="24" width="24" x="248" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-33" edge="1" parent="1" source="84QksBsU2HhS8z8TEo_k-25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="84QksBsU2HhS8z8TEo_k-27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-25" parent="1" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Unicons_Line_vol_5-2967/qrcode-scan-838.svg" value="" vertex="1">
+          <mxGeometry height="24" width="24" x="413" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-30" edge="1" parent="1" source="84QksBsU2HhS8z8TEo_k-26" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.75;entryY=0;entryDx=0;entryDy=0;" target="84QksBsU2HhS8z8TEo_k-27">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="610" y="360" />
+              <mxPoint x="496" y="360" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-26" parent="1" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Unicons_Line_vol_5-2967/qrcode-scan-838.svg" value="" vertex="1">
+          <mxGeometry height="24" width="24" x="598" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-27" parent="1" style="text;html=1;whiteSpace=wrap;strokeColor=#001DBC;fillColor=#0050ef;align=center;verticalAlign=middle;rounded=0;fontSize=16;fontColor=#ffffff;" value="จับคู่ว่า ลูกค้า ซื้อสินค้าอะไร ราคาเท่าไหร่" vertex="1">
+          <mxGeometry height="30" width="287.5" x="280" y="640" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-42" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="40" width="255" x="-310" y="20" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-35" parent="84QksBsU2HhS8z8TEo_k-42" style="text;html=1;whiteSpace=wrap;strokeColor=#001DBC;fillColor=#0050ef;align=center;verticalAlign=middle;rounded=0;fontSize=16;fontColor=#ffffff;" value="Scan QR เลือกสินค้าหน้าตู้" vertex="1">
+          <mxGeometry height="40" width="220" x="35" as="geometry" />
+        </mxCell>
+        <mxCell id="84QksBsU2HhS8z8TEo_k-41" parent="84QksBsU2HhS8z8TEo_k-42" style="shape=image;html=1;verticalAlign=top;verticalLabelPosition=bottom;labelBackgroundColor=#ffffff;imageAspect=0;aspect=fixed;image=https://icons.diagrams.net/icon-cache1/Unicons_Line_vol_5-2967/qrcode-scan-838.svg" value="" vertex="1">
+          <mxGeometry height="24" width="24" y="8" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

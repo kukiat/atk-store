@@ -5,9 +5,17 @@
  * instead of importing src/db/index.ts, which is marked "server-only".
  */
 import { drizzle } from "drizzle-orm/postgres-js";
+import { eq, inArray } from "drizzle-orm";
 import postgres from "postgres";
 
-import { products, roles, shelfProducts, shelves } from "./schema";
+import {
+  products,
+  roles,
+  shelfProducts,
+  shelves,
+  userRoles,
+  users,
+} from "./schema";
 
 process.loadEnvFile();
 
@@ -20,7 +28,7 @@ if (!connectionString) {
 
 const client = postgres(connectionString, { max: 1 });
 const db = drizzle(client, {
-  schema: { products, roles, shelfProducts, shelves },
+  schema: { products, roles, shelfProducts, shelves, userRoles, users },
 });
 
 const SHELVES = [
@@ -71,6 +79,34 @@ const PRODUCTS = [
   },
 ];
 
+const MOCK_CLIENTS = [
+  {
+    email: "mali.wong@example.com",
+    name: "Mali Wong",
+    providerAccountId: "mock-client-mali-wong",
+  },
+  {
+    email: "narin.sukjai@example.com",
+    name: "Narin Sukjai",
+    providerAccountId: "mock-client-narin-sukjai",
+  },
+  {
+    email: "pimchanok.k@example.com",
+    name: "Pimchanok K.",
+    providerAccountId: "mock-client-pimchanok-k",
+  },
+  {
+    email: "tanawat.lee@example.com",
+    name: "Tanawat Lee",
+    providerAccountId: "mock-client-tanawat-lee",
+  },
+  {
+    email: "siriporn.cha@example.com",
+    name: "Siriporn Cha",
+    providerAccountId: "mock-client-siriporn-cha",
+  },
+];
+
 async function main() {
   console.log("Seeding database...");
 
@@ -82,6 +118,52 @@ async function main() {
       { code: "super_admin", name: "Super Admin" },
     ])
     .onConflictDoNothing();
+
+  const [clientRole] = await db
+    .select({ id: roles.id })
+    .from(roles)
+    .where(eq(roles.code, "client"))
+    .limit(1);
+
+  if (!clientRole) {
+    throw new Error("Missing client role after seed initialization");
+  }
+
+  await db
+    .insert(users)
+    .values(
+      MOCK_CLIENTS.map((client) => ({
+        email: client.email,
+        name: client.name,
+        authMethod: "google" as const,
+        providerAccountId: client.providerAccountId,
+        faceEnrollmentStatus: "not_registered" as const,
+        accountStatus: "active" as const,
+      })),
+    )
+    .onConflictDoNothing();
+
+  const mockUsers = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(
+      inArray(
+        users.email,
+        MOCK_CLIENTS.map((client) => client.email),
+      ),
+    );
+
+  if (mockUsers.length > 0) {
+    await db
+      .insert(userRoles)
+      .values(
+        mockUsers.map((user) => ({
+          userId: user.id,
+          roleId: clientRole.id,
+        })),
+      )
+      .onConflictDoNothing();
+  }
 
   // Idempotent reset so re-running gives a clean dataset.
   await db.delete(shelfProducts);
@@ -106,7 +188,7 @@ async function main() {
   ]);
 
   console.log(
-    `Seeded ${SHELVES.length} shelves and ${PRODUCTS.length} products.`,
+    `Seeded ${SHELVES.length} shelves, ${PRODUCTS.length} products, and ${MOCK_CLIENTS.length} mock clients.`,
   );
 }
 

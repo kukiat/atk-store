@@ -69,8 +69,7 @@ export function FaceAuthStatusNotice() {
             ต้องเข้าสู่ระบบ Google อีกครั้งก่อนใช้กล้อง
           </p>
           <p className="text-amber-800">
-            App session ยังอยู่ แต่ token ที่ใช้แลก AWS temporary credential
-            สำหรับ Face Liveness หมดอายุแล้ว
+            เพื่อความปลอดภัย ระบบต้องยืนยันบัญชีของคุณใหม่ก่อนเริ่มสแกนใบหน้า
           </p>
         </div>
         <Button

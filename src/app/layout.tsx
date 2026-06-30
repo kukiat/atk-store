@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Sans_Thai } from "next/font/google";
 
+import { AuthenticatedNav } from "@/components/authenticated-nav";
 import { ReadableStreamCancelErrorSilencer } from "@/lib/use-suppress-readable-stream-cancel-error";
 
 import "./globals.css";
@@ -40,6 +41,7 @@ export default function RootLayout({
           }}
         />
         <ReadableStreamCancelErrorSilencer />
+        <AuthenticatedNav />
         {children}
       </body>
     </html>

@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Client Attendance Worker Flow</title>
+    <style>
+      :root {
+        --bg: #171613;
+        --surface: #201e19;
+        --surface-soft: #28251f;
+        --line: rgba(232, 220, 199, 0.16);
+        --line-strong: rgba(232, 220, 199, 0.34);
+        --ink: #f1eadc;
+        --muted: #b9aa91;
+        --faint: #817565;
+        --terracotta: #d07645;
+        --blue: #7ea6c9;
+        --green: #88b58f;
+        --amber: #d6ad62;
+        --red: #d47c72;
+        --font-serif:
+          "Source Han Serif SC", "Noto Serif Thai", "Songti SC",
+          "Iowan Old Style", Georgia, serif;
+        --font-sans:
+          "PingFang SC", "Noto Sans Thai", "IBM Plex Sans", -apple-system,
+          BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+        --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font-sans);
+        font-size: 16px;
+        line-height: 1.74;
+        text-wrap: pretty;
+      }
+
+      body {
+        margin: 0;
+      }
+
+      code {
+        padding: 0.08em 0.32em;
+        background: rgba(208, 118, 69, 0.12);
+        color: var(--ink);
+        font-family: var(--font-mono);
+        font-size: 0.86em;
+      }
+
+      .page {
+        width: min(1220px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 56px 0 76px;
+      }
+
+      .kicker {
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        color: var(--ink);
+        font-family: var(--font-serif);
+        font-weight: 650;
+        line-height: 1.14;
+      }
+
+      h1 {
+        max-width: 900px;
+        margin-top: 10px;
+        font-size: clamp(2.25rem, 5.6vw, 5.35rem);
+        letter-spacing: -0.035em;
+      }
+
+      h2 {
+        font-size: clamp(1.45rem, 2.1vw, 2.25rem);
+        letter-spacing: -0.025em;
+      }
+
+      h3 {
+        font-size: 1.08rem;
+        letter-spacing: -0.01em;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.08fr 0.92fr;
+        gap: 34px;
+        align-items: end;
+        padding-bottom: 38px;
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .hero-copy {
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 1.04rem;
+      }
+
+      .hero-copy strong {
+        color: var(--ink);
+      }
+
+      .summary {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        border-top: 2px solid var(--ink);
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .metric {
+        min-height: 106px;
+        padding: 15px 18px;
+        border-right: 1px solid var(--line);
+      }
+
+      .metric:last-child {
+        border-right: 0;
+      }
+
+      .metric .label {
+        display: block;
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+
+      .metric .value {
+        display: block;
+        margin-top: 7px;
+        font-family: var(--font-serif);
+        font-size: 1.28rem;
+        line-height: 1.18;
+      }
+
+      .metric .note {
+        display: block;
+        margin-top: 8px;
+        color: var(--faint);
+        font-size: 0.78rem;
+        line-height: 1.45;
+      }
+
+      section {
+        margin-top: 54px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 24px;
+        margin-bottom: 22px;
+      }
+
+      .section-head p {
+        max-width: 620px;
+        color: var(--muted);
+        font-size: 0.96rem;
+      }
+
+      .actors {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        border-top: 2px solid var(--ink);
+        border-bottom: 2px solid var(--ink);
+      }
+
+      .actor {
+        min-height: 176px;
+        padding: 20px 18px;
+        border-right: 1px solid var(--line-strong);
+        background: linear-gradient(to bottom, rgba(255, 255, 255, 0.035), transparent);
+      }
+
+      .actor:last-child {
+        border-right: 0;
+      }
+
+      .mark {
+        width: 38px;
+        height: 38px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 18px;
+        border: 1.4px solid currentColor;
+        border-radius: 50%;
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
+      }
+
+      .camera {
+        color: var(--blue);
+      }
+
+      .worker {
+        color: var(--terracotta);
+      }
+
+      .backend {
+        color: var(--green);
+      }
+
+      .aws {
+        color: var(--amber);
+      }
+
+      .db {
+        color: var(--red);
+      }
+
+      .actor h3 {
+        color: var(--ink);
+      }
+
+      .actor p {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .flow {
+        border-top: 2px solid var(--ink);
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 92px 0.8fr 1.3fr 0.9fr;
+        gap: 22px;
+        padding: 22px 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .step-number {
+        color: var(--terracotta);
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .step-title {
+        color: var(--ink);
+        font-weight: 650;
+      }
+
+      .step-body {
+        color: var(--muted);
+        font-size: 0.94rem;
+      }
+
+      .step-output {
+        color: var(--faint);
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+        line-height: 1.56;
+      }
+
+      .lanes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border-top: 2px solid var(--ink);
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .lane {
+        padding: 20px 18px 22px;
+        border-right: 1px solid var(--line);
+      }
+
+      .lane:last-child {
+        border-right: 0;
+      }
+
+      .lane h3 {
+        margin-bottom: 12px;
+      }
+
+      .lane ul {
+        margin: 0;
+        padding-left: 18px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .lane li + li {
+        margin-top: 8px;
+      }
+
+      .schema {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        border-top: 2px solid var(--ink);
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .table-block {
+        padding: 20px 20px 24px;
+        border-right: 1px solid var(--line);
+      }
+
+      .table-block:last-child {
+        border-right: 0;
+      }
+
+      .table-block p {
+        margin-top: 10px;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .fields {
+        display: grid;
+        grid-template-columns: 0.78fr 1fr;
+        gap: 8px 14px;
+        margin-top: 18px;
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 0.78rem;
+      }
+
+      .fields dt,
+      .fields dd {
+        margin: 0;
+        padding-top: 8px;
+        border-top: 1px solid var(--line);
+      }
+
+      .fields dt {
+        color: var(--ink);
+      }
+
+      .callout {
+        display: grid;
+        grid-template-columns: 0.35fr 1fr;
+        gap: 24px;
+        padding: 22px 0;
+        border-top: 2px solid var(--ink);
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .callout strong {
+        color: var(--ink);
+      }
+
+      .callout p {
+        color: var(--muted);
+      }
+
+      .mono-block {
+        margin-top: 16px;
+        padding: 16px 18px;
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        background: var(--surface);
+        color: var(--muted);
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        line-height: 1.65;
+      }
+
+      @media (max-width: 920px) {
+        .hero,
+        .section-head,
+        .callout {
+          grid-template-columns: 1fr;
+        }
+
+        .summary,
+        .actors,
+        .lanes,
+        .schema {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        .step {
+          grid-template-columns: 72px 1fr;
+        }
+
+        .step-body,
+        .step-output {
+          grid-column: 2;
+        }
+      }
+
+      @media (max-width: 620px) {
+        .page {
+          width: min(100% - 28px, 1220px);
+          padding-top: 36px;
+        }
+
+        .summary,
+        .actors,
+        .lanes,
+        .schema,
+        .step {
+          grid-template-columns: 1fr;
+        }
+
+        .metric,
+        .actor,
+        .lane,
+        .table-block {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+
+        .step-body,
+        .step-output {
+          grid-column: auto;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <header class="hero">
+        <div>
+          <div class="kicker">ATK STORE / CAMERA POC</div>
+          <h1>Client Attendance Worker Flow</h1>
+          <p class="hero-copy">
+            ภาพรวมการทำงานของระบบกล้องหน้าร้าน ตั้งแต่ Python worker เปิดกล้อง
+            ตรวจจับใบหน้าในเครื่อง ส่ง face crop ไป backend, backend ค้น
+            Rekognition collection เดิม และบันทึกเหตุการณ์เข้า/ออกลง DB
+            โดย <strong>ไม่ index ใบหน้าใหม่</strong> และ
+            <strong>ไม่เก็บ raw image</strong>
+          </p>
+        </div>
+
+        <div class="summary">
+          <div class="metric">
+            <span class="label">Camera Source</span>
+            <span class="value">Notebook camera</span>
+            <span class="note">M4 เป็น entry, M1 เป็น exit ได้</span>
+          </div>
+          <div class="metric">
+            <span class="label">Recognition</span>
+            <span class="value">Search only</span>
+            <span class="note">ใช้ `SearchFacesByImage` เท่านั้น</span>
+          </div>
+          <div class="metric">
+            <span class="label">Transport</span>
+            <span class="value">Multipart POST</span>
+            <span class="note">ส่งเฉพาะ JPEG face crop</span>
+          </div>
+          <div class="metric">
+            <span class="label">Storage</span>
+            <span class="value">Event + Visit</span>
+            <span class="note">เก็บ metadata/hash ไม่เก็บภาพ</span>
+          </div>
+        </div>
+      </header>
+
+      <section>
+        <div class="section-head">
+          <h2>System Actors</h2>
+          <p>
+            แต่ละส่วนมีหน้าที่แยกกันชัดเจน: worker รับผิดชอบกล้องและ frame
+            selection, backend รับผิดชอบ credential, Rekognition และ DB state
+          </p>
+        </div>
+
+        <div class="actors">
+          <div class="actor camera">
+            <div class="mark">01</div>
+            <h3>Camera</h3>
+            <p>กล้องจาก MacBook หรือ device จริงในอนาคต เป็นแหล่งภาพเท่านั้น</p>
+          </div>
+          <div class="actor worker">
+            <div class="mark">02</div>
+            <h3>Python Worker</h3>
+            <p>detect หน้า, crop, throttle และส่ง request เข้า backend</p>
+          </div>
+          <div class="actor backend">
+            <div class="mark">03</div>
+            <h3>Next Backend</h3>
+            <p>validate API key, ตรวจขนาดรูป, เรียก service layer</p>
+          </div>
+          <div class="actor aws">
+            <div class="mark">04</div>
+            <h3>AWS Rekognition</h3>
+            <p>ค้น face collection เดิมด้วย `SearchFacesByImage`</p>
+          </div>
+          <div class="actor db">
+            <div class="mark">05</div>
+            <h3>PostgreSQL</h3>
+            <p>บันทึก attendance event และ visit session</p>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>End-to-End Flow</h2>
+          <p>
+            Flow นี้เริ่มจาก worker process หนึ่งตัวต่อกล้องหนึ่งตัว
+            และจบที่การสร้าง/ปิด visit ของลูกค้าที่รู้จักในระบบแล้ว
+          </p>
+        </div>
+
+        <div class="flow">
+          <div class="step">
+            <div class="step-number">Step 01</div>
+            <div class="step-title">Load worker config</div>
+            <div class="step-body">
+              Worker อ่านค่า `.env`: backend URL, API key, camera ID,
+              direction, camera index, throttle interval และ JPEG quality
+            </div>
+            <div class="step-output">
+              ATTENDANCE_BACKEND_URL<br />
+              ATTENDANCE_CAMERA_ID<br />
+              ATTENDANCE_DIRECTION
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 02</div>
+            <div class="step-title">Open camera stream</div>
+            <div class="step-body">
+              Python เปิดกล้องด้วย `cv2.VideoCapture(camera_index)` แล้วอ่าน
+              frame ต่อเนื่องจาก notebook camera หรือกล้อง USB
+            </div>
+            <div class="step-output">cameraIndex = 0<br />preview window</div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 03</div>
+            <div class="step-title">Detect face locally</div>
+            <div class="step-body">
+              Worker ใช้ OpenCV Haar cascade หาใบหน้าใน frame และเลือกหน้าใหญ่สุด
+              เพื่อลด noise จากฉากหลังหรือคนที่อยู่ไกล
+            </div>
+            <div class="step-output">largest face box<br />minFaceSize</div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 04</div>
+            <div class="step-title">Throttle and crop</div>
+            <div class="step-body">
+              ถ้ามีหน้าและครบ interval แล้ว worker จะ crop พร้อม padding,
+              encode เป็น JPEG แล้วส่งเฉพาะ face crop ไม่ส่งทุก frame
+            </div>
+            <div class="step-output">request every 3s<br />JPEG crop only</div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 05</div>
+            <div class="step-title">POST to backend</div>
+            <div class="step-body">
+              Worker ส่ง multipart request ไปที่
+              `/api/client-attendance/recognize` พร้อม `x-client-attendance-key`
+              และ metadata ของกล้อง
+            </div>
+            <div class="step-output">
+              image<br />
+              cameraId<br />
+              direction<br />
+              capturedAt
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 06</div>
+            <div class="step-title">Validate request</div>
+            <div class="step-body">
+              Backend เช็ค API key แบบ timing-safe, validate direction,
+              image type และจำกัดขนาดด้วย `CLIENT_ATTENDANCE_MAX_IMAGE_BYTES`
+            </div>
+            <div class="step-output">
+              unauthorized = 401<br />
+              bad request = 400
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 07</div>
+            <div class="step-title">Search face collection</div>
+            <div class="step-body">
+              Service เรียก AWS Rekognition `SearchFacesByImage` ด้วย image
+              bytes และใช้ collection + threshold เดียวกับระบบ enrollment
+            </div>
+            <div class="step-output">
+              FaceId<br />
+              ImageId<br />
+              Similarity
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 08</div>
+            <div class="step-title">Map FaceId to user</div>
+            <div class="step-body">
+              Backend lookup `user_face_profiles.face_id` เพื่อหา user
+              แล้วกรองเฉพาะ account ที่ยัง active และไม่ disabled
+            </div>
+            <div class="step-output">
+              recognized<br />
+              unknown<br />
+              ignored
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 09</div>
+            <div class="step-title">Insert attendance event</div>
+            <div class="step-body">
+              บันทึกทุกผลลัพธ์ลง `client_attendance_events`: camera, direction,
+              decision, matched user, similarity, image hash และ metadata
+            </div>
+            <div class="step-output">
+              no raw image<br />
+              SHA-256 only
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 10</div>
+            <div class="step-title">Apply visit state</div>
+            <div class="step-body">
+              ถ้าเป็น `entry` และยังไม่มี open visit จะสร้าง `inside`.
+              ถ้าเป็น `exit` และมี open visit จะปิดเป็น `exited`
+            </div>
+            <div class="step-output">
+              client_visits.inside<br />
+              client_visits.exited
+            </div>
+          </div>
+
+          <div class="step">
+            <div class="step-number">Step 11</div>
+            <div class="step-title">Return worker feedback</div>
+            <div class="step-body">
+              Backend ส่งผลกลับให้ worker แสดงบน preview window เช่น recognized,
+              user name, similarity และ visit status
+            </div>
+            <div class="step-output">
+              event.id<br />
+              user<br />
+              visit.status
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>Runtime Boundaries</h2>
+          <p>
+            ขอบเขตนี้ช่วยให้ PoC คุม cost และ security ได้ โดยแยกหน้าที่ worker,
+            backend และ AWS ออกจากกัน
+          </p>
+        </div>
+
+        <div class="lanes">
+          <div class="lane">
+            <h3>Worker responsibility</h3>
+            <ul>
+              <li>เปิดกล้องและอ่าน frame</li>
+              <li>detect/crop ใบหน้าในเครื่อง</li>
+              <li>throttle request ไม่ส่งทุก frame</li>
+              <li>ส่ง API key และ metadata ของ camera</li>
+            </ul>
+          </div>
+          <div class="lane">
+            <h3>Backend responsibility</h3>
+            <ul>
+              <li>ถือ AWS credential ฝั่ง server เท่านั้น</li>
+              <li>validate image และ request</li>
+              <li>ค้น Rekognition collection</li>
+              <li>ตัดสินใจ entry/exit state และบันทึก DB</li>
+            </ul>
+          </div>
+          <div class="lane">
+            <h3>Explicit non-goals</h3>
+            <ul>
+              <li>ยังไม่ทำ liveness ที่หน้าร้าน</li>
+              <li>ยังไม่ทำ tracking ข้ามกล้อง</li>
+              <li>ยังไม่เก็บภาพ raw หรือ video</li>
+              <li>ยังไม่ index ใบหน้าใหม่จาก worker</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <h2>DB Write Model</h2>
+          <p>
+            ระบบแยก event log ออกจาก visit session เพื่อให้ audit ได้ และยัง query
+            สถานะลูกค้าที่อยู่ในร้านได้ง่าย
+          </p>
+        </div>
+
+        <div class="schema">
+          <div class="table-block">
+            <h3>client_attendance_events</h3>
+            <p>
+              immutable event ต่อ recognition attempt หนึ่งครั้ง ใช้ตรวจสอบว่า
+              กล้องเห็นอะไร ตอนไหน และ backend ตัดสินใจอย่างไร
+            </p>
+            <dl class="fields">
+              <dt>camera_id</dt>
+              <dd>กล้องที่ส่ง event</dd>
+              <dt>direction</dt>
+              <dd>entry / exit / sighting</dd>
+              <dt>decision</dt>
+              <dd>recognized / unknown / ignored</dd>
+              <dt>matched_user_id</dt>
+              <dd>user ที่ match ได้</dd>
+              <dt>matched_face_id</dt>
+              <dd>FaceId จาก Rekognition</dd>
+              <dt>image_sha256</dt>
+              <dd>hash ของรูป crop</dd>
+            </dl>
+          </div>
+
+          <div class="table-block">
+            <h3>client_visits</h3>
+            <p>
+              inferred session ของลูกค้าในร้าน หนึ่ง user มี open visit ได้แค่
+              หนึ่งรายการด้วย unique index
+            </p>
+            <dl class="fields">
+              <dt>user_id</dt>
+              <dd>ลูกค้าที่รู้จักแล้ว</dd>
+              <dt>status</dt>
+              <dd>inside / exited / unknown_exit</dd>
+              <dt>entered_at</dt>
+              <dd>เวลาเข้าจาก entry event</dd>
+              <dt>exited_at</dt>
+              <dd>เวลาออกจาก exit event</dd>
+              <dt>entry_event_id</dt>
+              <dd>event ที่เปิด visit</dd>
+              <dt>exit_event_id</dt>
+              <dd>event ที่ปิด visit</dd>
+            </dl>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="callout">
+          <h2>Env Contract</h2>
+          <div>
+            <p>
+              <strong>Next.js backend</strong> ต้องมี API key สำหรับ worker และ
+              image size limit ส่วน <strong>Python worker</strong> แต่ละเครื่อง
+              ต้องตั้ง backend URL, camera ID และ direction ให้ตรงกับตำแหน่งกล้อง
+            </p>
+            <pre class="mono-block"># Next.js .env
+CLIENT_ATTENDANCE_API_KEY=&lt;long-random-secret&gt;
+CLIENT_ATTENDANCE_MAX_IMAGE_BYTES=800000
+
+# Worker .env
+ATTENDANCE_BACKEND_URL=http://&lt;main-mac-lan-ip&gt;:3000
+ATTENDANCE_API_KEY=&lt;same-secret&gt;
+ATTENDANCE_CAMERA_ID=entry-camera-01
+ATTENDANCE_DIRECTION=entry
+ATTENDANCE_CAMERA_INDEX=0</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

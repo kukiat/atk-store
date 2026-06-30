@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  type FaceMatch,
   IndexFacesCommand,
   SearchFacesByImageCommand,
 } from "@aws-sdk/client-rekognition";
@@ -205,9 +206,7 @@ class FaceRecognitionService {
     return profile ?? null;
   }
 
-  private async getProfileByFaceId(
-    faceId: string,
-  ): Promise<UserFaceProfile | null> {
+  async getProfileByFaceId(faceId: string): Promise<UserFaceProfile | null> {
     const [profile] = await db
       .select()
       .from(userFaceProfiles)
@@ -215,6 +214,33 @@ class FaceRecognitionService {
       .limit(1);
 
     return profile ?? null;
+  }
+
+  async searchBestFaceFromBytes(
+    imageBytes: Uint8Array,
+  ): Promise<SearchMatch | null> {
+    const config = getFaceRecognitionConfig();
+
+    try {
+      const { FaceMatches } = await getRekognitionClient().send(
+        new SearchFacesByImageCommand({
+          CollectionId: config.collectionId,
+          Image: {
+            Bytes: imageBytes,
+          },
+          FaceMatchThreshold: config.matchThreshold,
+          MaxFaces: 1,
+          QualityFilter: config.qualityFilter,
+        }),
+      );
+
+      return this.readBestMatch(FaceMatches);
+    } catch (error) {
+      if (isInvalidImageError(error)) {
+        return null;
+      }
+      throw error;
+    }
   }
 
   private async searchBestFace(
@@ -238,23 +264,26 @@ class FaceRecognitionService {
           QualityFilter: config.qualityFilter,
         }),
       );
-
-      const match = FaceMatches?.[0];
-      if (!match?.Face?.FaceId || typeof match.Similarity !== "number") {
-        return null;
-      }
-
-      return {
-        faceId: match.Face.FaceId,
-        imageId: match.Face.ImageId,
-        similarity: match.Similarity,
-      };
+      return this.readBestMatch(FaceMatches);
     } catch (error) {
       if (isInvalidImageError(error)) {
         return null;
       }
       throw error;
     }
+  }
+
+  private readBestMatch(matches: FaceMatch[] | undefined): SearchMatch | null {
+    const match = matches?.[0];
+    if (!match?.Face?.FaceId || typeof match.Similarity !== "number") {
+      return null;
+    }
+
+    return {
+      faceId: match.Face.FaceId,
+      imageId: match.Face.ImageId,
+      similarity: match.Similarity,
+    };
   }
 }
 

@@ -47,24 +47,20 @@ export const roleGrantStatusEnum = db_schema.enum("role_grant_status", [
  * - `pending`: an attempt is in flight.
  * - `registered`: a liveness attempt passed and a face profile was indexed.
  */
-export const faceEnrollmentStatusEnum = db_schema.enum("face_enrollment_status", [
-  "not_registered",
-  "pending",
-  "registered",
-]);
+export const faceEnrollmentStatusEnum = db_schema.enum(
+  "face_enrollment_status",
+  ["not_registered", "pending", "registered"],
+);
 
 /**
  * Lifecycle of a single Rekognition Face Liveness attempt.
  * Terminal states (`succeeded`, `failed`, `expired`, `cancelled`) are never
  * re-used; a new attempt must be created explicitly.
  */
-export const livenessAttemptStatusEnum = db_schema.enum("liveness_attempt_status", [
-  "pending",
-  "succeeded",
-  "failed",
-  "expired",
-  "cancelled",
-]);
+export const livenessAttemptStatusEnum = db_schema.enum(
+  "liveness_attempt_status",
+  ["pending", "succeeded", "failed", "expired", "cancelled"],
+);
 
 /**
  * Why a Face Liveness attempt exists. Enrollment attempts can create/update a
@@ -81,12 +77,29 @@ export const faceLivenessIntentEnum = db_schema.enum("face_liveness_intent", [
  * repeated result reads idempotent: once a terminal recognition decision is
  * stored, the API can return it without another Rekognition search/index call.
  */
-export const faceRecognitionOutcomeEnum = db_schema.enum("face_recognition_outcome", [
-  "registered",
-  "verified",
-  "mismatch",
-  "duplicate",
-  "not_indexed",
+export const faceRecognitionOutcomeEnum = db_schema.enum(
+  "face_recognition_outcome",
+  ["registered", "verified", "mismatch", "duplicate", "not_indexed"],
+);
+
+/** Physical camera intent in the store attendance PoC. */
+export const attendanceDirectionEnum = db_schema.enum("attendance_direction", [
+  "entry",
+  "exit",
+  "sighting",
+]);
+
+/** Backend decision for one frame submitted by a camera worker. */
+export const attendanceRecognitionDecisionEnum = db_schema.enum(
+  "attendance_recognition_decision",
+  ["recognized", "unknown", "ignored"],
+);
+
+/** Current lifecycle of a customer visit inferred from entry/exit cameras. */
+export const clientVisitStatusEnum = db_schema.enum("client_visit_status", [
+  "inside",
+  "exited",
+  "unknown_exit",
 ]);
 
 /**
@@ -150,9 +163,12 @@ export const userRoles = db_schema.table(
     roleId: integer("role_id")
       .notNull()
       .references(() => roles.id, { onDelete: "cascade" }),
-    assignedByUserId: integer("assigned_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
+    assignedByUserId: integer("assigned_by_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -176,9 +192,12 @@ export const roleGrants = db_schema.table(
     invitedByUserId: integer("invited_by_user_id").references(() => users.id, {
       onDelete: "set null",
     }),
-    acceptedByUserId: integer("accepted_by_user_id").references(() => users.id, {
-      onDelete: "set null",
-    }),
+    acceptedByUserId: integer("accepted_by_user_id").references(
+      () => users.id,
+      {
+        onDelete: "set null",
+      },
+    ),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -310,6 +329,62 @@ export const userFaceProfiles = db_schema.table(
   ],
 );
 
+/**
+ * One camera worker recognition result. The backend stores only metadata,
+ * Rekognition IDs, and a SHA-256 digest of the submitted frame; it does not
+ * retain the image bytes.
+ */
+export const clientAttendanceEvents = db_schema.table(
+  "client_attendance_events",
+  {
+    id: serial("id").primaryKey(),
+    cameraId: text("camera_id").notNull(),
+    direction: attendanceDirectionEnum("direction").notNull(),
+    decision: attendanceRecognitionDecisionEnum("decision").notNull(),
+    matchedUserId: integer("matched_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    matchedFaceId: text("matched_face_id"),
+    similarity: doublePrecision("similarity"),
+    imageSha256: text("image_sha256").notNull(),
+    workerCapturedAt: timestamp("worker_captured_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+);
+
+/**
+ * Store visit session inferred from recognition events. The initial PoC keeps a
+ * single open visit per user and closes it when an exit camera recognizes them.
+ */
+export const clientVisits = db_schema.table(
+  "client_visits",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: clientVisitStatusEnum("status").notNull().default("inside"),
+    enteredAt: timestamp("entered_at", { withTimezone: true }).notNull(),
+    exitedAt: timestamp("exited_at", { withTimezone: true }),
+    entryEventId: integer("entry_event_id"),
+    exitEventId: integer("exit_event_id"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("client_visits_one_open_per_user")
+      .on(table.userId)
+      .where(sql`${table.status} = 'inside'`),
+  ],
+);
+
 export const usersRelations = relations(users, ({ many, one }) => ({
   sessions: many(sessions),
   faceLivenessAttempts: many(faceLivenessAttempts),
@@ -319,6 +394,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   auditEvents: many(adminAuditLogs, { relationName: "auditActor" }),
   targetedAuditEvents: many(adminAuditLogs, { relationName: "auditTarget" }),
   faceProfile: one(userFaceProfiles),
+  attendanceEvents: many(clientAttendanceEvents),
+  clientVisits: many(clientVisits),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
@@ -406,6 +483,23 @@ export const userFaceProfilesRelations = relations(
   }),
 );
 
+export const clientAttendanceEventsRelations = relations(
+  clientAttendanceEvents,
+  ({ one }) => ({
+    matchedUser: one(users, {
+      fields: [clientAttendanceEvents.matchedUserId],
+      references: [users.id],
+    }),
+  }),
+);
+
+export const clientVisitsRelations = relations(clientVisits, ({ one }) => ({
+  user: one(users, {
+    fields: [clientVisits.userId],
+    references: [users.id],
+  }),
+}));
+
 /**
  * A physical smart shelf in the store.
  * `id` is the human-readable code encoded in the shelf QR (e.g. "A12").
@@ -487,6 +581,11 @@ export type FaceLivenessAttempt = typeof faceLivenessAttempts.$inferSelect;
 export type NewFaceLivenessAttempt = typeof faceLivenessAttempts.$inferInsert;
 export type UserFaceProfile = typeof userFaceProfiles.$inferSelect;
 export type NewUserFaceProfile = typeof userFaceProfiles.$inferInsert;
+export type ClientAttendanceEvent = typeof clientAttendanceEvents.$inferSelect;
+export type NewClientAttendanceEvent =
+  typeof clientAttendanceEvents.$inferInsert;
+export type ClientVisit = typeof clientVisits.$inferSelect;
+export type NewClientVisit = typeof clientVisits.$inferInsert;
 
 /** Union of supported sign-in channels, e.g. "google" | "line" | … */
 export type AuthMethod = (typeof authMethodEnum.enumValues)[number];
@@ -513,3 +612,15 @@ export type FaceLivenessIntent =
 /** Stored recognition decision for a terminal liveness attempt. */
 export type FaceRecognitionOutcome =
   (typeof faceRecognitionOutcomeEnum.enumValues)[number];
+
+/** Camera worker direction. */
+export type AttendanceDirection =
+  (typeof attendanceDirectionEnum.enumValues)[number];
+
+/** Backend decision for a camera worker frame. */
+export type AttendanceRecognitionDecision =
+  (typeof attendanceRecognitionDecisionEnum.enumValues)[number];
+
+/** Inferred customer visit lifecycle. */
+export type ClientVisitStatus =
+  (typeof clientVisitStatusEnum.enumValues)[number];

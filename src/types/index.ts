@@ -1,18 +1,26 @@
-import type { Product, Shelf } from "@/db/schema";
+import type { Inventory, Shelf } from "@/db/schema";
 
-export type { Product, Shelf };
+export type { Inventory, Shelf };
 
-/** A shelf together with the products placed on it, ordered by position. */
-export type ShelfWithProducts = Shelf & {
-  products: Product[];
+/** A shelf together with active inventory items. */
+export type ShelfWithInventories = Shelf & {
+  inventories: Inventory[];
 };
 
 /** A single line in the client-side cart. */
 export type CartItem = {
-  productId: number;
-  sku: string;
+  inventoryId: string;
+  shelfId: string;
   name: string;
-  priceCents: number;
+  price: number;
+  weightPerPiece: number;
+  unitId: string;
   imageUrl: string | null;
   quantity: number;
+};
+
+export type IotTransaction = {
+  shelfId: string;
+  amount: number;
+  weightPerPiece: number;
 };

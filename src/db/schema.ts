@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   doublePrecision,
+  boolean,
   integer,
   jsonb,
   primaryKey,
@@ -8,6 +9,7 @@ import {
   text,
   timestamp,
   uniqueIndex,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 import db_schema from "./db_schema";
@@ -101,6 +103,40 @@ export const clientVisitStatusEnum = db_schema.enum("client_visit_status", [
   "exited",
   "unknown_exit",
 ]);
+
+export const orderStatusEnum = db_schema.enum("order_status", [
+  "pending",
+  "paid",
+  "failed",
+  "cancelled",
+]);
+
+export const paymentStatusEnum = db_schema.enum("payment_status", [
+  "pending",
+  "paid",
+  "failed",
+  "cancelled",
+]);
+
+export const notificationRecipientTypeEnum = db_schema.enum(
+  "notification_recipient_type",
+  ["client", "admin", "super_admin"],
+);
+
+export const notificationSeverityEnum = db_schema.enum(
+  "notification_severity",
+  ["info", "warning", "error"],
+);
+
+const lifecycleColumns = {
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+};
 
 /**
  * An enrolled user. One row per person, keyed by email. `authMethod` records
@@ -500,76 +536,179 @@ export const clientVisitsRelations = relations(clientVisits, ({ one }) => ({
   }),
 }));
 
-/**
- * A physical smart shelf in the store.
- * `id` is the human-readable code encoded in the shelf QR (e.g. "A12").
- */
-export const shelves = db_schema.table("shelves", {
-  id: text("id").primaryKey(),
+/** A physical integrated box/group that can contain multiple shelves. */
+export const groups = db_schema.table("groups", {
+  id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull(),
-  location: text("location"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
+  ...lifecycleColumns,
 });
 
-/**
- * A product in the catalog. Prices are stored as integer minor units
- * (satang) to avoid floating-point money bugs.
- */
-export const products = db_schema.table("products", {
-  id: serial("id").primaryKey(),
-  sku: text("sku").notNull().unique(),
+/** A physical smart shelf. Group is optional for standalone shelves. */
+export const shelfs = db_schema.table("shelfs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  groupId: uuid("group_id").references(() => groups.id, {
+    onDelete: "set null",
+  }),
+  name: text("name").notNull(),
+  imageUrl: text("image_url"),
+  sensorId: text("sensor_id"),
+  ...lifecycleColumns,
+});
+
+export const units = db_schema.table("units", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  name: text("name").notNull().unique(),
+  ...lifecycleColumns,
+});
+
+/** Sellable inventory item. This replaces the older products table. */
+export const inventories = db_schema.table("inventories", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  shelfId: uuid("shelf_id")
+    .notNull()
+    .references(() => shelfs.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
-  priceCents: integer("price_cents").notNull(),
-  imageUrl: text("image_url"),
-  stock: integer("stock").notNull().default(0),
-  createdAt: timestamp("created_at", { withTimezone: true })
+  price: doublePrecision("price").notNull(),
+  amount: integer("amount").notNull().default(0),
+  weightPerPiece: doublePrecision("weight_per_piece").notNull(),
+  unitId: uuid("unit_id")
     .notNull()
-    .defaultNow(),
+    .references(() => units.id, { onDelete: "restrict" }),
+  isActive: boolean("is_active").notNull().default(true),
+  imageUrl: text("image_url"),
+  ...lifecycleColumns,
 });
 
-/**
- * Many-to-many join between shelves and products.
- * A product can live on several shelves; `position` orders it on a shelf.
- */
-export const shelfProducts = db_schema.table(
-  "shelf_products",
-  {
-    shelfId: text("shelf_id")
-      .notNull()
-      .references(() => shelves.id, { onDelete: "cascade" }),
-    productId: integer("product_id")
-      .notNull()
-      .references(() => products.id, { onDelete: "cascade" }),
-    position: integer("position").notNull().default(0),
-  },
-  (table) => [primaryKey({ columns: [table.shelfId, table.productId] })],
-);
+export const qrCodes = db_schema.table("qr_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  imageUrl: text("image_url"),
+  shelfIds: text("shelf_ids").notNull(),
+  encodedPayload: text("encoded_payload").notNull(),
+  description: text("description"),
+  ...lifecycleColumns,
+});
 
-export const shelvesRelations = relations(shelves, ({ many }) => ({
-  shelfProducts: many(shelfProducts),
-}));
+export const orders = db_schema.table("orders", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientVisitId: integer("client_visit_id")
+    .notNull()
+    .references(() => clientVisits.id, { onDelete: "cascade" }),
+  status: orderStatusEnum("status").notNull().default("paid"),
+  paymentStatus: paymentStatusEnum("payment_status").notNull().default("paid"),
+  totalPrice: doublePrecision("total_price").notNull().default(0),
+  paymentReference: text("payment_reference"),
+  ...lifecycleColumns,
+});
 
-export const productsRelations = relations(products, ({ many }) => ({
-  shelfProducts: many(shelfProducts),
-}));
-
-export const shelfProductsRelations = relations(shelfProducts, ({ one }) => ({
-  shelf: one(shelves, {
-    fields: [shelfProducts.shelfId],
-    references: [shelves.id],
+export const orderItems = db_schema.table("order_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  orderId: uuid("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+  inventoryId: uuid("inventory_id").references(() => inventories.id, {
+    onDelete: "set null",
   }),
-  product: one(products, {
-    fields: [shelfProducts.productId],
-    references: [products.id],
+  name: text("name").notNull(),
+  price: doublePrecision("price").notNull(),
+  amount: integer("amount").notNull(),
+  weightPerPiece: doublePrecision("weight_per_piece").notNull(),
+  unitId: uuid("unit_id").references(() => units.id, { onDelete: "set null" }),
+  imageUrl: text("image_url"),
+  ...lifecycleColumns,
+});
+
+export const notifications = db_schema.table("notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientVisitId: integer("client_visit_id").references(() => clientVisits.id, {
+    onDelete: "set null",
+  }),
+  recipientType: notificationRecipientTypeEnum("recipient_type").notNull(),
+  userId: integer("user_id").references(() => users.id, {
+    onDelete: "set null",
+  }),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  severity: notificationSeverityEnum("severity").notNull().default("info"),
+  isRead: boolean("is_read").notNull().default(false),
+  rawPayload: jsonb("raw_payload").$type<Record<string, unknown>>(),
+  ...lifecycleColumns,
+});
+
+export const groupsRelations = relations(groups, ({ many }) => ({
+  shelfs: many(shelfs),
+}));
+
+export const shelfsRelations = relations(shelfs, ({ many, one }) => ({
+  group: one(groups, {
+    fields: [shelfs.groupId],
+    references: [groups.id],
+  }),
+  inventories: many(inventories),
+}));
+
+export const unitsRelations = relations(units, ({ many }) => ({
+  inventories: many(inventories),
+  orderItems: many(orderItems),
+}));
+
+export const inventoriesRelations = relations(inventories, ({ one }) => ({
+  shelf: one(shelfs, {
+    fields: [inventories.shelfId],
+    references: [shelfs.id],
+  }),
+  unit: one(units, {
+    fields: [inventories.unitId],
+    references: [units.id],
   }),
 }));
 
-export type Shelf = typeof shelves.$inferSelect;
-export type Product = typeof products.$inferSelect;
-export type ShelfProduct = typeof shelfProducts.$inferSelect;
+export const ordersRelations = relations(orders, ({ many, one }) => ({
+  clientVisit: one(clientVisits, {
+    fields: [orders.clientVisitId],
+    references: [clientVisits.id],
+  }),
+  items: many(orderItems),
+}));
+
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderItems.orderId],
+    references: [orders.id],
+  }),
+  inventory: one(inventories, {
+    fields: [orderItems.inventoryId],
+    references: [inventories.id],
+  }),
+  unit: one(units, {
+    fields: [orderItems.unitId],
+    references: [units.id],
+  }),
+}));
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  clientVisit: one(clientVisits, {
+    fields: [notifications.clientVisitId],
+    references: [clientVisits.id],
+  }),
+  user: one(users, {
+    fields: [notifications.userId],
+    references: [users.id],
+  }),
+}));
+
+export type Group = typeof groups.$inferSelect;
+export type NewGroup = typeof groups.$inferInsert;
+export type Shelf = typeof shelfs.$inferSelect;
+export type NewShelf = typeof shelfs.$inferInsert;
+export type Inventory = typeof inventories.$inferSelect;
+export type NewInventory = typeof inventories.$inferInsert;
+export type QrCode = typeof qrCodes.$inferSelect;
+export type Unit = typeof units.$inferSelect;
+export type NewUnit = typeof units.$inferInsert;
+export type Order = typeof orders.$inferSelect;
+export type OrderItem = typeof orderItems.$inferSelect;
+export type Notification = typeof notifications.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Session = typeof sessions.$inferSelect;

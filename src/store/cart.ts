@@ -3,13 +3,13 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import type { CartItem, Product } from "@/types";
+import type { CartItem, Inventory } from "@/types";
 
 type CartState = {
   items: CartItem[];
-  addItem: (product: Product, quantity?: number) => void;
-  removeItem: (productId: number) => void;
-  setQty: (productId: number, quantity: number) => void;
+  addItem: (inventory: Inventory, quantity?: number) => void;
+  removeItem: (inventoryId: string) => void;
+  setQty: (inventoryId: string, quantity: number) => void;
   clear: () => void;
 };
 
@@ -18,15 +18,15 @@ export const useCartStore = create<CartState>()(
     (set) => ({
       items: [],
 
-      addItem: (product, quantity = 1) =>
+      addItem: (inventory, quantity = 1) =>
         set((state) => {
           const existing = state.items.find(
-            (item) => item.productId === product.id,
+            (item) => item.inventoryId === inventory.id,
           );
           if (existing) {
             return {
               items: state.items.map((item) =>
-                item.productId === product.id
+                item.inventoryId === inventory.id
                   ? { ...item, quantity: item.quantity + quantity }
                   : item,
               ),
@@ -36,29 +36,33 @@ export const useCartStore = create<CartState>()(
             items: [
               ...state.items,
               {
-                productId: product.id,
-                sku: product.sku,
-                name: product.name,
-                priceCents: product.priceCents,
-                imageUrl: product.imageUrl,
+                inventoryId: inventory.id,
+                shelfId: inventory.shelfId,
+                name: inventory.name,
+                price: inventory.price,
+                weightPerPiece: inventory.weightPerPiece,
+                unitId: inventory.unitId,
+                imageUrl: inventory.imageUrl,
                 quantity,
               },
             ],
           };
         }),
 
-      removeItem: (productId) =>
+      removeItem: (inventoryId) =>
         set((state) => ({
-          items: state.items.filter((item) => item.productId !== productId),
+          items: state.items.filter((item) => item.inventoryId !== inventoryId),
         })),
 
-      setQty: (productId, quantity) =>
+      setQty: (inventoryId, quantity) =>
         set((state) => ({
           items:
             quantity <= 0
-              ? state.items.filter((item) => item.productId !== productId)
+              ? state.items.filter((item) => item.inventoryId !== inventoryId)
               : state.items.map((item) =>
-                  item.productId === productId ? { ...item, quantity } : item,
+                  item.inventoryId === inventoryId
+                    ? { ...item, quantity }
+                    : item,
                 ),
         })),
 
@@ -72,6 +76,6 @@ export const useCartStore = create<CartState>()(
 export const selectTotalCount = (state: CartState): number =>
   state.items.reduce((sum, item) => sum + item.quantity, 0);
 
-/** Total price of the cart in satang. */
-export const selectTotalCents = (state: CartState): number =>
-  state.items.reduce((sum, item) => sum + item.priceCents * item.quantity, 0);
+/** Total price of the cart in baht. */
+export const selectTotalPrice = (state: CartState): number =>
+  state.items.reduce((sum, item) => sum + item.price * item.quantity, 0);

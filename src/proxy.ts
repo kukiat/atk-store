@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextRequest, userAgent } from "next/server";
 
 import { PUBLIC_PATHS, SESSION_COOKIE, SIGN_IN_PATH } from "@/lib/auth-shared";
 
@@ -14,12 +14,27 @@ import { PUBLIC_PATHS, SESSION_COOKIE, SIGN_IN_PATH } from "@/lib/auth-shared";
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = Boolean(request.cookies.get(SESSION_COOKIE)?.value);
+  const deviceType = userAgent(request).device.type;
+  const mobileOnly =
+    pathname === "/cart" ||
+    pathname === "/scan" ||
+    pathname.startsWith("/scan/") ||
+    pathname.startsWith("/shelf/");
   const isPublic = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 
   if (!hasSession && !isPublic) {
     return NextResponse.redirect(new URL(SIGN_IN_PATH, request.url));
+  }
+
+  if (
+    mobileOnly &&
+    deviceType !== "mobile" &&
+    deviceType !== "tablet" &&
+    pathname !== "/unsupported-device"
+  ) {
+    return NextResponse.redirect(new URL("/unsupported-device", request.url));
   }
 
   return NextResponse.next();

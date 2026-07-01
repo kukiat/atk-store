@@ -14,7 +14,7 @@ export default async function ShelfPage({
   if (!user) redirect("/signin");
 
   const { id } = await params;
-  const shelf = await shelfService.getShelfWithProducts(id);
+  const shelf = await shelfService.getShelfWithInventories(id);
 
   if (!shelf) notFound();
 
@@ -23,18 +23,20 @@ export default async function ShelfPage({
       <header className="mb-6">
         <p className="text-muted-foreground text-sm">ชั้นวาง {shelf.id}</p>
         <h1 className="text-xl font-bold">{shelf.name}</h1>
-        {shelf.location && (
-          <p className="text-muted-foreground text-sm">{shelf.location}</p>
+        {shelf.sensorId && (
+          <p className="text-muted-foreground text-sm">
+            Sensor {shelf.sensorId}
+          </p>
         )}
       </header>
 
-      {shelf.products.length === 0 ? (
+      {shelf.inventories.length === 0 ? (
         <p className="text-muted-foreground py-12 text-center">
           ยังไม่มีสินค้าบนชั้นนี้
         </p>
       ) : (
         <div className="grid gap-4">
-          {shelf.products.map((product) => (
+          {shelf.inventories.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>

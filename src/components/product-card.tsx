@@ -12,14 +12,14 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { formatPrice } from "@/lib/format";
+import { formatBaht } from "@/lib/format";
 import { useCartStore } from "@/store/cart";
-import type { Product } from "@/types";
+import type { Inventory } from "@/types";
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product }: { product: Inventory }) {
   const addItem = useCartStore((state) => state.addItem);
   const [justAdded, setJustAdded] = useState(false);
-  const outOfStock = product.stock <= 0;
+  const outOfStock = !product.isActive || product.amount <= 0;
 
   useEffect(() => {
     if (!justAdded) return;
@@ -37,12 +37,12 @@ export function ProductCard({ product }: { product: Product }) {
       </CardHeader>
       <CardContent className="mt-auto flex items-center justify-between">
         <span className="text-lg font-semibold">
-          {formatPrice(product.priceCents)}
+          {formatBaht(product.price)}
         </span>
         {outOfStock ? (
           <Badge variant="secondary">สินค้าหมด</Badge>
         ) : (
-          <Badge variant="outline">เหลือ {product.stock} ชิ้น</Badge>
+          <Badge variant="outline">เหลือ {product.amount} ชิ้น</Badge>
         )}
       </CardContent>
       <CardFooter>

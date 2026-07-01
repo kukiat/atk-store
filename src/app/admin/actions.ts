@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { requireCurrentUser } from "@/lib/auth";
+import { adminInventoryService } from "@/services/admin-inventory.service";
 import { adminUserService } from "@/services/admin-user.service";
 
 async function requireAdminActor() {
@@ -88,4 +89,74 @@ export async function revokeAdminRoleAction(formData: FormData) {
   await adminUserService.revokeAdminRole(actor, userId);
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${userId}`);
+}
+
+async function revalidateInventoryAdmin() {
+  revalidatePath("/admin/inventory");
+}
+
+export async function saveGroupAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.saveGroup(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function deleteGroupAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.deleteGroup(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function saveUnitAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.saveUnit(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function deleteUnitAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.deleteUnit(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function saveShelfAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.saveShelf(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function deleteShelfAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.deleteShelf(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function saveInventoryAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.saveInventory(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function deleteInventoryAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.deleteInventory(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function importInventoriesAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.importInventories(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function createQrCodeAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.createQrCode(actor, formData);
+  await revalidateInventoryAdmin();
+}
+
+export async function deleteQrCodeAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  await adminInventoryService.deleteQrCode(actor, formData);
+  await revalidateInventoryAdmin();
 }

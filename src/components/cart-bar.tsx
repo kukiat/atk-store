@@ -3,9 +3,9 @@
 import { ShoppingCart } from "lucide-react";
 import Link from "next/link";
 
-import { formatPrice } from "@/lib/format";
+import { formatBaht } from "@/lib/format";
 import { useHydrated } from "@/lib/use-hydrated";
-import { selectTotalCents, selectTotalCount, useCartStore } from "@/store/cart";
+import { selectTotalCount, selectTotalPrice, useCartStore } from "@/store/cart";
 
 /**
  * Floating bar pinned to the bottom of the viewport that summarises the cart
@@ -15,7 +15,7 @@ import { selectTotalCents, selectTotalCount, useCartStore } from "@/store/cart";
 export function CartBar() {
   const hydrated = useHydrated();
   const count = useCartStore(selectTotalCount);
-  const total = useCartStore(selectTotalCents);
+  const total = useCartStore(selectTotalPrice);
 
   if (!hydrated || count === 0) return null;
 
@@ -34,7 +34,7 @@ export function CartBar() {
           </span>
           ดูตะกร้า
         </span>
-        <span className="font-semibold">{formatPrice(total)}</span>
+        <span className="font-semibold">{formatBaht(total)}</span>
       </Link>
     </div>
   );

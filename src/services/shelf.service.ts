@@ -1,40 +1,49 @@
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, inArray } from "drizzle-orm";
 
 import { db } from "@/db";
-import { products, shelfProducts, shelves } from "@/db/schema";
-import type { ShelfWithProducts } from "@/types";
+import { inventories, shelfs } from "@/db/schema";
+import type { ShelfWithInventories } from "@/types";
 
-/**
- * Business logic for shelves. Combines validation + data access in one layer.
- * Both Server Components and API routes call through the shared `shelfService`
- * singleton so logic stays in one place.
- */
 class ShelfService {
-  /**
-   * Load a shelf and the products placed on it, ordered by their shelf position.
-   * Returns null when the shelf code does not exist.
-   */
-  async getShelfWithProducts(
+  async getShelfWithInventories(
     shelfId: string,
-  ): Promise<ShelfWithProducts | null> {
-    const normalizedId = shelfId.trim().toUpperCase();
+  ): Promise<ShelfWithInventories | null> {
+    const normalizedId = shelfId.trim();
     if (!normalizedId) return null;
 
-    const shelf = await db.query.shelves.findFirst({
-      where: eq(shelves.id, normalizedId),
+    const shelf = await db.query.shelfs.findFirst({
+      where: and(eq(shelfs.id, normalizedId), isNull(shelfs.deletedAt)),
     });
     if (!shelf) return null;
 
     const rows = await db
-      .select({ product: products })
-      .from(shelfProducts)
-      .innerJoin(products, eq(shelfProducts.productId, products.id))
-      .where(eq(shelfProducts.shelfId, normalizedId))
-      .orderBy(asc(shelfProducts.position));
+      .select()
+      .from(inventories)
+      .where(
+        and(
+          eq(inventories.shelfId, shelf.id),
+          eq(inventories.isActive, true),
+          isNull(inventories.deletedAt),
+        ),
+      )
+      .orderBy(asc(inventories.name));
 
-    return { ...shelf, products: rows.map((row) => row.product) };
+    return { ...shelf, inventories: rows };
+  }
+
+  async listShelvesByIds(
+    shelfIds: string[],
+  ): Promise<(typeof shelfs.$inferSelect)[]> {
+    const ids = shelfIds.map((id) => id.trim()).filter(Boolean);
+    if (ids.length === 0) return [];
+
+    return db
+      .select()
+      .from(shelfs)
+      .where(and(inArray(shelfs.id, ids), isNull(shelfs.deletedAt)))
+      .orderBy(asc(shelfs.name));
   }
 }
 

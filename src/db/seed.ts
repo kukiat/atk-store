@@ -9,10 +9,11 @@ import { eq, inArray } from "drizzle-orm";
 import postgres from "postgres";
 
 import {
-  products,
+  groups,
+  inventories,
   roles,
-  shelfProducts,
-  shelves,
+  shelfs,
+  units,
   userRoles,
   users,
 } from "./schema";
@@ -28,53 +29,48 @@ if (!connectionString) {
 
 const client = postgres(connectionString, { max: 1 });
 const db = drizzle(client, {
-  schema: { products, roles, shelfProducts, shelves, userRoles, users },
+  schema: { groups, inventories, roles, shelfs, units, userRoles, users },
 });
 
-const SHELVES = [
-  { id: "A12", name: "ชั้นชุดตรวจ ATK", location: "โซนหน้าร้าน แถว A" },
-  { id: "B03", name: "ชั้นหน้ากากอนามัย", location: "โซนสุขภาพ แถว B" },
-];
-
-const PRODUCTS = [
+const INVENTORIES = [
   {
-    sku: "ATK-001",
     name: "ชุดตรวจ ATK แบบจมูก (1 เทสต์)",
     description: "ชุดตรวจหาเชื้อโควิด-19 ด้วยตัวเอง ทราบผลใน 15 นาที",
-    priceCents: 3500,
-    stock: 120,
+    price: 35,
+    amount: 120,
+    weightPerPiece: 25,
     imageUrl: null,
   },
   {
-    sku: "ATK-005",
     name: "ชุดตรวจ ATK แบบจมูก (แพ็ก 5 เทสต์)",
     description: "แพ็กประหยัด 5 ชิ้น เหมาะสำหรับครอบครัว",
-    priceCents: 15000,
-    stock: 60,
+    price: 150,
+    amount: 60,
+    weightPerPiece: 120,
     imageUrl: null,
   },
   {
-    sku: "ATK-SAL",
     name: "ชุดตรวจ ATK แบบน้ำลาย",
     description: "ตรวจง่ายด้วยน้ำลาย ไม่ต้องแยงจมูก",
-    priceCents: 4500,
-    stock: 40,
+    price: 45,
+    amount: 40,
+    weightPerPiece: 30,
     imageUrl: null,
   },
   {
-    sku: "MASK-KF94",
     name: "หน้ากากอนามัย KF94 (10 ชิ้น)",
     description: "หน้ากากทรง 3 มิติ กรองฝุ่นและเชื้อโรค",
-    priceCents: 6900,
-    stock: 200,
+    price: 69,
+    amount: 200,
+    weightPerPiece: 85,
     imageUrl: null,
   },
   {
-    sku: "MASK-SUR",
     name: "หน้ากากอนามัยทางการแพทย์ (50 ชิ้น)",
     description: "หน้ากาก 3 ชั้น มาตรฐานทางการแพทย์",
-    priceCents: 5900,
-    stock: 150,
+    price: 59,
+    amount: 150,
+    weightPerPiece: 180,
     imageUrl: null,
   },
 ];
@@ -166,29 +162,59 @@ async function main() {
   }
 
   // Idempotent reset so re-running gives a clean dataset.
-  await db.delete(shelfProducts);
-  await db.delete(products);
-  await db.delete(shelves);
+  await db.delete(inventories);
+  await db.delete(shelfs);
+  await db.delete(groups);
+  await db.delete(units);
 
-  await db.insert(shelves).values(SHELVES);
+  const [gram] = await db
+    .insert(units)
+    .values({ name: "gram", updatedAt: new Date() })
+    .returning({ id: units.id });
+  if (!gram) throw new Error("Failed to seed gram unit");
 
-  const insertedProducts = await db
-    .insert(products)
-    .values(PRODUCTS)
-    .returning({ id: products.id, sku: products.sku });
+  const [atkGroup] = await db
+    .insert(groups)
+    .values({ name: "ATK Integrated Box", updatedAt: new Date() })
+    .returning({ id: groups.id });
+  if (!atkGroup) throw new Error("Failed to seed group");
 
-  const idBySku = new Map(insertedProducts.map((p) => [p.sku, p.id]));
+  const insertedShelves = await db
+    .insert(shelfs)
+    .values([
+      {
+        groupId: atkGroup.id,
+        name: "ชั้นชุดตรวจ ATK",
+        sensorId: "mock-sensor-atk",
+        updatedAt: new Date(),
+      },
+      {
+        groupId: null,
+        name: "ชั้นหน้ากากอนามัย",
+        sensorId: "mock-sensor-mask",
+        updatedAt: new Date(),
+      },
+    ])
+    .returning({ id: shelfs.id, name: shelfs.name });
 
-  await db.insert(shelfProducts).values([
-    { shelfId: "A12", productId: idBySku.get("ATK-001")!, position: 0 },
-    { shelfId: "A12", productId: idBySku.get("ATK-005")!, position: 1 },
-    { shelfId: "A12", productId: idBySku.get("ATK-SAL")!, position: 2 },
-    { shelfId: "B03", productId: idBySku.get("MASK-KF94")!, position: 0 },
-    { shelfId: "B03", productId: idBySku.get("MASK-SUR")!, position: 1 },
-  ]);
+  const atkShelf = insertedShelves.find((shelf) => shelf.name.includes("ATK"));
+  const maskShelf = insertedShelves.find((shelf) =>
+    shelf.name.includes("หน้ากาก"),
+  );
+  if (!atkShelf || !maskShelf) throw new Error("Failed to seed shelves");
+
+  await db.insert(inventories).values(
+    INVENTORIES.map((inventory, index) => ({
+      ...inventory,
+      shelfId: index < 3 ? atkShelf.id : maskShelf.id,
+      unitId: gram.id,
+      isActive: true,
+      updatedAt: new Date(),
+    })),
+  );
 
   console.log(
-    `Seeded ${SHELVES.length} shelves, ${PRODUCTS.length} products, and ${MOCK_CLIENTS.length} mock clients.`,
+    `Seeded ${insertedShelves.length} shelves, ${INVENTORIES.length} inventories, and ${MOCK_CLIENTS.length} mock clients.`,
   );
 }
 

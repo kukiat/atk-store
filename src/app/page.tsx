@@ -1,4 +1,4 @@
-import { QrCode, ScanLine } from "lucide-react";
+import { QrCode, ScanLine, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -32,7 +32,9 @@ export default async function HomePage() {
 
           <div className="bg-muted text-muted-foreground flex w-full max-w-md items-center gap-2 rounded-lg px-4 py-3 text-sm md:max-w-none">
             <QrCode className="size-4 shrink-0" />
-            <span className="text-left">ตัวอย่าง: เปิดหน้าชั้นวางเพื่อทดลองใช้งาน</span>
+            <span className="text-left">
+              สแกน QR ที่ group หรือ shelf เพื่อเริ่มเลือกสินค้า
+            </span>
           </div>
         </div>
 
@@ -44,15 +46,13 @@ export default async function HomePage() {
           <FaceAuthStatusNotice />
 
           <div className="flex w-full flex-col gap-3 sm:grid sm:grid-cols-2 md:flex md:flex-col">
-            <Button render={<Link href="/shelf/A12" />} size="lg">
-              ชั้น A12 — ชุดตรวจ ATK
+            <Button render={<Link href="/scan" />} size="lg">
+              <QrCode className="size-4" />
+              สแกน QR
             </Button>
-            <Button
-              render={<Link href="/shelf/B03" />}
-              size="lg"
-              variant="outline"
-            >
-              ชั้น B03 — หน้ากากอนามัย
+            <Button render={<Link href="/cart" />} size="lg" variant="outline">
+              <ShoppingCart className="size-4" />
+              เปิดตะกร้า
             </Button>
           </div>
         </div>

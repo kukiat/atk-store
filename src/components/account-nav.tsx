@@ -8,15 +8,19 @@ import {
   LogOut,
   ScanLine,
   ShieldCheck,
+  ShoppingCart,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 import { ThemeToggle } from "@/components/theme-toggle";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import { formatBaht } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { useHydrated } from "@/lib/use-hydrated";
+import { selectTotalCount, selectTotalPrice, useCartStore } from "@/store/cart";
 
 type AccountNavProps = {
   user: {
@@ -31,6 +35,10 @@ export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
   const displayName = user.name ?? user.email;
   const pathname = usePathname();
   const isAdminPage = pathname.startsWith("/admin");
+  const hydrated = useHydrated();
+  const cartCount = useCartStore(selectTotalCount);
+  const cartTotal = useCartStore(selectTotalPrice);
+  const showCartBadge = hydrated && cartCount > 0;
 
   return (
     <header className="bg-background/95 sticky top-0 z-50 border-b">
@@ -63,27 +71,37 @@ export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
           )}
         >
           {isAdminPage ? (
-            <Button
-              render={<Link href="/" />}
-              variant="outline"
-              className="w-full md:w-auto"
+            <Link
+              href="/"
+              className={cn(
+                buttonVariants({ variant: "outline" }),
+                "w-full md:w-auto",
+              )}
             >
               <ArrowLeft className="size-4" />
               Home
-            </Button>
+            </Link>
           ) : null}
 
           <ThemeToggle />
 
           <Menu.Root modal={false}>
             <Menu.Trigger
-              className="border-border bg-card text-card-foreground focus-visible:border-ring focus-visible:ring-ring/50 flex h-11 w-full min-w-0 max-w-[calc(100vw-5.5rem)] items-center gap-2 rounded-lg border px-2 pr-3 text-left shadow-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 md:w-[320px]"
+              className="border-border bg-card text-card-foreground focus-visible:border-ring focus-visible:ring-ring/50 relative flex h-11 w-full min-w-0 max-w-[calc(100vw-5.5rem)] items-center gap-2 rounded-lg border px-2 pr-3 text-left shadow-sm outline-none transition-colors hover:bg-muted focus-visible:ring-3 md:w-[320px]"
               aria-label="เปิดเมนูโปรไฟล์"
             >
               <Avatar avatarUrl={user.avatarUrl} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 {displayName}
               </span>
+              {showCartBadge ? (
+                <span
+                  aria-label={`${cartCount} items in cart`}
+                  className="bg-primary text-primary-foreground absolute -top-2 -right-2 flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] font-bold tabular-nums"
+                >
+                  {cartCount}
+                </span>
+              ) : null}
               <ChevronDown className="text-muted-foreground size-4 shrink-0" />
             </Menu.Trigger>
             <Menu.Portal>
@@ -104,6 +122,21 @@ export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
                     <ScanLine className="size-4" />
                     Store home
                   </Menu.LinkItem>
+                  <Menu.LinkItem
+                    render={<Link href="/cart" />}
+                    closeOnClick
+                    className="data-[highlighted]:bg-muted flex items-center justify-between gap-3 rounded-md px-2 py-2 outline-none"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <ShoppingCart className="size-4" />
+                      <span>Cart</span>
+                    </span>
+                    {showCartBadge ? (
+                      <span className="text-muted-foreground text-xs tabular-nums">
+                        {cartCount} · {formatBaht(cartTotal)}
+                      </span>
+                    ) : null}
+                  </Menu.LinkItem>
                   {canAccessAdmin ? (
                     <Menu.LinkItem
                       render={<Link href="/admin/users" />}
@@ -117,6 +150,7 @@ export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
                   <Separator />
                   <form action="/api/auth/signout" method="post">
                     <Menu.Item
+                      nativeButton
                       render={<button type="submit" />}
                       className="text-destructive data-[highlighted]:bg-destructive/10 flex w-full items-center gap-2 rounded-md px-2 py-2 text-left outline-none"
                     >

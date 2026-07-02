@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
@@ -204,6 +204,23 @@ class AdminInventoryService {
   async saveShelf(actor: AdminActor, formData: FormData): Promise<void> {
     requireInventoryPermission(actor);
     const id = readOptionalText(formData.get("id"));
+    const sensorId = readOptionalText(formData.get("sensorId"));
+
+    if (sensorId) {
+      const conditions = [eq(shelfs.sensorId, sensorId), isNull(shelfs.deletedAt)];
+      if (id) conditions.push(ne(shelfs.id, id));
+
+      const [existingSensorShelf] = await db
+        .select({ id: shelfs.id })
+        .from(shelfs)
+        .where(and(...conditions))
+        .limit(1);
+
+      if (existingSensorShelf) {
+        throw new Error("This sensor ID is already assigned to another shelf");
+      }
+    }
+
     const uploadedImageUrl = await s3StorageService.uploadImageFile(
       readImageFile(formData),
       "shelf",
@@ -212,7 +229,7 @@ class AdminInventoryService {
       groupId: readOptionalText(formData.get("groupId")),
       name: readRequiredText(formData, "name"),
       imageUrl: uploadedImageUrl ?? readOptionalText(formData.get("imageUrl")),
-      sensorId: readOptionalText(formData.get("sensorId")),
+      sensorId,
       updatedAt: new Date(),
     };
 
@@ -235,12 +252,15 @@ class AdminInventoryService {
   async saveInventory(actor: AdminActor, formData: FormData): Promise<void> {
     requireInventoryPermission(actor);
     const id = readOptionalText(formData.get("id"));
+    const shelfId = readRequiredText(formData, "shelfId");
+    await this.requireShelfInventorySlot(shelfId, id);
+
     const uploadedImageUrl = await s3StorageService.uploadImageFile(
       readImageFile(formData),
       "product",
     );
     const values: NewInventory = {
-      shelfId: readRequiredText(formData, "shelfId"),
+      shelfId,
       name: readRequiredText(formData, "name"),
       description: readOptionalText(formData.get("description")),
       price: readRequiredNumber(formData, "price"),
@@ -309,13 +329,7 @@ class AdminInventoryService {
       const [existing] = await db
         .select({ id: inventories.id })
         .from(inventories)
-        .where(
-          and(
-            eq(inventories.shelfId, shelfId),
-            eq(inventories.name, name),
-            isNull(inventories.deletedAt),
-          ),
-        )
+        .where(and(eq(inventories.shelfId, shelfId), isNull(inventories.deletedAt)))
         .limit(1);
 
       if (existing) {
@@ -326,6 +340,27 @@ class AdminInventoryService {
       } else {
         await db.insert(inventories).values(payload);
       }
+    }
+  }
+
+  private async requireShelfInventorySlot(
+    shelfId: string,
+    currentInventoryId: string | null,
+  ): Promise<void> {
+    const conditions = [
+      eq(inventories.shelfId, shelfId),
+      isNull(inventories.deletedAt),
+    ];
+    if (currentInventoryId) conditions.push(ne(inventories.id, currentInventoryId));
+
+    const [existingInventory] = await db
+      .select({ id: inventories.id })
+      .from(inventories)
+      .where(and(...conditions))
+      .limit(1);
+
+    if (existingInventory) {
+      throw new Error("This shelf already has an inventory item");
     }
   }
 

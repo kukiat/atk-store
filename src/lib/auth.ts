@@ -34,8 +34,40 @@ export async function requireCurrentUser(): Promise<User> {
   return user;
 }
 
-/** Reject browser-originated mutations from a different origin. */
+function getOrigin(value: string | null): string | null {
+  if (!value) return null;
+
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
+}
+
+function getForwardedOrigin(request: Request): string | null {
+  const forwardedHost =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+  if (!forwardedHost) return null;
+
+  const forwardedProto =
+    request.headers.get("x-forwarded-proto") ??
+    new URL(request.url).protocol.replace(":", "");
+
+  return getOrigin(`${forwardedProto}://${forwardedHost}`);
+}
+
+/** Reject browser-originated mutations from an unexpected origin. */
 export function hasSameOrigin(request: Request): boolean {
-  const origin = request.headers.get("origin");
-  return origin === new URL(request.url).origin;
+  const origin = getOrigin(request.headers.get("origin"));
+  if (!origin) return false;
+
+  const allowedOrigins = new Set(
+    [
+      new URL(request.url).origin,
+      getForwardedOrigin(request),
+      getOrigin(process.env.AUTH_URL ?? null),
+    ].filter((value): value is string => Boolean(value)),
+  );
+
+  return allowedOrigins.has(origin);
 }

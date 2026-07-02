@@ -92,7 +92,7 @@ export async function revokeAdminRoleAction(formData: FormData) {
 }
 
 async function revalidateInventoryAdmin() {
-  revalidatePath("/admin/inventory");
+  revalidatePath("/admin/inventory", "layout");
 }
 
 export async function saveGroupAction(formData: FormData) {

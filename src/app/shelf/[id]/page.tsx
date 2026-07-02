@@ -1,7 +1,10 @@
+import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
 import { CartBar } from "@/components/cart-bar";
 import { ProductCard } from "@/components/product-card";
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { shelfService } from "@/services/shelf.service";
 
@@ -20,14 +23,27 @@ export default async function ShelfPage({
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 px-4 pt-6 pb-28">
-      <header className="mb-6">
-        <p className="text-muted-foreground text-sm">ชั้นวาง {shelf.id}</p>
-        <h1 className="text-xl font-bold">{shelf.name}</h1>
-        {shelf.sensorId && (
-          <p className="text-muted-foreground text-sm">
-            Sensor {shelf.sensorId}
-          </p>
-        )}
+      <header className="mb-6 grid gap-3">
+        <Link
+          href="/scan"
+          className={buttonVariants({
+            variant: "ghost",
+            size: "sm",
+            className: "w-fit -ml-2",
+          })}
+        >
+          <ArrowLeft className="size-4" />
+          กลับ
+        </Link>
+        <div>
+          <p className="text-muted-foreground text-sm">ชั้นวาง {shelf.id}</p>
+          <h1 className="text-xl font-bold">{shelf.name}</h1>
+          {shelf.sensorId && (
+            <p className="text-muted-foreground text-sm">
+              Sensor {shelf.sensorId}
+            </p>
+          )}
+        </div>
       </header>
 
       {shelf.inventories.length === 0 ? (

@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { FaceAuthStatusNotice } from "@/components/face-auth-status-notice";
 import { FaceEnrollmentPrompt } from "@/components/face-enrollment-prompt";
 import { FaceVerificationDebugPrompt } from "@/components/face-verification-debug-prompt";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 
 export default async function HomePage() {
@@ -46,14 +46,17 @@ export default async function HomePage() {
           <FaceAuthStatusNotice />
 
           <div className="flex w-full flex-col gap-3 sm:grid sm:grid-cols-2 md:flex md:flex-col">
-            <Button render={<Link href="/scan" />} size="lg">
+            <Link href="/scan" className={buttonVariants({ size: "lg" })}>
               <QrCode className="size-4" />
               สแกน QR
-            </Button>
-            <Button render={<Link href="/cart" />} size="lg" variant="outline">
+            </Link>
+            <Link
+              href="/cart"
+              className={buttonVariants({ size: "lg", variant: "outline" })}
+            >
               <ShoppingCart className="size-4" />
               เปิดตะกร้า
-            </Button>
+            </Link>
           </div>
         </div>
       </section>

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { FaceLivenessRegistration } from "@/components/face-liveness-registration";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 
 export default async function RegisterFacePage() {
@@ -15,15 +15,17 @@ export default async function RegisterFacePage() {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-6 py-10 sm:max-w-xl">
       <div className="flex items-center gap-2">
-        <Button
-          render={<Link href="/" />}
-          variant="ghost"
-          size="sm"
-          className="-ml-2"
+        <Link
+          href="/"
+          className={buttonVariants({
+            variant: "ghost",
+            size: "sm",
+            className: "-ml-2",
+          })}
         >
           <ArrowLeft className="size-4" />
           กลับ
-        </Button>
+        </Link>
       </div>
 
       <div className="space-y-2">
@@ -43,9 +45,12 @@ export default async function RegisterFacePage() {
             </p>
           </div>
           <div className="w-full pt-2">
-            <Button render={<Link href="/" />} size="lg" className="w-full">
+            <Link
+              href="/"
+              className={buttonVariants({ size: "lg", className: "w-full" })}
+            >
               กลับสู่หน้าหลัก
-            </Button>
+            </Link>
           </div>
         </div>
       ) : (

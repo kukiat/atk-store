@@ -1,6 +1,10 @@
 import Link from "next/link";
 
 import {
+  ConfirmSubmitButton,
+  FormPendingOverlay,
+} from "@/app/admin/confirm-submit-button";
+import {
   deleteGroupAction,
   deleteInventoryAction,
   deleteQrCodeAction,
@@ -14,8 +18,9 @@ import {
 } from "@/app/admin/actions";
 import { QrCodeBuilder } from "@/app/admin/inventory/_qr-code-builder";
 import { ImageUploadField } from "@/components/image-upload-field";
+import { ImageGalleryButton } from "@/components/image-preview-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -24,6 +29,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatBaht } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import type { InventoryAdminData } from "@/services/admin-inventory.service";
 
 const inputClass =
@@ -104,13 +110,21 @@ export function GroupsPanel({ data }: { data: InventoryAdminData }) {
       <CardContent className="grid gap-4">
         <form
           action={saveGroupAction}
-          className="grid gap-3 sm:grid-cols-[1fr_auto]"
+          className="relative grid gap-3 sm:grid-cols-[1fr_auto]"
         >
+          <FormPendingOverlay label="Saving group" />
           <label className={labelClass}>
             Group name
             <input className={inputClass} name="name" required />
           </label>
-          <Button className="self-end">Save group</Button>
+          <ConfirmSubmitButton
+            title="Save group?"
+            description="This will create a new shelf group in the back-office inventory."
+            confirmLabel="Save group"
+            className="self-end"
+          >
+            Save group
+          </ConfirmSubmitButton>
         </form>
         <div className="grid gap-2">
           {data.groups.length === 0 ? (
@@ -122,8 +136,9 @@ export function GroupsPanel({ data }: { data: InventoryAdminData }) {
               <form
                 key={group.id}
                 action={saveGroupAction}
-                className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto_auto]"
+                className="relative grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto_auto]"
               >
+                <FormPendingOverlay label="Updating group" />
                 <input type="hidden" name="id" value={group.id} />
                 <input
                   className={inputClass}
@@ -131,15 +146,24 @@ export function GroupsPanel({ data }: { data: InventoryAdminData }) {
                   defaultValue={group.name}
                   aria-label={`Group ${group.name}`}
                 />
-                <Button variant="outline">Update</Button>
-                <Button
+                <ConfirmSubmitButton
+                  title="Update group?"
+                  description={`This will save the latest name for ${group.name}.`}
+                  confirmLabel="Update"
+                  variant="outline"
+                >
+                  Update
+                </ConfirmSubmitButton>
+                <ConfirmSubmitButton
                   formAction={deleteGroupAction}
+                  title="Delete group?"
+                  description={`This will remove ${group.name} from active inventory groups.`}
+                  confirmLabel="Delete"
                   variant="destructive"
-                  name="id"
-                  value={group.id}
+                  confirmVariant="destructive"
                 >
                   Delete
-                </Button>
+                </ConfirmSubmitButton>
               </form>
             ))
           )}
@@ -161,8 +185,9 @@ export function UnitsPanel({ data }: { data: InventoryAdminData }) {
       <CardContent className="grid gap-4">
         <form
           action={saveUnitAction}
-          className="grid gap-3 sm:grid-cols-[1fr_auto]"
+          className="relative grid gap-3 sm:grid-cols-[1fr_auto]"
         >
+          <FormPendingOverlay label="Saving unit" />
           <label className={labelClass}>
             Unit name
             <input
@@ -172,15 +197,23 @@ export function UnitsPanel({ data }: { data: InventoryAdminData }) {
               required
             />
           </label>
-          <Button className="self-end">Save unit</Button>
+          <ConfirmSubmitButton
+            title="Save unit?"
+            description="This will add a unit that can be used by inventory items."
+            confirmLabel="Save unit"
+            className="self-end"
+          >
+            Save unit
+          </ConfirmSubmitButton>
         </form>
         <div className="grid gap-2">
           {data.units.map((unit) => (
             <form
               key={unit.id}
               action={saveUnitAction}
-              className="grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto_auto]"
+              className="relative grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto_auto]"
             >
+              <FormPendingOverlay label="Updating unit" />
               <input type="hidden" name="id" value={unit.id} />
               <input
                 className={inputClass}
@@ -188,15 +221,24 @@ export function UnitsPanel({ data }: { data: InventoryAdminData }) {
                 defaultValue={unit.name}
                 aria-label={`Unit ${unit.name}`}
               />
-              <Button variant="outline">Update</Button>
-              <Button
+              <ConfirmSubmitButton
+                title="Update unit?"
+                description={`This will save the latest name for ${unit.name}.`}
+                confirmLabel="Update"
+                variant="outline"
+              >
+                Update
+              </ConfirmSubmitButton>
+              <ConfirmSubmitButton
                 formAction={deleteUnitAction}
+                title="Delete unit?"
+                description={`This will remove ${unit.name} from active units.`}
+                confirmLabel="Delete"
                 variant="destructive"
-                name="id"
-                value={unit.id}
+                confirmVariant="destructive"
               >
                 Delete
-              </Button>
+              </ConfirmSubmitButton>
             </form>
           ))}
         </div>
@@ -207,6 +249,9 @@ export function UnitsPanel({ data }: { data: InventoryAdminData }) {
 
 export function ShelfsPanel({ data }: { data: InventoryAdminData }) {
   const groupName = new Map(data.groups.map((group) => [group.id, group.name]));
+  const usedSensorIds = data.shelfs
+    .map((shelf) => shelf.sensorId)
+    .filter((sensorId): sensorId is string => Boolean(sensorId));
 
   return (
     <Card>
@@ -219,9 +264,9 @@ export function ShelfsPanel({ data }: { data: InventoryAdminData }) {
       <CardContent className="grid gap-4">
         <form
           action={saveShelfAction}
-          encType="multipart/form-data"
-          className="grid gap-3 md:grid-cols-5"
+          className="relative grid gap-3 md:grid-cols-5"
         >
+          <FormPendingOverlay label="Saving shelf" />
           <label className={labelClass}>
             Name
             <input className={inputClass} name="name" required />
@@ -255,7 +300,19 @@ export function ShelfsPanel({ data }: { data: InventoryAdminData }) {
               description="Select or drop shelf image"
             />
           </div>
-          <Button className="self-end">Save shelf</Button>
+          <ConfirmSubmitButton
+            title="Save shelf?"
+            description="This will save this shelf and make it available for inventory and QR binding."
+            confirmLabel="Save shelf"
+            className="self-end"
+            uniqueField={{
+              name: "sensorId",
+              values: usedSensorIds,
+              message: "This sensor ID is already assigned to another shelf.",
+            }}
+          >
+            Save shelf
+          </ConfirmSubmitButton>
         </form>
 
         <div className="overflow-x-auto rounded-lg border">
@@ -280,18 +337,28 @@ export function ShelfsPanel({ data }: { data: InventoryAdminData }) {
                   </td>
                   <td className="p-3">{shelf.sensorId ?? "-"}</td>
                   <td className="p-3">
-                    {shelf.imageUrl ? "Ready" : "No image"}
+                    <ImageGalleryButton
+                      src={shelf.imageUrl}
+                      alt={`${shelf.name} shelf image`}
+                    />
                   </td>
                   <td className="p-3">
-                    <form action={deleteShelfAction}>
-                      <Button
+                    <form
+                      action={deleteShelfAction}
+                      className="relative inline-block"
+                    >
+                      <FormPendingOverlay label="Deleting shelf" />
+                      <input type="hidden" name="id" value={shelf.id} />
+                      <ConfirmSubmitButton
+                        title="Delete shelf?"
+                        description={`This will remove ${shelf.name} from active shelves.`}
+                        confirmLabel="Delete"
                         variant="destructive"
+                        confirmVariant="destructive"
                         size="sm"
-                        name="id"
-                        value={shelf.id}
                       >
                         Delete
-                      </Button>
+                      </ConfirmSubmitButton>
                     </form>
                   </td>
                 </tr>
@@ -307,6 +374,12 @@ export function ShelfsPanel({ data }: { data: InventoryAdminData }) {
 export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
   const shelfName = new Map(data.shelfs.map((shelf) => [shelf.id, shelf.name]));
   const unitName = new Map(data.units.map((unit) => [unit.id, unit.name]));
+  const occupiedShelfIds = new Set(
+    data.inventories.map((inventory) => inventory.shelfId),
+  );
+  const availableShelves = data.shelfs.filter(
+    (shelf) => !occupiedShelfIds.has(shelf.id),
+  );
 
   return (
     <Card>
@@ -317,13 +390,21 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
       <CardContent className="grid gap-4">
         <form
           action={saveInventoryAction}
-          encType="multipart/form-data"
-          className="grid gap-3 md:grid-cols-4"
+          className="relative grid gap-3 md:grid-cols-4"
         >
+          <FormPendingOverlay label="Saving inventory" />
           <label className={labelClass}>
             Shelf
-            <select className={inputClass} name="shelfId" required>
-              {data.shelfs.map((shelf) => (
+            <select
+              className={inputClass}
+              name="shelfId"
+              required
+              disabled={availableShelves.length === 0}
+            >
+              {availableShelves.length === 0 ? (
+                <option value="">All shelves already have an item</option>
+              ) : null}
+              {availableShelves.map((shelf) => (
                 <option key={shelf.id} value={shelf.id}>
                   {shelf.name}
                 </option>
@@ -395,13 +476,22 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
               description="Select or drop inventory image"
             />
           </div>
-          <Button className="self-end">Save inventory</Button>
+          <ConfirmSubmitButton
+            title="Save inventory?"
+            description="This will save this product item and its stock settings."
+            confirmLabel="Save inventory"
+            className="self-end"
+            disabled={availableShelves.length === 0}
+          >
+            Save inventory
+          </ConfirmSubmitButton>
         </form>
 
         <form
           action={importInventoriesAction}
-          className="grid gap-2 rounded-lg border p-3"
+          className="relative grid gap-2 rounded-lg border p-3"
         >
+          <FormPendingOverlay label="Importing inventory" />
           <label className={labelClass}>
             CSV import
             <textarea
@@ -410,9 +500,15 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
               placeholder="shelfId,name,description,price,amount,weightPerPiece,unitId,isActive,imageUrl"
             />
           </label>
-          <Button className="w-fit" variant="outline">
+          <ConfirmSubmitButton
+            title="Import inventory CSV?"
+            description="This will create or update inventory items from the CSV content."
+            confirmLabel="Import"
+            variant="outline"
+            className="w-fit"
+          >
             Import / update
-          </Button>
+          </ConfirmSubmitButton>
         </form>
 
         <div className="overflow-x-auto rounded-lg border">
@@ -424,6 +520,7 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
                 <th className="p-3">Price</th>
                 <th className="p-3">Amount</th>
                 <th className="p-3">Weight</th>
+                <th className="p-3">Image</th>
                 <th className="p-3">Status</th>
                 <th className="p-3">Actions</th>
               </tr>
@@ -441,6 +538,12 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
                     {inventory.weightPerPiece} {unitName.get(inventory.unitId)}
                   </td>
                   <td className="p-3">
+                    <ImageGalleryButton
+                      src={inventory.imageUrl}
+                      alt={`${inventory.name} product image`}
+                    />
+                  </td>
+                  <td className="p-3">
                     <Badge
                       variant={inventory.isActive ? "outline" : "secondary"}
                     >
@@ -448,15 +551,22 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
                     </Badge>
                   </td>
                   <td className="p-3">
-                    <form action={deleteInventoryAction}>
-                      <Button
+                    <form
+                      action={deleteInventoryAction}
+                      className="relative inline-block"
+                    >
+                      <FormPendingOverlay label="Deleting inventory" />
+                      <input type="hidden" name="id" value={inventory.id} />
+                      <ConfirmSubmitButton
+                        title="Delete inventory item?"
+                        description={`This will remove ${inventory.name} from active inventory items.`}
+                        confirmLabel="Delete"
                         variant="destructive"
+                        confirmVariant="destructive"
                         size="sm"
-                        name="id"
-                        value={inventory.id}
                       >
                         Delete
-                      </Button>
+                      </ConfirmSubmitButton>
                     </form>
                   </td>
                 </tr>
@@ -491,9 +601,12 @@ export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
                 to each code.
               </CardDescription>
             </div>
-            <Button render={<Link href="#create-qrcode" />} size="sm">
+            <Link
+              href="#create-qrcode"
+              className={cn(buttonVariants({ size: "sm" }))}
+            >
               Create QR Code
-            </Button>
+            </Link>
           </div>
         </CardHeader>
         <CardContent>
@@ -567,15 +680,22 @@ export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
                               )}
                             </div>
                           </details>
-                          <form action={deleteQrCodeAction}>
-                            <Button
+                          <form
+                            action={deleteQrCodeAction}
+                            className="relative inline-block"
+                          >
+                            <FormPendingOverlay label="Deleting QR" />
+                            <input type="hidden" name="id" value={qr.id} />
+                            <ConfirmSubmitButton
+                              title="Delete QR code?"
+                              description="This will remove this QR code from the back-office list."
+                              confirmLabel="Delete"
                               variant="destructive"
+                              confirmVariant="destructive"
                               size="sm"
-                              name="id"
-                              value={qr.id}
                             >
                               Delete
-                            </Button>
+                            </ConfirmSubmitButton>
                           </form>
                         </div>
                       </td>

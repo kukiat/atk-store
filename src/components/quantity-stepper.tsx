@@ -8,13 +8,18 @@ type QuantityStepperProps = {
   value: number;
   onChange: (value: number) => void;
   min?: number;
+  max?: number;
 };
 
 export function QuantityStepper({
   value,
   onChange,
   min = 0,
+  max,
 }: QuantityStepperProps) {
+  const canDecrease = value > min;
+  const canIncrease = max === undefined || value < max;
+
   return (
     <div className="flex items-center gap-2">
       <Button
@@ -23,6 +28,7 @@ export function QuantityStepper({
         size="icon"
         className="size-8"
         onClick={() => onChange(Math.max(min, value - 1))}
+        disabled={!canDecrease}
         aria-label="ลดจำนวน"
       >
         <Minus className="size-4" />
@@ -33,7 +39,10 @@ export function QuantityStepper({
         variant="outline"
         size="icon"
         className="size-8"
-        onClick={() => onChange(value + 1)}
+        onClick={() =>
+          onChange(max === undefined ? value + 1 : Math.min(max, value + 1))
+        }
+        disabled={!canIncrease}
         aria-label="เพิ่มจำนวน"
       >
         <Plus className="size-4" />

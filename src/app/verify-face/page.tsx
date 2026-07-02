@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { FaceVerificationDebug } from "@/components/face-verification-debug";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { getPermissions } from "@/lib/permissions";
 import { faceRecognitionService } from "@/services/face-recognition.service";
@@ -28,15 +28,17 @@ export default async function VerifyFacePage() {
   return (
     <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-8 px-6 py-10 sm:max-w-xl">
       <div className="flex items-center gap-2">
-        <Button
-          render={<Link href="/" />}
-          variant="ghost"
-          size="sm"
-          className="-ml-2"
+        <Link
+          href="/"
+          className={buttonVariants({
+            variant: "ghost",
+            size: "sm",
+            className: "-ml-2",
+          })}
         >
           <ArrowLeft className="size-4" />
           กลับ
-        </Button>
+        </Link>
       </div>
 
       <div className="space-y-2">

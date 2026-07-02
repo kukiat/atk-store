@@ -4,7 +4,7 @@ import { ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 
 type Status = "checking" | "ready" | "reauth" | "signed_out" | "unknown";
 
@@ -72,14 +72,17 @@ export function FaceAuthStatusNotice() {
             เพื่อความปลอดภัย ระบบต้องยืนยันบัญชีของคุณใหม่ก่อนเริ่มสแกนใบหน้า
           </p>
         </div>
-        <Button
-          render={<Link href="/api/auth/signin/google" />}
-          size="sm"
-          variant="outline"
-          className="border-amber-300 bg-white text-amber-950 hover:bg-amber-100"
+        <Link
+          href="/api/auth/signin/google"
+          className={buttonVariants({
+            size: "sm",
+            variant: "outline",
+            className:
+              "border-amber-300 bg-white text-amber-950 hover:bg-amber-100",
+          })}
         >
           Sign in Google อีกครั้ง
-        </Button>
+        </Link>
       </div>
     </div>
   );

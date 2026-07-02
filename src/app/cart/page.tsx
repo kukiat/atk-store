@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { QuantityStepper } from "@/components/quantity-stepper";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { formatBaht } from "@/lib/format";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -51,13 +51,13 @@ export default function CartPage() {
   return (
     <main className="mx-auto w-full max-w-md flex-1 px-4 pt-6 pb-8">
       <header className="mb-6 flex items-center gap-3">
-        <Button
-          render={<Link href="/" aria-label="ย้อนกลับ" />}
-          variant="ghost"
-          size="icon"
+        <Link
+          href="/"
+          aria-label="ย้อนกลับ"
+          className={buttonVariants({ variant: "ghost", size: "icon" })}
         >
           <ArrowLeft className="size-5" />
-        </Button>
+        </Link>
         <h1 className="text-xl font-bold">ตะกร้าสินค้า</h1>
       </header>
 

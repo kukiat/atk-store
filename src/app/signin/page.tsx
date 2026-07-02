@@ -2,7 +2,7 @@ import { AlertCircle, ScanLine, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 
 // Where the Google OAuth flow begins. After Google authenticates the user it
@@ -90,15 +90,17 @@ export default async function SignInPage({
           </div>
         )}
 
-        <Button
-          render={<Link href={GOOGLE_SIGN_IN_URL} />}
-          variant="outline"
-          size="lg"
-          className="mt-8 h-11 w-full gap-3 text-sm font-medium"
+        <Link
+          href={GOOGLE_SIGN_IN_URL}
+          className={buttonVariants({
+            variant: "outline",
+            size: "lg",
+            className: "mt-8 h-11 w-full gap-3 text-sm font-medium",
+          })}
         >
           <GoogleIcon className="size-5" />
           เข้าสู่ระบบด้วย Google
-        </Button>
+        </Link>
 
         <div className="text-muted-foreground mt-6 flex items-center justify-center gap-1.5 text-xs">
           <ShieldCheck className="size-3.5" />

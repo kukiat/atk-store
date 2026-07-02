@@ -10,6 +10,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import {
+  ConfirmSubmitButton,
+  FormPendingOverlay,
+} from "@/app/admin/confirm-submit-button";
+import {
   blockUserAction,
   disableUserAction,
   resetFaceEnrollmentAction,
@@ -17,7 +21,7 @@ import {
   unblockUserAction,
 } from "@/app/admin/actions";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -27,6 +31,7 @@ import {
 } from "@/components/ui/card";
 import { requireCurrentUser } from "@/lib/auth";
 import { getHighestRole } from "@/lib/permissions";
+import { cn } from "@/lib/utils";
 import { adminUserService } from "@/services/admin-user.service";
 
 function formatDate(value: Date | null) {
@@ -64,10 +69,13 @@ export default async function AdminUserDetailPage({
   return (
     <div className="grid gap-6">
       <div className="flex items-center justify-between gap-3">
-        <Button render={<Link href="/admin/users" />} variant="ghost">
+        <Link
+          href="/admin/users"
+          className={cn(buttonVariants({ variant: "ghost" }))}
+        >
           <ArrowLeft className="size-4" />
           Users
-        </Button>
+        </Link>
         <Badge variant={detail.canManage ? "secondary" : "outline"}>
           {detail.canManage ? "manageable" : "read only"}
         </Badge>
@@ -241,7 +249,11 @@ export default async function AdminUserDetailPage({
               {detail.canManage ? (
                 <>
                   {detail.user.accountStatus === "active" ? (
-                    <form action={blockUserAction} className="grid gap-2">
+                    <form
+                      action={blockUserAction}
+                      className="relative grid gap-2"
+                    >
+                      <FormPendingOverlay label="Blocking user" />
                       <HiddenUserId userId={detail.user.id} />
                       <label className="grid gap-1 text-sm">
                         <span className="font-medium">Block reason</span>
@@ -251,22 +263,39 @@ export default async function AdminUserDetailPage({
                           placeholder="Policy violation"
                         />
                       </label>
-                    <Button type="submit" variant="destructive" className="w-full">
+                      <ConfirmSubmitButton
+                        title="Block user?"
+                        description={`This will block ${detail.user.email} and record the action in the audit log.`}
+                        confirmLabel="Block user"
+                        variant="destructive"
+                        confirmVariant="destructive"
+                        className="w-full"
+                      >
                         <Ban className="size-4" />
                         Block user
-                      </Button>
+                      </ConfirmSubmitButton>
                     </form>
                   ) : (
-                    <form action={unblockUserAction}>
+                    <form action={unblockUserAction} className="relative">
+                      <FormPendingOverlay label="Activating user" />
                       <HiddenUserId userId={detail.user.id} />
-                      <Button type="submit" className="w-full">
+                      <ConfirmSubmitButton
+                        title="Set user active?"
+                        description={`This will reactivate ${detail.user.email}.`}
+                        confirmLabel="Set active"
+                        className="w-full"
+                      >
                         <Unlock className="size-4" />
                         Set active
-                      </Button>
+                      </ConfirmSubmitButton>
                     </form>
                   )}
 
-                  <form action={disableUserAction} className="grid gap-2">
+                  <form
+                    action={disableUserAction}
+                    className="relative grid gap-2"
+                  >
+                    <FormPendingOverlay label="Disabling user" />
                     <HiddenUserId userId={detail.user.id} />
                     <label className="grid gap-1 text-sm">
                       <span className="font-medium">Disable until</span>
@@ -285,32 +314,52 @@ export default async function AdminUserDetailPage({
                         placeholder="Temporary restriction"
                       />
                     </label>
-                    <Button type="submit" variant="outline" className="w-full">
+                    <ConfirmSubmitButton
+                      title="Temporarily disable user?"
+                      description={`This will disable ${detail.user.email} until the selected date and time.`}
+                      confirmLabel="Disable user"
+                      variant="outline"
+                      className="w-full"
+                    >
                       <TimerOff className="size-4" />
                       Temporarily disable
-                    </Button>
+                    </ConfirmSubmitButton>
                   </form>
 
-                  <form action={resetFaceEnrollmentAction}>
+                  <form
+                    action={resetFaceEnrollmentAction}
+                    className="relative"
+                  >
+                    <FormPendingOverlay label="Resetting face enrollment" />
                     <HiddenUserId userId={detail.user.id} />
-                    <Button type="submit" variant="outline" className="w-full">
+                    <ConfirmSubmitButton
+                      title="Reset face enrollment?"
+                      description={`This will require ${detail.user.email} to register face verification again.`}
+                      confirmLabel="Reset face"
+                      variant="outline"
+                      className="w-full"
+                    >
                       <RotateCcw className="size-4" />
                       Reset face enrollment
-                    </Button>
+                    </ConfirmSubmitButton>
                   </form>
 
                   {actor.permissions.canManageAdmins &&
                   highestRole === "admin" ? (
-                    <form action={revokeAdminRoleAction}>
+                    <form action={revokeAdminRoleAction} className="relative">
+                      <FormPendingOverlay label="Revoking admin" />
                       <HiddenUserId userId={detail.user.id} />
-                      <Button
-                        type="submit"
+                      <ConfirmSubmitButton
+                        title="Revoke admin role?"
+                        description={`This will remove admin permissions from ${detail.user.email}.`}
+                        confirmLabel="Revoke admin"
                         variant="destructive"
+                        confirmVariant="destructive"
                         className="w-full"
                       >
                         <ShieldMinus className="size-4" />
                         Revoke admin role
-                      </Button>
+                      </ConfirmSubmitButton>
                     </form>
                   ) : null}
                 </>

@@ -3,6 +3,10 @@
 import { Plus, X } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import {
+  ConfirmSubmitButton,
+  FormPendingOverlay,
+} from "@/app/admin/confirm-submit-button";
 import { createQrCodeAction } from "@/app/admin/actions";
 import { Button } from "@/components/ui/button";
 
@@ -47,8 +51,9 @@ export function QrCodeBuilder({ shelves }: { shelves: ShelfOption[] }) {
   return (
     <form
       action={createQrCodeAction}
-      className="grid gap-4 rounded-lg border p-4"
+      className="relative grid gap-4 rounded-lg border p-4"
     >
+      <FormPendingOverlay label="Generating QR" />
       <input type="hidden" name="shelfIds" value={selectedShelfIds.join(",")} />
 
       <div className="grid gap-3 md:grid-cols-[1fr_auto]">
@@ -119,9 +124,15 @@ export function QrCodeBuilder({ shelves }: { shelves: ShelfOption[] }) {
         />
       </label>
 
-      <Button className="w-fit" disabled={selectedShelfIds.length === 0}>
+      <ConfirmSubmitButton
+        title="Generate QR code?"
+        description="This will create a QR code for the selected shelves."
+        confirmLabel="Generate QR"
+        className="w-fit"
+        disabled={selectedShelfIds.length === 0}
+      >
         Generate QR
-      </Button>
+      </ConfirmSubmitButton>
     </form>
   );
 }

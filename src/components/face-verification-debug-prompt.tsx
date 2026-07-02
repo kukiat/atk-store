@@ -1,7 +1,7 @@
 import { ChevronRight, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { getPermissions } from "@/lib/permissions";
 import { faceRecognitionService } from "@/services/face-recognition.service";
@@ -32,11 +32,13 @@ export async function FaceVerificationDebugPrompt() {
   if (!profile) return null;
 
   return (
-    <Button
-      render={<Link href="/verify-face" />}
-      variant="outline"
-      size="lg"
-      className="h-auto w-full justify-between gap-3 px-4 py-3 text-left"
+    <Link
+      href="/verify-face"
+      className={buttonVariants({
+        variant: "outline",
+        size: "lg",
+        className: "h-auto w-full justify-between gap-3 px-4 py-3 text-left",
+      })}
       aria-label="ทดสอบยืนยันใบหน้าด้วย Face Recognition"
     >
       <span className="flex min-w-0 items-center gap-3">
@@ -51,6 +53,6 @@ export async function FaceVerificationDebugPrompt() {
         </span>
       </span>
       <ChevronRight className="text-muted-foreground size-4 shrink-0" />
-    </Button>
+    </Link>
   );
 }

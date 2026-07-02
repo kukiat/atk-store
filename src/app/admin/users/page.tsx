@@ -9,9 +9,13 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import {
+  ConfirmSubmitButton,
+  FormPendingOverlay,
+} from "@/app/admin/confirm-submit-button";
 import { grantAdminRoleAction } from "@/app/admin/actions";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -175,7 +179,11 @@ export default async function AdminUsersPage({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form action={grantAdminRoleAction} className="grid gap-3 sm:flex">
+            <form
+              action={grantAdminRoleAction}
+              className="relative grid gap-3 sm:flex"
+            >
+              <FormPendingOverlay label="Granting admin" />
               <label className="grid min-w-0 flex-1 gap-1 text-sm">
                 <span className="font-medium">Email</span>
                 <input
@@ -186,10 +194,15 @@ export default async function AdminUsersPage({
                   className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 h-9 rounded-lg border px-3 text-sm outline-none focus-visible:ring-3"
                 />
               </label>
-              <Button type="submit" className="self-end">
+              <ConfirmSubmitButton
+                title="Grant admin access?"
+                description="This will grant admin access to this email when the user signs in."
+                confirmLabel="Grant admin"
+                className="self-end"
+              >
                 <MailPlus className="size-4" />
                 Grant admin
-              </Button>
+              </ConfirmSubmitButton>
             </form>
 
             {pendingGrants.length > 0 ? (
@@ -297,14 +310,15 @@ function UsersTable({
                 {formatDate(item.user.disabledUntil)}
               </p>
             ) : null}
-            <Button
-              render={<Link href={`/admin/users/${item.user.id}`} />}
-              variant="outline"
-              size="sm"
-              className="w-full"
+            <Link
+              href={`/admin/users/${item.user.id}`}
+              className={cn(
+                buttonVariants({ variant: "outline", size: "sm" }),
+                "w-full",
+              )}
             >
               View
-            </Button>
+            </Link>
           </div>
         ))}
       </div>
@@ -350,13 +364,14 @@ function UsersTable({
                   {formatDate(item.user.lastLoginAt)}
                 </td>
                 <td className="py-3 text-right">
-                  <Button
-                    render={<Link href={`/admin/users/${item.user.id}`} />}
-                    variant="outline"
-                    size="sm"
+                  <Link
+                    href={`/admin/users/${item.user.id}`}
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                    )}
                   >
                     View
-                  </Button>
+                  </Link>
                 </td>
               </tr>
             ))}

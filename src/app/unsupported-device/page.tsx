@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 
 export default function UnsupportedDevicePage() {
   return (
@@ -12,9 +12,9 @@ export default function UnsupportedDevicePage() {
         QR scan, shelf selection และ cart ถูกจำกัดให้ใช้งานบนอุปกรณ์ mobile หรือ
         tablet เท่านั้น
       </p>
-      <Button className="mt-6" render={<Link href="/" />}>
+      <Link href="/" className={buttonVariants({ className: "mt-6" })}>
         กลับหน้าหลัก
-      </Button>
+      </Link>
     </main>
   );
 }

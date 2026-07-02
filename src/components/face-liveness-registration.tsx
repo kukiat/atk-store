@@ -11,7 +11,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   stopFaceCameraStreams,
   useFaceCameraCleanup,
@@ -173,9 +173,12 @@ export function FaceLivenessRegistration({
         description="ระบบยืนยันตัวตนของคุณแล้ว"
         debug={debugMode ? <ConfidenceBadge confidence={confidence} /> : null}
         action={
-          <Button render={<Link href="/" />} size="lg" className="w-full">
+          <Link
+            href="/"
+            className={buttonVariants({ size: "lg", className: "w-full" })}
+          >
             กลับสู่หน้าหลัก
-          </Button>
+          </Link>
         }
       />
     );
@@ -208,13 +211,12 @@ export function FaceLivenessRegistration({
         title="เซสชันหมดอายุ"
         description="กรุณาเข้าสู่ระบบอีกครั้งเพื่อลงทะเบียนใบหน้า"
         action={
-          <Button
-            render={<Link href="/api/auth/signin/google" />}
-            size="lg"
-            className="w-full"
+          <Link
+            href="/api/auth/signin/google"
+            className={buttonVariants({ size: "lg", className: "w-full" })}
           >
             เข้าสู่ระบบอีกครั้ง
-          </Button>
+          </Link>
         }
       />
     );

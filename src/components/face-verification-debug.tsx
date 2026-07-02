@@ -16,7 +16,7 @@ import {
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import {
   stopFaceCameraStreams,
   useFaceCameraCleanup,
@@ -221,9 +221,12 @@ export function FaceVerificationDebug({
         description="ระบบจำใบหน้าของบัญชีนี้ได้แล้ว"
       >
         <VerifiedProfile user={user} similarity={similarity} />
-        <Button render={<Link href="/" />} size="lg" className="w-full">
+        <Link
+          href="/"
+          className={buttonVariants({ size: "lg", className: "w-full" })}
+        >
           Back to home
-        </Button>
+        </Link>
       </ResultShell>
     );
   }
@@ -235,13 +238,12 @@ export function FaceVerificationDebug({
         title="เซสชันหมดอายุ"
         description="กรุณาเข้าสู่ระบบอีกครั้งก่อนทดสอบยืนยันใบหน้า"
       >
-        <Button
-          render={<Link href="/api/auth/signin/google" />}
-          size="lg"
-          className="w-full"
+        <Link
+          href="/api/auth/signin/google"
+          className={buttonVariants({ size: "lg", className: "w-full" })}
         >
           เข้าสู่ระบบอีกครั้ง
-        </Button>
+        </Link>
       </ResultShell>
     );
   }
@@ -261,9 +263,12 @@ export function FaceVerificationDebug({
             </span>
           </p>
         ) : null}
-        <Button render={<Link href="/" />} size="lg" className="w-full">
+        <Link
+          href="/"
+          className={buttonVariants({ size: "lg", className: "w-full" })}
+        >
           Back to home
-        </Button>
+        </Link>
       </ResultShell>
     );
   }
@@ -276,9 +281,12 @@ export function FaceVerificationDebug({
           title="ตั้งค่าไม่ครบ"
           description="ไม่พบค่า region สำหรับ Face Liveness กรุณาติดต่อ admin"
         >
-          <Button render={<Link href="/" />} size="lg" className="w-full">
+          <Link
+            href="/"
+            className={buttonVariants({ size: "lg", className: "w-full" })}
+          >
             Back to home
-          </Button>
+          </Link>
         </ResultShell>
       );
     }

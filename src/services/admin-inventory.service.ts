@@ -243,10 +243,21 @@ class AdminInventoryService {
 
   async deleteShelf(actor: AdminActor, formData: FormData): Promise<void> {
     requireInventoryPermission(actor);
+    const shelfId = readId(formData);
+    const [existingInventory] = await db
+      .select({ id: inventories.id })
+      .from(inventories)
+      .where(and(eq(inventories.shelfId, shelfId), isNull(inventories.deletedAt)))
+      .limit(1);
+
+    if (existingInventory) {
+      throw new Error("Cannot delete a shelf that still has inventory");
+    }
+
     await db
       .update(shelfs)
       .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(shelfs.id, readId(formData)));
+      .where(eq(shelfs.id, shelfId));
   }
 
   async saveInventory(actor: AdminActor, formData: FormData): Promise<void> {

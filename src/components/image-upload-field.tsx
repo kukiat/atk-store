@@ -11,10 +11,12 @@ export function ImageUploadField({
   name = "imageFile",
   label = "Image",
   description = "Select or drop an image",
+  currentImageUrl,
 }: {
   name?: string;
   label?: string;
   description?: string;
+  currentImageUrl?: string | null;
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const wasPendingRef = useRef(false);
@@ -100,8 +102,31 @@ export function ImageUploadField({
           />
         </span>
       </label>
-      {previewUrl ? (
+      {previewUrl && currentImageUrl ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="grid gap-1">
+            <span className="text-xs text-muted-foreground">Current</span>
+            <ImagePreviewThumbnail
+              src={currentImageUrl}
+              alt={`${label} current image`}
+            />
+          </div>
+          <span className="text-muted-foreground text-sm">=&gt;</span>
+          <div className="grid gap-1">
+            <span className="text-xs text-muted-foreground">New</span>
+            <ImagePreviewThumbnail src={previewUrl} alt={`${label} preview`} />
+          </div>
+        </div>
+      ) : previewUrl ? (
         <ImagePreviewThumbnail src={previewUrl} alt={`${label} preview`} />
+      ) : currentImageUrl ? (
+        <div className="grid gap-1">
+          <span className="text-xs text-muted-foreground">Current</span>
+          <ImagePreviewThumbnail
+            src={currentImageUrl}
+            alt={`${label} current image`}
+          />
+        </div>
       ) : null}
     </div>
   );

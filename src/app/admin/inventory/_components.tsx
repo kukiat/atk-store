@@ -6,19 +6,17 @@ import {
 } from "@/app/admin/confirm-submit-button";
 import {
   deleteGroupAction,
-  deleteInventoryAction,
   deleteQrCodeAction,
-  deleteShelfAction,
   deleteUnitAction,
   importInventoriesAction,
   saveGroupAction,
-  saveInventoryAction,
-  saveShelfAction,
   saveUnitAction,
 } from "@/app/admin/actions";
+import {
+  InventoriesEditor,
+  ShelvesEditor,
+} from "@/app/admin/inventory/_editable-panels";
 import { QrCodeBuilder } from "@/app/admin/inventory/_qr-code-builder";
-import { ImageUploadField } from "@/components/image-upload-field";
-import { ImageGalleryButton } from "@/components/image-preview-dialog";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -248,11 +246,6 @@ export function UnitsPanel({ data }: { data: InventoryAdminData }) {
 }
 
 export function ShelfsPanel({ data }: { data: InventoryAdminData }) {
-  const groupName = new Map(data.groups.map((group) => [group.id, group.name]));
-  const usedSensorIds = data.shelfs
-    .map((shelf) => shelf.sensorId)
-    .filter((sensorId): sensorId is string => Boolean(sensorId));
-
   return (
     <Card>
       <CardHeader>
@@ -261,126 +254,38 @@ export function ShelfsPanel({ data }: { data: InventoryAdminData }) {
           Standalone shelves or shelves inside a group.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-4">
-        <form
-          action={saveShelfAction}
-          className="relative grid gap-3 md:grid-cols-5"
-        >
-          <FormPendingOverlay label="Saving shelf" />
-          <label className={labelClass}>
-            Name
-            <input className={inputClass} name="name" required />
-          </label>
-          <label className={labelClass}>
-            Group
-            <select className={inputClass} name="groupId">
-              <option value="">Standalone</option>
-              {data.groups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass}>
-            Sensor ID
-            <input className={inputClass} name="sensorId" />
-          </label>
-          <label className={labelClass}>
-            Image URL fallback
-            <input
-              className={inputClass}
-              name="imageUrl"
-              placeholder="https://..."
-            />
-          </label>
-          <div className="md:col-span-2">
-            <ImageUploadField
-              label="Shelf image"
-              description="Select or drop shelf image"
-            />
-          </div>
-          <ConfirmSubmitButton
-            title="Save shelf?"
-            description="This will save this shelf and make it available for inventory and QR binding."
-            confirmLabel="Save shelf"
-            className="self-end"
-            uniqueField={{
-              name: "sensorId",
-              values: usedSensorIds,
-              message: "This sensor ID is already assigned to another shelf.",
-            }}
-          >
-            Save shelf
-          </ConfirmSubmitButton>
-        </form>
-
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead className="bg-muted text-left">
-              <tr>
-                <th className="p-3">Name</th>
-                <th className="p-3">Group</th>
-                <th className="p-3">Sensor</th>
-                <th className="p-3">Image</th>
-                <th className="p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.shelfs.map((shelf) => (
-                <tr key={shelf.id} className="border-t">
-                  <td className="p-3 font-medium">{shelf.name}</td>
-                  <td className="p-3">
-                    {shelf.groupId
-                      ? groupName.get(shelf.groupId)
-                      : "Standalone"}
-                  </td>
-                  <td className="p-3">{shelf.sensorId ?? "-"}</td>
-                  <td className="p-3">
-                    <ImageGalleryButton
-                      src={shelf.imageUrl}
-                      alt={`${shelf.name} shelf image`}
-                    />
-                  </td>
-                  <td className="p-3">
-                    <form
-                      action={deleteShelfAction}
-                      className="relative inline-block"
-                    >
-                      <FormPendingOverlay label="Deleting shelf" />
-                      <input type="hidden" name="id" value={shelf.id} />
-                      <ConfirmSubmitButton
-                        title="Delete shelf?"
-                        description={`This will remove ${shelf.name} from active shelves.`}
-                        confirmLabel="Delete"
-                        variant="destructive"
-                        confirmVariant="destructive"
-                        size="sm"
-                      >
-                        Delete
-                      </ConfirmSubmitButton>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      <CardContent>
+        <ShelvesEditor
+          groups={data.groups.map((group) => ({
+            id: group.id,
+            name: group.name,
+          }))}
+          shelves={data.shelfs.map((shelf) => ({
+            id: shelf.id,
+            groupId: shelf.groupId,
+            name: shelf.name,
+            imageUrl: shelf.imageUrl,
+            sensorId: shelf.sensorId,
+          }))}
+          inventories={data.inventories.map((inventory) => ({
+            id: inventory.id,
+            shelfId: inventory.shelfId,
+            name: inventory.name,
+            description: inventory.description,
+            price: inventory.price,
+            amount: inventory.amount,
+            weightPerPiece: inventory.weightPerPiece,
+            unitId: inventory.unitId,
+            isActive: inventory.isActive,
+            imageUrl: inventory.imageUrl,
+          }))}
+        />
       </CardContent>
     </Card>
   );
 }
 
 export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
-  const shelfName = new Map(data.shelfs.map((shelf) => [shelf.id, shelf.name]));
-  const unitName = new Map(data.units.map((unit) => [unit.id, unit.name]));
-  const occupiedShelfIds = new Set(
-    data.inventories.map((inventory) => inventory.shelfId),
-  );
-  const availableShelves = data.shelfs.filter(
-    (shelf) => !occupiedShelfIds.has(shelf.id),
-  );
-
   return (
     <Card>
       <CardHeader>
@@ -388,104 +293,31 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
         <CardDescription>Sellable items on each shelf.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <form
-          action={saveInventoryAction}
-          className="relative grid gap-3 md:grid-cols-4"
-        >
-          <FormPendingOverlay label="Saving inventory" />
-          <label className={labelClass}>
-            Shelf
-            <select
-              className={inputClass}
-              name="shelfId"
-              required
-              disabled={availableShelves.length === 0}
-            >
-              {availableShelves.length === 0 ? (
-                <option value="">All shelves already have an item</option>
-              ) : null}
-              {availableShelves.map((shelf) => (
-                <option key={shelf.id} value={shelf.id}>
-                  {shelf.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass}>
-            Name
-            <input className={inputClass} name="name" required />
-          </label>
-          <label className={labelClass}>
-            Price
-            <input
-              className={inputClass}
-              name="price"
-              type="number"
-              step="0.01"
-              required
-            />
-          </label>
-          <label className={labelClass}>
-            Amount
-            <input
-              className={inputClass}
-              name="amount"
-              type="number"
-              required
-            />
-          </label>
-          <label className={labelClass}>
-            Weight / piece
-            <input
-              className={inputClass}
-              name="weightPerPiece"
-              type="number"
-              step="0.01"
-              required
-            />
-          </label>
-          <label className={labelClass}>
-            Unit
-            <select className={inputClass} name="unitId" required>
-              {data.units.map((unit) => (
-                <option key={unit.id} value={unit.id}>
-                  {unit.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass}>
-            Image URL fallback
-            <input
-              className={inputClass}
-              name="imageUrl"
-              placeholder="https://..."
-            />
-          </label>
-          <label className={`${labelClass} justify-end pb-2`}>
-            <span>Active</span>
-            <input name="isActive" type="checkbox" defaultChecked />
-          </label>
-          <label className={`${labelClass} md:col-span-3`}>
-            Description
-            <input className={inputClass} name="description" />
-          </label>
-          <div className="md:col-span-3">
-            <ImageUploadField
-              label="Inventory image"
-              description="Select or drop inventory image"
-            />
-          </div>
-          <ConfirmSubmitButton
-            title="Save inventory?"
-            description="This will save this product item and its stock settings."
-            confirmLabel="Save inventory"
-            className="self-end"
-            disabled={availableShelves.length === 0}
-          >
-            Save inventory
-          </ConfirmSubmitButton>
-        </form>
+        <InventoriesEditor
+          shelves={data.shelfs.map((shelf) => ({
+            id: shelf.id,
+            groupId: shelf.groupId,
+            name: shelf.name,
+            imageUrl: shelf.imageUrl,
+            sensorId: shelf.sensorId,
+          }))}
+          units={data.units.map((unit) => ({
+            id: unit.id,
+            name: unit.name,
+          }))}
+          inventories={data.inventories.map((inventory) => ({
+            id: inventory.id,
+            shelfId: inventory.shelfId,
+            name: inventory.name,
+            description: inventory.description,
+            price: inventory.price,
+            amount: inventory.amount,
+            weightPerPiece: inventory.weightPerPiece,
+            unitId: inventory.unitId,
+            isActive: inventory.isActive,
+            imageUrl: inventory.imageUrl,
+          }))}
+        />
 
         <form
           action={importInventoriesAction}
@@ -511,69 +343,6 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
           </ConfirmSubmitButton>
         </form>
 
-        <div className="overflow-x-auto rounded-lg border">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead className="bg-muted text-left">
-              <tr>
-                <th className="p-3">Name</th>
-                <th className="p-3">Shelf</th>
-                <th className="p-3">Price</th>
-                <th className="p-3">Amount</th>
-                <th className="p-3">Weight</th>
-                <th className="p-3">Image</th>
-                <th className="p-3">Status</th>
-                <th className="p-3">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.inventories.map((inventory) => (
-                <tr key={inventory.id} className="border-t">
-                  <td className="p-3 font-medium">{inventory.name}</td>
-                  <td className="p-3">{shelfName.get(inventory.shelfId)}</td>
-                  <td className="p-3 tabular-nums">
-                    {formatBaht(inventory.price)}
-                  </td>
-                  <td className="p-3 tabular-nums">{inventory.amount}</td>
-                  <td className="p-3 tabular-nums">
-                    {inventory.weightPerPiece} {unitName.get(inventory.unitId)}
-                  </td>
-                  <td className="p-3">
-                    <ImageGalleryButton
-                      src={inventory.imageUrl}
-                      alt={`${inventory.name} product image`}
-                    />
-                  </td>
-                  <td className="p-3">
-                    <Badge
-                      variant={inventory.isActive ? "outline" : "secondary"}
-                    >
-                      {inventory.isActive ? "Active" : "Inactive"}
-                    </Badge>
-                  </td>
-                  <td className="p-3">
-                    <form
-                      action={deleteInventoryAction}
-                      className="relative inline-block"
-                    >
-                      <FormPendingOverlay label="Deleting inventory" />
-                      <input type="hidden" name="id" value={inventory.id} />
-                      <ConfirmSubmitButton
-                        title="Delete inventory item?"
-                        description={`This will remove ${inventory.name} from active inventory items.`}
-                        confirmLabel="Delete"
-                        variant="destructive"
-                        confirmVariant="destructive"
-                        size="sm"
-                      >
-                        Delete
-                      </ConfirmSubmitButton>
-                    </form>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </CardContent>
     </Card>
   );

@@ -2,6 +2,7 @@
 
 import { ShoppingCart } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { formatBaht } from "@/lib/format";
 import { useHydrated } from "@/lib/use-hydrated";
@@ -13,6 +14,7 @@ import { selectTotalCount, selectTotalPrice, useCartStore } from "@/store/cart";
  * persisted localStorage state) and when the cart is empty.
  */
 export function CartBar() {
+  const router = useRouter();
   const hydrated = useHydrated();
   const count = useCartStore(selectTotalCount);
   const total = useCartStore(selectTotalPrice);
@@ -23,6 +25,13 @@ export function CartBar() {
     <div className="fixed inset-x-0 bottom-0 z-50 p-4">
       <Link
         href="/cart"
+        onClick={(event) => {
+          const returnTo = `${window.location.pathname}${window.location.search}`;
+          if (returnTo === "/cart") return;
+
+          event.preventDefault();
+          router.push(`/cart?${new URLSearchParams({ returnTo }).toString()}`);
+        }}
         className="bg-primary text-primary-foreground mx-auto flex max-w-md items-center justify-between rounded-full px-5 py-3 shadow-lg transition-opacity hover:opacity-90"
       >
         <span className="flex items-center gap-2 font-medium">

@@ -10,13 +10,22 @@ import { shelfService } from "@/services/shelf.service";
 
 export default async function ShelfPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ payload?: string | string[] }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
 
   const { id } = await params;
+  const payloadParam = (await searchParams).payload;
+  const encodedPayload = Array.isArray(payloadParam)
+    ? payloadParam[0]
+    : payloadParam;
+  const backHref = encodedPayload
+    ? `/scan/shelves?${new URLSearchParams({ payload: encodedPayload }).toString()}`
+    : "/scan";
   const shelf = await shelfService.getShelfWithInventories(id);
 
   if (!shelf) notFound();
@@ -25,7 +34,7 @@ export default async function ShelfPage({
     <main className="mx-auto w-full max-w-md flex-1 px-4 pt-6 pb-28">
       <header className="mb-6 grid gap-3">
         <Link
-          href="/scan"
+          href={backHref}
           className={buttonVariants({
             variant: "ghost",
             size: "sm",

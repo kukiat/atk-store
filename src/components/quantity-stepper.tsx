@@ -9,6 +9,7 @@ type QuantityStepperProps = {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
+  disabled?: boolean;
 };
 
 export function QuantityStepper({
@@ -16,9 +17,10 @@ export function QuantityStepper({
   onChange,
   min = 0,
   max,
+  disabled = false,
 }: QuantityStepperProps) {
-  const canDecrease = value > min;
-  const canIncrease = max === undefined || value < max;
+  const canDecrease = !disabled && value > min;
+  const canIncrease = !disabled && (max === undefined || value < max);
 
   return (
     <div className="flex items-center gap-2">

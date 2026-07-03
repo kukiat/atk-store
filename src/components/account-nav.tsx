@@ -12,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
@@ -33,6 +33,7 @@ type AccountNavProps = {
 
 export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
   const displayName = user.name ?? user.email;
+  const router = useRouter();
   const pathname = usePathname();
   const isAdminPage = pathname.startsWith("/admin");
   const hydrated = useHydrated();
@@ -123,7 +124,22 @@ export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
                     Store home
                   </Menu.LinkItem>
                   <Menu.LinkItem
-                    render={<Link href="/cart" />}
+                    render={
+                      <Link
+                        href="/cart"
+                        onClick={(event) => {
+                          const returnTo = `${window.location.pathname}${window.location.search}`;
+                          if (returnTo === "/cart") return;
+
+                          event.preventDefault();
+                          router.push(
+                            `/cart?${new URLSearchParams({
+                              returnTo,
+                            }).toString()}`,
+                          );
+                        }}
+                      />
+                    }
                     closeOnClick
                     className="data-[highlighted]:bg-muted flex items-center justify-between gap-3 rounded-md px-2 py-2 outline-none"
                   >

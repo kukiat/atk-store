@@ -49,7 +49,12 @@ export default async function ScanShelvesPage({
 
       <div className="grid grid-cols-2 gap-3">
         {shelves.map((shelf) => (
-          <Link key={shelf.id} href={`/shelf/${shelf.id}`}>
+          <Link
+            key={shelf.id}
+            href={`/shelf/${shelf.id}?${new URLSearchParams({
+              payload: encodedPayload,
+            }).toString()}`}
+          >
             <Card className="h-full">
               <div
                 className="aspect-square bg-muted bg-cover bg-center"

@@ -21,6 +21,8 @@ export type CartItem = {
 
 export type IotTransaction = {
   shelfId: string;
-  amount: number;
-  weightPerPiece: number;
+  sensorId: string | null;
+  channelId: string;
+  expectedCount: number;
+  expectedWeight: number;
 };

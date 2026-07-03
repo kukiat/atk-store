@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ShoppingCart, Trash2 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { QuantityStepper } from "@/components/quantity-stepper";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -19,9 +19,41 @@ export default function CartPage() {
   const clear = useCartStore((state) => state.clear);
   const total = useCartStore(selectTotalPrice);
   const [status, setStatus] = useState<
-    "idle" | "submitting" | "success" | "error"
+    "idle" | "submitting" | "waiting" | "success" | "error"
   >("idle");
   const [message, setMessage] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sessionId || status !== "waiting") return;
+
+    const intervalId = window.setInterval(async () => {
+      const response = await fetch(`/api/iot/sessions/${sessionId}`, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) return;
+
+      const body = (await response.json()) as {
+        session?: {
+          status: "pending" | "matched" | "short" | "over" | "expired";
+          message: string;
+        };
+      };
+      if (!body.session) return;
+
+      setMessage(body.session.message);
+
+      if (body.session.status === "matched") {
+        setStatus("success");
+        setSessionId(null);
+        clear();
+        window.clearInterval(intervalId);
+      }
+    }, 2000);
+
+    return () => window.clearInterval(intervalId);
+  }, [clear, sessionId, status]);
 
   async function submitToIot() {
     setStatus("submitting");
@@ -35,6 +67,7 @@ export default function CartPage() {
     const body = (await response.json()) as {
       error?: string;
       message?: string;
+      sessionId?: string;
     };
 
     if (!response.ok) {
@@ -43,9 +76,9 @@ export default function CartPage() {
       return;
     }
 
-    setStatus("success");
-    setMessage(body.message ?? "ส่งข้อมูลไปยัง IOT mock แล้ว");
-    clear();
+    setStatus("waiting");
+    setSessionId(body.sessionId ?? null);
+    setMessage(body.message ?? "เปิดตู้แล้ว กำลังรอผลจาก IOT mock");
   }
 
   return (
@@ -117,12 +150,15 @@ export default function CartPage() {
           <Button
             className="mt-6 w-full"
             size="lg"
-            disabled={status === "submitting"}
+            disabled={status === "submitting" || status === "waiting"}
             onClick={submitToIot}
           >
-            {status === "submitting"
-              ? "กำลังเปิดตู้..."
-              : "Submit เพื่อเปิดตู้"}
+            {status === "submitting" && "กำลังเปิดตู้..."}
+            {status === "waiting" && "กำลังรอผลจากตู้..."}
+            {(status === "idle" ||
+              status === "success" ||
+              status === "error") &&
+              "Submit เพื่อเปิดตู้"}
           </Button>
         </>
       )}

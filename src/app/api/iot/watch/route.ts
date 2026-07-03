@@ -47,6 +47,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const result = await iotService.watchCart(user, items);
-  return NextResponse.json(result);
+  try {
+    const result = await iotService.watchCart(user, items);
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "IOT watch failed" },
+      { status: 400 },
+    );
+  }
 }

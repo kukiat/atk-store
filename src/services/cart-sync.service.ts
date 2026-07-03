@@ -7,23 +7,32 @@ import type { CartItem } from "@/types";
 
 type StoredCart = {
   clientVisitId: number;
+  sessionId: string;
   items: CartItem[];
   syncedAt: string;
 };
 
 const globalForCart = globalThis as unknown as {
-  atkRedisCartMock: Map<number, StoredCart> | undefined;
+  atkRedisCartMock: Map<string, StoredCart> | undefined;
+  atkRedisCartActiveMock: Map<number, string> | undefined;
 };
 
 const memoryStore =
-  globalForCart.atkRedisCartMock ?? new Map<number, StoredCart>();
+  globalForCart.atkRedisCartMock ?? new Map<string, StoredCart>();
+const activeSessionStore =
+  globalForCart.atkRedisCartActiveMock ?? new Map<number, string>();
 
 if (process.env.NODE_ENV !== "production") {
   globalForCart.atkRedisCartMock = memoryStore;
+  globalForCart.atkRedisCartActiveMock = activeSessionStore;
 }
 
-function cartKey(clientVisitId: number): string {
-  return `client_visit:${clientVisitId}:cart`;
+function activeCartKey(clientVisitId: number): string {
+  return `cart:${clientVisitId}:active`;
+}
+
+function cartKey(clientVisitId: number, sessionId: string): string {
+  return `cart:${clientVisitId}:${sessionId}`;
 }
 
 function shouldUseRedis(): boolean {
@@ -105,9 +114,14 @@ async function runRedisCommand(parts: string[]): Promise<string | null> {
 }
 
 class CartSyncService {
-  async setCart(clientVisitId: number, items: CartItem[]): Promise<StoredCart> {
+  async setCart(
+    clientVisitId: number,
+    items: CartItem[],
+    sessionId: string,
+  ): Promise<StoredCart> {
     const stored = {
       clientVisitId,
+      sessionId,
       items,
       syncedAt: new Date().toISOString(),
     };
@@ -116,42 +130,62 @@ class CartSyncService {
       try {
         await runRedisCommand([
           "SET",
-          cartKey(clientVisitId),
+          cartKey(clientVisitId, sessionId),
           JSON.stringify(stored),
         ]);
+        await runRedisCommand(["SET", activeCartKey(clientVisitId), sessionId]);
         return stored;
       } catch {
         // Redis can be offline in local dev; keep the mobile flow usable.
       }
     }
 
-    memoryStore.set(clientVisitId, stored);
+    memoryStore.set(cartKey(clientVisitId, sessionId), stored);
+    activeSessionStore.set(clientVisitId, sessionId);
     return stored;
   }
 
   async getCart(clientVisitId: number): Promise<StoredCart | null> {
+    let sessionId: string | null = null;
+
     if (shouldUseRedis()) {
       try {
-        const raw = await runRedisCommand(["GET", cartKey(clientVisitId)]);
+        sessionId = await runRedisCommand(["GET", activeCartKey(clientVisitId)]);
+        if (!sessionId) return null;
+        const raw = await runRedisCommand([
+          "GET",
+          cartKey(clientVisitId, sessionId),
+        ]);
         if (raw) return JSON.parse(raw) as StoredCart;
       } catch {
         // Fall through to memory fallback.
       }
     }
 
-    return memoryStore.get(clientVisitId) ?? null;
+    sessionId ??= activeSessionStore.get(clientVisitId) ?? null;
+    if (!sessionId) return null;
+
+    return memoryStore.get(cartKey(clientVisitId, sessionId)) ?? null;
   }
 
   async clearCart(clientVisitId: number): Promise<void> {
+    let sessionId: string | null = null;
+
     if (shouldUseRedis()) {
       try {
-        await runRedisCommand(["DEL", cartKey(clientVisitId)]);
+        sessionId = await runRedisCommand(["GET", activeCartKey(clientVisitId)]);
+        if (sessionId) {
+          await runRedisCommand(["DEL", cartKey(clientVisitId, sessionId)]);
+        }
+        await runRedisCommand(["DEL", activeCartKey(clientVisitId)]);
       } catch {
         // Fall through to memory cleanup.
       }
     }
 
-    memoryStore.delete(clientVisitId);
+    sessionId ??= activeSessionStore.get(clientVisitId) ?? null;
+    if (sessionId) memoryStore.delete(cartKey(clientVisitId, sessionId));
+    activeSessionStore.delete(clientVisitId);
   }
 }
 

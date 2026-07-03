@@ -304,6 +304,14 @@
 # note (2026-07-02)
 > คือเราไม่ต้องส่งจำนวนไปให้ IOT server แต่จะให้ IOT server ส่งมาบอกเราแบบ realtime ว่ามีการหยิบสินค้าออกกี่ชิ้น แล้วมาคำนวณ
 1. user scan -> เลือกสินค้า + จำนวน -> submit
-2. app server ส่งไปบอก IOT Server ว่าจะให้เปิดประตู ไหนบ้าง (อันนี้อาจจะส่งเป็น survoId)
+2. app server ส่งไปบอก IOT Server ว่าจะให้เปิดประตูไหนบ้าง โดยใช้ `sensorId` จาก shelf เป็นตัวอ้างอิงฝั่ง IOT
 3. IOT Server จะส่งมาบอกว่า user คนนี้หยิบสินค้ากี่ชิ้น (ผ่าน socket) เป็นจำนวนชิ้น แล้วให้ app server มาคำนวณว่า match กับจำนวนที่เลือกไหม (คำนวณ ขาด/เกิน) ผ่าน ws
-4. channelId ของ ws ให้ใช้ id ลูกค้า + visitorId
+4. `survoId` ไม่ต้องแยกใน app ตอนนี้ ให้ถือว่าฝั่ง IOT config รวมกับ `sensorId` แล้ว
+5. cart key และ channelId ไม่ควรใช้ email ตรงๆ เพราะเป็น PII, เปลี่ยนได้, และจะไปโผล่ใน Redis/log/ws URL ได้ง่าย
+6. แนะนำให้ใช้ opaque visit/session id เป็นหลัก เช่น
+    - cart key: `cart:<clientVisitId>:<sessionUuid>`
+    - ws channelId: `shelf:<shelfId>:visit:<clientVisitId>:<sessionUuid>`
+    - เก็บ email/name เป็น metadata สำหรับแสดงผลใน notification/admin UI เท่านั้น
+7. ช่วงที่ IOT Server ยังไม่พร้อม ให้มี PoC route `/admin/inventory/iot-poc` เป็น mock IOT portal สำหรับส่ง picked count กลับเข้า app
+8. PoC ใช้ strict flow: ถ้า picked count ไม่ตรงกับจำนวนที่ลูกค้าเลือก จะไม่ sync cart เข้า Redis และจะสร้าง notification แจ้งขาด/เกินก่อน
+9. ถ้า shelf นั้นผูก inventory เดียว ให้ app server ใช้ `shelfId -> inventory.weightPerPiece` สำหรับคำนวณ/แสดง expected weight แต่ผล match หลักใช้จำนวนชิ้นที่ IOT ส่งกลับมาเทียบกับจำนวนที่ลูกค้าเลือก

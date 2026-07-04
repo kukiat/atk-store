@@ -16,6 +16,7 @@ import {
   units,
   userRoles,
   users,
+  walletFundingChannels,
 } from "./schema";
 
 process.loadEnvFile();
@@ -29,7 +30,16 @@ if (!connectionString) {
 
 const client = postgres(connectionString, { max: 1 });
 const db = drizzle(client, {
-  schema: { groups, inventories, roles, shelfs, units, userRoles, users },
+  schema: {
+    groups,
+    inventories,
+    roles,
+    shelfs,
+    units,
+    userRoles,
+    users,
+    walletFundingChannels,
+  },
 });
 
 const INVENTORIES = [
@@ -103,6 +113,19 @@ const MOCK_CLIENTS = [
   },
 ];
 
+const WALLET_FUNDING_CHANNELS = [
+  {
+    channelCode: "card" as const,
+    displayName: "Credit / debit card",
+    stripePaymentMethodType: "card",
+  },
+  {
+    channelCode: "promptpay" as const,
+    displayName: "PromptPay",
+    stripePaymentMethodType: "promptpay",
+  },
+];
+
 async function main() {
   console.log("Seeding database...");
 
@@ -160,6 +183,23 @@ async function main() {
       )
       .onConflictDoNothing();
   }
+
+  await db
+    .insert(walletFundingChannels)
+    .values(
+      [false, true].flatMap((livemode) =>
+        WALLET_FUNDING_CHANNELS.map((channel) => ({
+          ...channel,
+          provider: "stripe" as const,
+          livemode,
+          minAmountMinor: 1000,
+          maxAmountMinor: 2000000,
+          isEnabled: true,
+          updatedAt: new Date(),
+        })),
+      ),
+    )
+    .onConflictDoNothing();
 
   // Idempotent reset so re-running gives a clean dataset.
   await db.delete(inventories);

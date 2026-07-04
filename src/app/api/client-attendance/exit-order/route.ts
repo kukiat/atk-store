@@ -6,6 +6,7 @@ import {
   requireClientAttendanceApiKey,
 } from "@/lib/client-attendance-auth";
 import { orderService } from "@/services/order.service";
+import { WalletInsufficientBalanceError } from "@/services/wallet.service";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const order = await orderService.createPaidMockOrderFromCart(clientVisitId);
+    const order = await orderService.createPaidWalletOrderFromCart(
+      clientVisitId,
+    );
     return NextResponse.json({ order }, { headers: noStore });
   } catch (error) {
     if (error instanceof ClientAttendanceAuthError) {
@@ -38,6 +41,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "server_misconfigured", message: error.message },
         { status: 500, headers: noStore },
+      );
+    }
+
+    if (error instanceof WalletInsufficientBalanceError) {
+      return NextResponse.json(
+        {
+          error: "insufficient_wallet_balance",
+          message: "Wallet balance is not enough to pay this order",
+        },
+        { status: 402, headers: noStore },
       );
     }
 

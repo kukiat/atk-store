@@ -1,0 +1,1191 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ATK Store Wallet ER Design</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --paper: #fbfaf7;
+        --ink: #20201d;
+        --muted: #68645c;
+        --line: #dad4c8;
+        --line-strong: #b8ac9b;
+        --panel: #fffdf9;
+        --panel-soft: #f5f1e8;
+        --stripe: #635bff;
+        --wallet: #ba5a31;
+        --core: #45605b;
+        --order: #7b5e32;
+        --danger: #9f3930;
+        --shadow: 0 16px 40px rgba(47, 39, 25, 0.08);
+        --mono:
+          "SFMono-Regular", "Cascadia Code", "Liberation Mono", Menlo, monospace;
+        --sans:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", sans-serif;
+        --serif:
+          "Source Serif 4", "Noto Serif Thai", "Noto Serif", Georgia, serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          linear-gradient(rgba(32, 32, 29, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(32, 32, 29, 0.035) 1px, transparent 1px),
+          var(--paper);
+        background-size: 28px 28px;
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 15px;
+        line-height: 1.65;
+      }
+
+      main {
+        width: min(1440px, calc(100% - 48px));
+        margin: 0 auto;
+        padding: 48px 0 64px;
+      }
+
+      header {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(300px, 0.95fr);
+        gap: 40px;
+        align-items: end;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 32px;
+      }
+
+      .eyebrow {
+        color: var(--wallet);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        margin: 0;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 820px;
+        font-family: var(--serif);
+        font-size: clamp(42px, 6vw, 82px);
+        line-height: 0.98;
+        font-weight: 720;
+      }
+
+      h2 {
+        font-family: var(--serif);
+        font-size: clamp(26px, 3vw, 38px);
+        line-height: 1.08;
+      }
+
+      h3 {
+        font-size: 14px;
+        font-weight: 850;
+      }
+
+      p {
+        margin: 0;
+      }
+
+      .lede {
+        color: var(--muted);
+        font-size: 17px;
+      }
+
+      .decision {
+        border-left: 4px solid var(--wallet);
+        padding: 4px 0 4px 18px;
+      }
+
+      .decision strong {
+        color: var(--ink);
+      }
+
+      section {
+        margin-top: 44px;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        align-items: end;
+        margin-bottom: 18px;
+      }
+
+      .section-head p {
+        max-width: 620px;
+        color: var(--muted);
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .pill {
+        display: inline-flex;
+        min-height: 26px;
+        align-items: center;
+        border: 1px solid var(--line);
+        background: rgba(255, 253, 249, 0.76);
+        padding: 2px 9px;
+        font-weight: 750;
+      }
+
+      .pill.core {
+        color: var(--core);
+      }
+
+      .pill.wallet {
+        color: var(--wallet);
+      }
+
+      .pill.stripe {
+        color: var(--stripe);
+      }
+
+      .pill.order {
+        color: var(--order);
+      }
+
+      .diagram-wrap {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid var(--line);
+        background:
+          radial-gradient(circle at 16% 0%, rgba(186, 90, 49, 0.08), transparent 32%),
+          radial-gradient(circle at 86% 8%, rgba(99, 91, 255, 0.08), transparent 34%),
+          rgba(255, 253, 249, 0.92);
+        box-shadow: var(--shadow);
+        padding: 28px;
+      }
+
+      .diagram {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(215px, 1fr));
+        gap: 18px;
+        align-items: start;
+      }
+
+      .lane {
+        display: grid;
+        gap: 14px;
+      }
+
+      .lane-title {
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        padding-bottom: 8px;
+        text-transform: uppercase;
+      }
+
+      .table {
+        border: 1px solid var(--line);
+        background: var(--panel);
+      }
+
+      .table.featured {
+        border-color: rgba(186, 90, 49, 0.58);
+        box-shadow: inset 0 0 0 2px rgba(186, 90, 49, 0.08);
+      }
+
+      .table-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 10px;
+        align-items: center;
+        border-bottom: 1px solid var(--line);
+        padding: 10px 12px;
+      }
+
+      .table-name {
+        font-family: var(--mono);
+        font-size: 13px;
+        font-weight: 850;
+      }
+
+      .tag {
+        border: 1px solid currentColor;
+        padding: 1px 6px;
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 850;
+        line-height: 1.6;
+        text-transform: uppercase;
+      }
+
+      .tag.core {
+        color: var(--core);
+      }
+
+      .tag.wallet {
+        color: var(--wallet);
+      }
+
+      .tag.stripe {
+        color: var(--stripe);
+      }
+
+      .tag.order {
+        color: var(--order);
+      }
+
+      .cols {
+        display: grid;
+      }
+
+      .col {
+        display: grid;
+        grid-template-columns: 38px minmax(0, 1fr) auto;
+        gap: 8px;
+        align-items: baseline;
+        border-bottom: 1px solid rgba(218, 212, 200, 0.62);
+        padding: 7px 12px;
+      }
+
+      .col:last-child {
+        border-bottom: 0;
+      }
+
+      .key {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 10px;
+        font-weight: 850;
+      }
+
+      .field {
+        overflow-wrap: anywhere;
+        font-family: var(--mono);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .type {
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 10px;
+        white-space: nowrap;
+      }
+
+      .note {
+        border-top: 1px solid var(--line);
+        background: var(--panel-soft);
+        color: var(--muted);
+        padding: 9px 12px;
+        font-size: 12px;
+      }
+
+      .relationships {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+        margin-top: 18px;
+      }
+
+      .rel {
+        border: 1px solid var(--line);
+        background: rgba(255, 253, 249, 0.82);
+        padding: 12px;
+      }
+
+      .rel code {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 800;
+      }
+
+      .rel p {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 4px;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .step {
+        min-height: 150px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 14px;
+        position: relative;
+      }
+
+      .step::after {
+        content: "";
+        position: absolute;
+        top: 50%;
+        right: -11px;
+        width: 11px;
+        border-top: 1px solid var(--line-strong);
+      }
+
+      .step:last-child::after {
+        display: none;
+      }
+
+      .step-num {
+        color: var(--wallet);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 900;
+      }
+
+      .step h3 {
+        margin-top: 8px;
+      }
+
+      .step p {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 8px;
+      }
+
+      .rules {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 18px;
+      }
+
+      .rule-panel,
+      .status-panel {
+        border: 1px solid var(--line);
+        background: rgba(255, 253, 249, 0.9);
+        padding: 22px;
+      }
+
+      .rule-list {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .rule {
+        display: grid;
+        grid-template-columns: 22px minmax(0, 1fr);
+        gap: 10px;
+      }
+
+      .rule-mark {
+        color: var(--wallet);
+        font-family: var(--mono);
+        font-weight: 900;
+      }
+
+      .rule strong {
+        display: block;
+        font-size: 13px;
+      }
+
+      .rule span {
+        color: var(--muted);
+        display: block;
+        font-size: 12px;
+        margin-top: 2px;
+      }
+
+      .status-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .status {
+        border: 1px solid var(--line);
+        background: var(--panel-soft);
+        padding: 10px;
+      }
+
+      .status code {
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 850;
+      }
+
+      .status span {
+        color: var(--muted);
+        display: block;
+        font-size: 12px;
+        margin-top: 4px;
+      }
+
+      .schema-detail {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .mini {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 16px;
+      }
+
+      .mini h3 {
+        font-family: var(--mono);
+      }
+
+      .mini ul {
+        margin: 12px 0 0;
+        padding-left: 18px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .mini li + li {
+        margin-top: 6px;
+      }
+
+      footer {
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 48px;
+        padding-top: 18px;
+      }
+
+      @media (max-width: 1100px) {
+        header,
+        .rules,
+        .relationships,
+        .schema-detail {
+          grid-template-columns: 1fr;
+        }
+
+        .diagram {
+          grid-template-columns: repeat(2, minmax(240px, 1fr));
+        }
+
+        .flow {
+          grid-template-columns: 1fr;
+        }
+
+        .step::after {
+          display: none;
+        }
+      }
+
+      @media (max-width: 680px) {
+        main {
+          width: min(100% - 28px, 1440px);
+          padding-top: 28px;
+        }
+
+        .diagram-wrap {
+          padding: 16px;
+        }
+
+        .diagram {
+          grid-template-columns: 1fr;
+        }
+
+        .section-head {
+          display: grid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="eyebrow">ATK Store payment architecture</p>
+          <h1>Wallet-only Checkout with Stripe-funded Balance</h1>
+        </div>
+        <div class="decision">
+          <p class="lede">
+            โครงสร้างนี้บังคับให้การจ่ายเงินในร้านผ่าน <strong>wallet</strong>
+            เท่านั้น ส่วน <strong>Stripe</strong> เป็นตัวกลางเติมเงินเข้า wallet,
+            ยืนยัน funding channel เช่น card หรือ PromptPay และส่ง webhook กลับมาให้
+            server ปรับ ledger แบบ idempotent
+          </p>
+        </div>
+      </header>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>ER Overview</h2>
+            <p>
+              ใส่ users/orders ที่มีอยู่แล้วแบบคร่าว ๆ และออกแบบส่วน wallet
+              ให้เป็นช่องทางจ่ายเงินเดียวของร้าน ส่วน Stripe Checkout ใช้สำหรับ
+              เติมเงินเข้า wallet ผ่าน channel ที่ Stripe รองรับ
+            </p>
+          </div>
+          <div class="legend">
+            <span class="pill core">existing core</span>
+            <span class="pill wallet">wallet domain</span>
+            <span class="pill stripe">stripe boundary</span>
+            <span class="pill order">checkout/order</span>
+          </div>
+        </div>
+
+        <div class="diagram-wrap">
+          <div class="diagram">
+            <div class="lane">
+              <div class="lane-title">Existing core</div>
+
+              <article class="table">
+                <div class="table-head">
+                  <span class="table-name">users</span>
+                  <span class="tag core">existing</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">serial</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">UQ</span>
+                    <span class="field">email</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">name</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">account_status</span>
+                    <span class="type">enum</span>
+                  </div>
+                </div>
+                <p class="note">มีอยู่แล้วในระบบ ใช้เป็น owner ของ wallet</p>
+              </article>
+
+              <article class="table">
+                <div class="table-head">
+                  <span class="table-name">client_visits</span>
+                  <span class="tag core">existing</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">serial</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">user_id</span>
+                    <span class="type">users.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">status</span>
+                    <span class="type">enum</span>
+                  </div>
+                </div>
+                <p class="note">ผูก order กับการเข้าออก store</p>
+              </article>
+            </div>
+
+            <div class="lane">
+              <div class="lane-title">Wallet source of truth</div>
+
+              <article class="table featured">
+                <div class="table-head">
+                  <span class="table-name">wallets</span>
+                  <span class="tag wallet">new</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK/UQ</span>
+                    <span class="field">user_id</span>
+                    <span class="type">users.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">currency</span>
+                    <span class="type">THB</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">balance_available_minor</span>
+                    <span class="type">int</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">balance_pending_minor</span>
+                    <span class="type">int</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">status</span>
+                    <span class="type">enum</span>
+                  </div>
+                </div>
+                <p class="note">
+                  เก็บ balance แบบ cached snapshot เท่านั้น ยอดจริง audit จาก ledger
+                </p>
+              </article>
+
+              <article class="table featured">
+                <div class="table-head">
+                  <span class="table-name">wallet_ledger_entries</span>
+                  <span class="tag wallet">append only</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">wallet_id</span>
+                    <span class="type">wallets.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">direction</span>
+                    <span class="type">credit/debit</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">type</span>
+                    <span class="type">enum</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">amount_minor</span>
+                    <span class="type">int</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">balance_after_minor</span>
+                    <span class="type">int</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">UQ</span>
+                    <span class="field">idempotency_key</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">reference_type / reference_id</span>
+                    <span class="type">text</span>
+                  </div>
+                </div>
+                <p class="note">
+                  ห้าม update/delete ตามปกติ ใช้ reverse entry หากต้องแก้ยอด
+                </p>
+              </article>
+            </div>
+
+            <div class="lane">
+              <div class="lane-title">Stripe integration</div>
+
+              <article class="table">
+                <div class="table-head">
+                  <span class="table-name">stripe_customers</span>
+                  <span class="tag stripe">new</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK/UQ</span>
+                    <span class="field">user_id</span>
+                    <span class="type">users.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">UQ</span>
+                    <span class="field">stripe_customer_id</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">email_snapshot</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">livemode</span>
+                    <span class="type">bool</span>
+                  </div>
+                </div>
+                <p class="note">
+                  mapping ระหว่าง user ของเราและ Customer object ของ Stripe
+                </p>
+              </article>
+
+              <article class="table featured">
+                <div class="table-head">
+                  <span class="table-name">wallet_topup_intents</span>
+                  <span class="tag wallet">new</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">wallet_id</span>
+                    <span class="type">wallets.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">stripe_customer_id</span>
+                    <span class="type">stripe_customers.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">UQ</span>
+                    <span class="field">stripe_checkout_session_id</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">UQ</span>
+                    <span class="field">stripe_payment_intent_id</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">amount_minor</span>
+                    <span class="type">int</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">requested_channel</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">confirmed_channel</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">status</span>
+                    <span class="type">enum</span>
+                  </div>
+                </div>
+                <p class="note">
+                  top-up request หนึ่งครั้ง ไม่ credit wallet จน webhook confirm paid;
+                  channel มาจาก Stripe เช่น card หรือ promptpay
+                </p>
+              </article>
+
+              <article class="table">
+                <div class="table-head">
+                  <span class="table-name">wallet_funding_channels</span>
+                  <span class="tag stripe">config</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">provider</span>
+                    <span class="type">stripe</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">UQ</span>
+                    <span class="field">channel_code</span>
+                    <span class="type">card/promptpay</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">stripe_payment_method_type</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">is_enabled</span>
+                    <span class="type">bool</span>
+                  </div>
+                </div>
+                <p class="note">
+                  catalog ช่องทางเติมเงินที่ app เปิดให้ใช้ โดย provider รอบแรกคือ Stripe
+                </p>
+              </article>
+
+              <article class="table">
+                <div class="table-head">
+                  <span class="table-name">stripe_webhook_events</span>
+                  <span class="tag stripe">new</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">UQ</span>
+                    <span class="field">stripe_event_id</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">event_type</span>
+                    <span class="type">text</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">processing_status</span>
+                    <span class="type">enum</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">payload</span>
+                    <span class="type">jsonb</span>
+                  </div>
+                </div>
+                <p class="note">
+                  กัน webhook ซ้ำ และเก็บ audit trail ของ provider event
+                </p>
+              </article>
+            </div>
+
+            <div class="lane">
+              <div class="lane-title">Order settlement</div>
+
+              <article class="table">
+                <div class="table-head">
+                  <span class="table-name">orders</span>
+                  <span class="tag order">existing</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">client_visit_id</span>
+                    <span class="type">client_visits.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">status</span>
+                    <span class="type">enum</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">total_price</span>
+                    <span class="type">double</span>
+                  </div>
+                </div>
+                <p class="note">
+                  มีอยู่แล้ว แต่ production ต้อง settle ผ่าน wallet เท่านั้น
+                </p>
+              </article>
+
+              <article class="table featured">
+                <div class="table-head">
+                  <span class="table-name">order_payments</span>
+                  <span class="tag wallet">new</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK/UQ</span>
+                    <span class="field">order_id</span>
+                    <span class="type">orders.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">wallet_id</span>
+                    <span class="type">wallets.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">ledger_entry_id</span>
+                    <span class="type">ledger.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">payment_method</span>
+                    <span class="type">wallet</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">amount_minor</span>
+                    <span class="type">int</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">status</span>
+                    <span class="type">enum</span>
+                  </div>
+                </div>
+                <p class="note">
+                  จ่าย order ด้วย wallet เท่านั้น โดยสร้าง debit ledger entry แบบ atomic;
+                  ไม่ผูก Stripe กับ order โดยตรง
+                </p>
+              </article>
+
+              <article class="table">
+                <div class="table-head">
+                  <span class="table-name">order_items</span>
+                  <span class="tag order">existing</span>
+                </div>
+                <div class="cols">
+                  <div class="col">
+                    <span class="key">PK</span>
+                    <span class="field">id</span>
+                    <span class="type">uuid</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">order_id</span>
+                    <span class="type">orders.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key">FK</span>
+                    <span class="field">inventory_id</span>
+                    <span class="type">inventories.id</span>
+                  </div>
+                  <div class="col">
+                    <span class="key"></span>
+                    <span class="field">amount / price</span>
+                    <span class="type">snapshot</span>
+                  </div>
+                </div>
+                <p class="note">เก็บ snapshot สินค้าที่คิดเงินแล้ว</p>
+              </article>
+            </div>
+          </div>
+
+          <div class="relationships">
+            <div class="rel">
+              <code>users 1:1 wallets</code>
+              <p>ลูกค้า 1 คนมี wallet หลัก 1 ใบใน currency THB</p>
+            </div>
+            <div class="rel">
+              <code>wallets 1:N wallet_ledger_entries</code>
+              <p>ทุกยอดเข้าออกต้องลง ledger ก่อน แล้วค่อย update cached balance</p>
+            </div>
+            <div class="rel">
+              <code>stripe_webhook_events 1:1 provider event</code>
+              <p>ใช้ stripe_event_id เป็น unique key กัน webhook replay หรือ duplicate delivery</p>
+            </div>
+            <div class="rel">
+              <code>orders 1:1 order_payments</code>
+              <p>order settlement มี payment method เดียวคือ wallet ส่วน Stripe อยู่ในฝั่งเติมเงิน</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>Top-up Flow</h2>
+            <p>
+              Stripe เป็นคนรับเงินและยืนยัน funding channel แต่ server ของเราต้องเป็นคนตัดสินใจ
+              ว่าเมื่อไรจะ credit เข้า wallet; ตอนซื้อสินค้าใช้ wallet balance เท่านั้น
+            </p>
+          </div>
+        </div>
+
+        <div class="flow">
+          <article class="step">
+            <span class="step-num">01</span>
+            <h3>Create top-up intent</h3>
+            <p>
+              user เลือกจำนวนเงินและ channel ที่เปิดใช้ ระบบสร้าง wallet_topup_intents
+              เป็น status <code>created</code>
+            </p>
+          </article>
+          <article class="step">
+            <span class="step-num">02</span>
+            <h3>Create Stripe Checkout</h3>
+            <p>
+              server สร้าง Checkout Session พร้อม payment_method_types ตาม channel
+              และ metadata: topupIntentId, walletId, userId
+            </p>
+          </article>
+          <article class="step">
+            <span class="step-num">03</span>
+            <h3>Customer pays</h3>
+            <p>
+              Stripe รับเงินด้วย channel ที่เลือก เช่น card หรือ PromptPay แล้ว redirect user กลับ app
+              แต่ยังไม่ถือว่า wallet credited
+            </p>
+          </article>
+          <article class="step">
+            <span class="step-num">04</span>
+            <h3>Webhook confirms</h3>
+            <p>
+              server verify signature, insert stripe_webhook_events,
+              mark top-up paid แบบ idempotent พร้อมบันทึก confirmed_channel
+            </p>
+          </article>
+          <article class="step">
+            <span class="step-num">05</span>
+            <h3>Credit ledger</h3>
+            <p>
+              สร้าง credit ledger entry และ update wallets.balance_available_minor
+              ใน transaction เดียวกัน
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="rules">
+          <article class="rule-panel">
+            <h2>Design Rules</h2>
+            <div class="rule-list">
+              <div class="rule">
+                <span class="rule-mark">01</span>
+                <div>
+                  <strong>Money uses integer minor units</strong>
+                  <span>เก็บเป็นสตางค์ เช่น 100 บาท = 10000 minor units เลี่ยง double precision สำหรับเงิน</span>
+                </div>
+              </div>
+              <div class="rule">
+                <span class="rule-mark">02</span>
+                <div>
+                  <strong>Ledger is append-only</strong>
+                  <span>ยอดผิดให้ทำ reversal entry ไม่แก้ row เดิม เพื่อ audit ได้ครบ</span>
+                </div>
+              </div>
+              <div class="rule">
+                <span class="rule-mark">03</span>
+                <div>
+                  <strong>Webhook is trusted funding confirmation</strong>
+                  <span>หน้า success ของ Stripe ใช้บอก user ได้ แต่ห้าม credit wallet จาก redirect อย่างเดียว</span>
+                </div>
+              </div>
+              <div class="rule">
+                <span class="rule-mark">04</span>
+                <div>
+                  <strong>Every mutation is idempotent</strong>
+                  <span>top-up, wallet order payment, refund ต้องมี idempotency_key หรือ provider event unique key</span>
+                </div>
+              </div>
+              <div class="rule">
+                <span class="rule-mark">05</span>
+                <div>
+                  <strong>Order payment is wallet-only</strong>
+                  <span>Stripe ไม่ควรเป็น payment method ของ order โดยตรงใน app flow นี้</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="status-panel">
+            <h2>Status Model</h2>
+            <div class="status-grid">
+              <div class="status">
+                <code>wallet.status</code>
+                <span>active, suspended, closed</span>
+              </div>
+              <div class="status">
+                <code>topup.status</code>
+                <span>created, checkout_open, paid, failed, canceled, refunded</span>
+              </div>
+              <div class="status">
+                <code>ledger.type</code>
+                <span>topup_credit, order_debit, refund_credit, adjustment_credit, adjustment_debit</span>
+              </div>
+              <div class="status">
+                <code>order_payment.status</code>
+                <span>pending, paid, failed, refunded</span>
+              </div>
+              <div class="status">
+                <code>funding.channel</code>
+                <span>card, promptpay, or any Stripe-enabled method</span>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <div>
+            <h2>Implementation Notes</h2>
+            <p>
+              ส่วนนี้คือข้อเสนอสำหรับ migration รอบ production ไม่ใช่ table
+              ที่มีอยู่ครบแล้วใน repo ตอนนี้
+            </p>
+          </div>
+        </div>
+
+        <div class="schema-detail">
+          <article class="mini">
+            <h3>Phase 1: top-up only</h3>
+            <ul>
+              <li>เพิ่ม wallets, stripe_customers, wallet_topup_intents, wallet_funding_channels</li>
+              <li>เพิ่ม stripe_webhook_events เพื่อกัน event ซ้ำ</li>
+              <li>เติม wallet เฉพาะจาก webhook ที่ verified แล้ว และบันทึก confirmed_channel</li>
+            </ul>
+          </article>
+          <article class="mini">
+            <h3>Phase 2: pay from wallet</h3>
+            <ul>
+              <li>เพิ่ม order_payments เป็นชั้นกลางระหว่าง orders กับ ledger โดย method เป็น wallet เท่านั้น</li>
+              <li>ตอน checkout ต้อง lock wallet row หรือใช้ transaction isolation</li>
+              <li>ไม่ให้ balance_available_minor ติดลบ เว้นแต่ตั้งใจทำ credit line</li>
+            </ul>
+          </article>
+          <article class="mini">
+            <h3>Phase 3: saved card</h3>
+            <ul>
+              <li>ค่อยเพิ่ม user_payment_methods ถ้าต้องเก็บ payment method สำหรับ quick top-up รอบถัดไป</li>
+              <li>เก็บเฉพาะ Stripe payment_method id, brand, last4, exp ไม่เก็บเลขบัตร</li>
+              <li>ถ้าแค่ top-up ผ่าน Checkout ยังไม่จำเป็นต้องมี table นี้ และยังไม่ใช้จ่าย order โดยตรง</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          Recommended principle: Stripe owns wallet funding collection and payment
+          method security; ATK Store owns wallet-only checkout, customer balance,
+          ledger audit, and order settlement.
+        </p>
+      </footer>
+    </main>
+  </body>
+</html>

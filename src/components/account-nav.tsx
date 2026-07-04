@@ -2,7 +2,7 @@
 
 import { Menu } from "@base-ui/react/menu";
 import {
-  ArrowLeft,
+  Home,
   BriefcaseBusiness,
   ChevronDown,
   LogOut,
@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   ShoppingCart,
   UserRound,
+  WalletCards,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -17,7 +18,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { formatBaht } from "@/lib/format";
+import { formatBaht, formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useHydrated } from "@/lib/use-hydrated";
 import { selectTotalCount, selectTotalPrice, useCartStore } from "@/store/cart";
@@ -29,9 +30,14 @@ type AccountNavProps = {
     avatarUrl: string | null;
   };
   canAccessAdmin: boolean;
+  walletBalanceMinor: number;
 };
 
-export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
+export function AccountNav({
+  user,
+  canAccessAdmin,
+  walletBalanceMinor,
+}: AccountNavProps) {
   const displayName = user.name ?? user.email;
   const router = useRouter();
   const pathname = usePathname();
@@ -48,42 +54,41 @@ export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
           "mx-auto flex w-full max-w-6xl gap-3 px-4 py-3 sm:px-6 lg:px-8",
           isAdminPage
             ? "flex-col md:flex-row md:items-center md:justify-between"
-            : "items-center justify-end",
+            : "items-center justify-between",
         )}
       >
         {isAdminPage ? (
-          <div className="min-w-0 space-y-1">
-            <div className="text-muted-foreground flex items-center gap-2 text-sm">
-              <ShieldCheck className="size-4" />
-              <span>Back office</span>
+          <div className="grid min-w-0 gap-3 sm:grid-cols-[auto_minmax(0,1fr)] sm:items-center">
+            <Link
+              href="/"
+              className={cn(buttonVariants({ variant: "outline" }), "w-fit")}
+            >
+              <Home className="size-4" />
+              Home
+            </Link>
+            <div className="min-w-0 space-y-1">
+              <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                <ShieldCheck className="size-4" />
+                <span>Back office</span>
+              </div>
+              <h1 className="truncate text-xl font-bold sm:text-2xl">
+                User management
+              </h1>
             </div>
-            <h1 className="truncate text-xl font-bold sm:text-2xl">
-              User management
-            </h1>
           </div>
-        ) : null}
+        ) : (
+          <Link href="/" className={buttonVariants({ variant: "outline" })}>
+            <Home className="size-4" />
+            Home
+          </Link>
+        )}
 
         <div
           className={cn(
             "items-center gap-2",
-            isAdminPage
-              ? "grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1.4fr)] md:flex"
-              : "flex justify-end",
+            isAdminPage ? "flex justify-end" : "flex justify-end",
           )}
         >
-          {isAdminPage ? (
-            <Link
-              href="/"
-              className={cn(
-                buttonVariants({ variant: "outline" }),
-                "w-full md:w-auto",
-              )}
-            >
-              <ArrowLeft className="size-4" />
-              Home
-            </Link>
-          ) : null}
-
           <ThemeToggle />
 
           <Menu.Root modal={false}>
@@ -94,6 +99,10 @@ export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
               <Avatar avatarUrl={user.avatarUrl} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium">
                 {displayName}
+              </span>
+              <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums">
+                <WalletCards className="size-3.5" />
+                {formatPrice(walletBalanceMinor)}
               </span>
               {showCartBadge ? (
                 <span
@@ -122,6 +131,19 @@ export function AccountNav({ user, canAccessAdmin }: AccountNavProps) {
                   >
                     <ScanLine className="size-4" />
                     Store home
+                  </Menu.LinkItem>
+                  <Menu.LinkItem
+                    render={<Link href="/wallet" />}
+                    closeOnClick
+                    className="data-[highlighted]:bg-muted flex items-center justify-between gap-3 rounded-md px-2 py-2 outline-none"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <WalletCards className="size-4" />
+                      <span>Wallet</span>
+                    </span>
+                    <span className="text-muted-foreground text-xs tabular-nums">
+                      {formatPrice(walletBalanceMinor)}
+                    </span>
                   </Menu.LinkItem>
                   <Menu.LinkItem
                     render={

@@ -118,6 +118,51 @@ export const paymentStatusEnum = db_schema.enum("payment_status", [
   "cancelled",
 ]);
 
+export const walletStatusEnum = db_schema.enum("wallet_status", [
+  "active",
+  "suspended",
+  "closed",
+]);
+
+export const walletLedgerDirectionEnum = db_schema.enum(
+  "wallet_ledger_direction",
+  ["credit", "debit"],
+);
+
+export const walletLedgerTypeEnum = db_schema.enum("wallet_ledger_type", [
+  "topup_credit",
+  "order_debit",
+  "adjustment_credit",
+  "adjustment_debit",
+]);
+
+export const walletFundingProviderEnum = db_schema.enum(
+  "wallet_funding_provider",
+  ["stripe"],
+);
+
+export const walletFundingChannelEnum = db_schema.enum(
+  "wallet_funding_channel",
+  ["card", "promptpay"],
+);
+
+export const walletTopupStatusEnum = db_schema.enum("wallet_topup_status", [
+  "created",
+  "checkout_open",
+  "paid",
+  "failed",
+  "cancelled",
+]);
+
+export const stripeWebhookProcessingStatusEnum = db_schema.enum(
+  "stripe_webhook_processing_status",
+  ["processing", "processed", "ignored", "failed"],
+);
+
+export const orderPaymentMethodEnum = db_schema.enum("order_payment_method", [
+  "wallet",
+]);
+
 export const notificationRecipientTypeEnum = db_schema.enum(
   "notification_recipient_type",
   ["client", "admin", "super_admin"],
@@ -432,6 +477,8 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   faceProfile: one(userFaceProfiles),
   attendanceEvents: many(clientAttendanceEvents),
   clientVisits: many(clientVisits),
+  wallet: one(wallets),
+  stripeCustomers: many(stripeCustomers),
 }));
 
 export const rolesRelations = relations(roles, ({ many }) => ({
@@ -618,6 +665,188 @@ export const orderItems = db_schema.table("order_items", {
   ...lifecycleColumns,
 });
 
+export const wallets = db_schema.table(
+  "wallets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    currency: text("currency").notNull().default("THB"),
+    balanceAvailableMinor: integer("balance_available_minor")
+      .notNull()
+      .default(0),
+    balancePendingMinor: integer("balance_pending_minor").notNull().default(0),
+    status: walletStatusEnum("status").notNull().default("active"),
+    ...lifecycleColumns,
+  },
+  (table) => [uniqueIndex("wallets_user_id_unique").on(table.userId)],
+);
+
+export const walletLedgerEntries = db_schema.table(
+  "wallet_ledger_entries",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    walletId: uuid("wallet_id")
+      .notNull()
+      .references(() => wallets.id, { onDelete: "restrict" }),
+    direction: walletLedgerDirectionEnum("direction").notNull(),
+    type: walletLedgerTypeEnum("type").notNull(),
+    amountMinor: integer("amount_minor").notNull(),
+    currency: text("currency").notNull().default("THB"),
+    balanceAfterMinor: integer("balance_after_minor").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    referenceType: text("reference_type"),
+    referenceId: text("reference_id"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("wallet_ledger_entries_idempotency_key_unique").on(
+      table.idempotencyKey,
+    ),
+  ],
+);
+
+export const stripeCustomers = db_schema.table(
+  "stripe_customers",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    stripeCustomerId: text("stripe_customer_id").notNull(),
+    emailSnapshot: text("email_snapshot").notNull(),
+    livemode: boolean("livemode").notNull().default(false),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    uniqueIndex("stripe_customers_user_livemode_unique").on(
+      table.userId,
+      table.livemode,
+    ),
+    uniqueIndex("stripe_customers_provider_id_livemode_unique").on(
+      table.stripeCustomerId,
+      table.livemode,
+    ),
+  ],
+);
+
+export const walletFundingChannels = db_schema.table(
+  "wallet_funding_channels",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    provider: walletFundingProviderEnum("provider").notNull().default("stripe"),
+    channelCode: walletFundingChannelEnum("channel_code").notNull(),
+    displayName: text("display_name").notNull(),
+    stripePaymentMethodType: text("stripe_payment_method_type").notNull(),
+    livemode: boolean("livemode").notNull().default(false),
+    minAmountMinor: integer("min_amount_minor").notNull().default(1000),
+    maxAmountMinor: integer("max_amount_minor").notNull().default(2000000),
+    isEnabled: boolean("is_enabled").notNull().default(true),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    uniqueIndex("wallet_funding_channels_provider_code_livemode_unique").on(
+      table.provider,
+      table.channelCode,
+      table.livemode,
+    ),
+  ],
+);
+
+export const walletTopupIntents = db_schema.table(
+  "wallet_topup_intents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    walletId: uuid("wallet_id")
+      .notNull()
+      .references(() => wallets.id, { onDelete: "restrict" }),
+    stripeCustomerRecordId: uuid("stripe_customer_record_id").references(
+      () => stripeCustomers.id,
+      { onDelete: "set null" },
+    ),
+    stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    requestedChannel: walletFundingChannelEnum("requested_channel").notNull(),
+    confirmedChannel: walletFundingChannelEnum("confirmed_channel"),
+    amountMinor: integer("amount_minor").notNull(),
+    currency: text("currency").notNull().default("THB"),
+    status: walletTopupStatusEnum("status").notNull().default("created"),
+    livemode: boolean("livemode").notNull().default(false),
+    checkoutUrl: text("checkout_url"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    uniqueIndex("wallet_topup_intents_checkout_session_unique").on(
+      table.stripeCheckoutSessionId,
+    ),
+    uniqueIndex("wallet_topup_intents_payment_intent_unique").on(
+      table.stripePaymentIntentId,
+    ),
+  ],
+);
+
+export const stripeWebhookEvents = db_schema.table(
+  "stripe_webhook_events",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    stripeEventId: text("stripe_event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    livemode: boolean("livemode").notNull().default(false),
+    processingStatus: stripeWebhookProcessingStatusEnum("processing_status")
+      .notNull()
+      .default("processing"),
+    payload: jsonb("payload").$type<Record<string, unknown>>().notNull(),
+    errorMessage: text("error_message"),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    uniqueIndex("stripe_webhook_events_event_id_unique").on(
+      table.stripeEventId,
+    ),
+  ],
+);
+
+export const orderPayments = db_schema.table(
+  "order_payments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    walletId: uuid("wallet_id")
+      .notNull()
+      .references(() => wallets.id, { onDelete: "restrict" }),
+    ledgerEntryId: uuid("ledger_entry_id").references(
+      () => walletLedgerEntries.id,
+      { onDelete: "restrict" },
+    ),
+    paymentMethod: orderPaymentMethodEnum("payment_method")
+      .notNull()
+      .default("wallet"),
+    amountMinor: integer("amount_minor").notNull(),
+    currency: text("currency").notNull().default("THB"),
+    status: paymentStatusEnum("status").notNull().default("pending"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    uniqueIndex("order_payments_order_id_unique").on(table.orderId),
+    uniqueIndex("order_payments_ledger_entry_id_unique").on(
+      table.ledgerEntryId,
+    ),
+    uniqueIndex("order_payments_idempotency_key_unique").on(
+      table.idempotencyKey,
+    ),
+  ],
+);
+
 export const notifications = db_schema.table("notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
   clientVisitId: integer("client_visit_id").references(() => clientVisits.id, {
@@ -669,6 +898,7 @@ export const ordersRelations = relations(orders, ({ many, one }) => ({
     references: [clientVisits.id],
   }),
   items: many(orderItems),
+  payment: one(orderPayments),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
@@ -683,6 +913,66 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   unit: one(units, {
     fields: [orderItems.unitId],
     references: [units.id],
+  }),
+}));
+
+export const walletsRelations = relations(wallets, ({ many, one }) => ({
+  user: one(users, {
+    fields: [wallets.userId],
+    references: [users.id],
+  }),
+  ledgerEntries: many(walletLedgerEntries),
+  topupIntents: many(walletTopupIntents),
+  orderPayments: many(orderPayments),
+}));
+
+export const walletLedgerEntriesRelations = relations(
+  walletLedgerEntries,
+  ({ one }) => ({
+    wallet: one(wallets, {
+      fields: [walletLedgerEntries.walletId],
+      references: [wallets.id],
+    }),
+  }),
+);
+
+export const stripeCustomersRelations = relations(
+  stripeCustomers,
+  ({ many, one }) => ({
+    user: one(users, {
+      fields: [stripeCustomers.userId],
+      references: [users.id],
+    }),
+    topupIntents: many(walletTopupIntents),
+  }),
+);
+
+export const walletTopupIntentsRelations = relations(
+  walletTopupIntents,
+  ({ one }) => ({
+    wallet: one(wallets, {
+      fields: [walletTopupIntents.walletId],
+      references: [wallets.id],
+    }),
+    stripeCustomer: one(stripeCustomers, {
+      fields: [walletTopupIntents.stripeCustomerRecordId],
+      references: [stripeCustomers.id],
+    }),
+  }),
+);
+
+export const orderPaymentsRelations = relations(orderPayments, ({ one }) => ({
+  order: one(orders, {
+    fields: [orderPayments.orderId],
+    references: [orders.id],
+  }),
+  wallet: one(wallets, {
+    fields: [orderPayments.walletId],
+    references: [wallets.id],
+  }),
+  ledgerEntry: one(walletLedgerEntries, {
+    fields: [orderPayments.ledgerEntryId],
+    references: [walletLedgerEntries.id],
   }),
 }));
 
@@ -708,6 +998,17 @@ export type Unit = typeof units.$inferSelect;
 export type NewUnit = typeof units.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type Wallet = typeof wallets.$inferSelect;
+export type NewWallet = typeof wallets.$inferInsert;
+export type WalletLedgerEntry = typeof walletLedgerEntries.$inferSelect;
+export type NewWalletLedgerEntry = typeof walletLedgerEntries.$inferInsert;
+export type StripeCustomer = typeof stripeCustomers.$inferSelect;
+export type NewStripeCustomer = typeof stripeCustomers.$inferInsert;
+export type WalletFundingChannel = typeof walletFundingChannels.$inferSelect;
+export type WalletTopupIntent = typeof walletTopupIntents.$inferSelect;
+export type NewWalletTopupIntent = typeof walletTopupIntents.$inferInsert;
+export type StripeWebhookEvent = typeof stripeWebhookEvents.$inferSelect;
+export type OrderPayment = typeof orderPayments.$inferSelect;
 export type Notification = typeof notifications.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
@@ -763,3 +1064,21 @@ export type AttendanceRecognitionDecision =
 /** Inferred customer visit lifecycle. */
 export type ClientVisitStatus =
   (typeof clientVisitStatusEnum.enumValues)[number];
+
+/** Customer wallet lifecycle. */
+export type WalletStatus = (typeof walletStatusEnum.enumValues)[number];
+
+/** Wallet ledger direction. */
+export type WalletLedgerDirection =
+  (typeof walletLedgerDirectionEnum.enumValues)[number];
+
+/** Wallet ledger business reason. */
+export type WalletLedgerType = (typeof walletLedgerTypeEnum.enumValues)[number];
+
+/** Stripe-backed wallet funding channel. */
+export type WalletFundingChannelCode =
+  (typeof walletFundingChannelEnum.enumValues)[number];
+
+/** Top-up lifecycle. */
+export type WalletTopupStatus =
+  (typeof walletTopupStatusEnum.enumValues)[number];

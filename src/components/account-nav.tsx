@@ -81,47 +81,30 @@ export function AccountNav({
       if (
         body.order?.status === "paid" &&
         body.order.paymentStatus === "paid" &&
-        hydrated &&
-        cartCount > 0
+        hydrated
       ) {
         clearCart();
         router.replace("/?checkout=paid");
       }
     }
 
-    events.addEventListener(
-      "checkout-status",
-      handleCheckoutStatus as EventListener,
-    );
+    function handleCartUpdated(event: MessageEvent<string>) {
+      if (isAdminPage) return;
 
-    return () => events.close();
-  }, [cartCount, clearCart, hydrated, router]);
-
-  useEffect(() => {
-    if (!hydrated || isAdminPage) return;
-
-    let disposed = false;
-
-    async function syncActiveCart() {
-      const response = await fetch("/api/cart/active", {
-        cache: "no-store",
-      }).catch(() => null);
-      if (!response?.ok || disposed) return;
-
-      const body = (await response.json()) as ActiveCartResponse;
+      const body = JSON.parse(event.data) as ActiveCartResponse;
       if (!body.visit) return;
 
       setCartItems(body.cart?.items ?? []);
     }
 
-    void syncActiveCart();
-    const intervalId = window.setInterval(syncActiveCart, 2500);
+    events.addEventListener(
+      "checkout-status",
+      handleCheckoutStatus as EventListener,
+    );
+    events.addEventListener("cart-updated", handleCartUpdated as EventListener);
 
-    return () => {
-      disposed = true;
-      window.clearInterval(intervalId);
-    };
-  }, [hydrated, isAdminPage, setCartItems]);
+    return () => events.close();
+  }, [clearCart, hydrated, isAdminPage, router, setCartItems]);
 
   return (
     <header className="bg-background/95 sticky top-0 z-50 border-b">

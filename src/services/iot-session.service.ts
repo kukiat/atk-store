@@ -4,7 +4,9 @@ import { randomUUID } from "node:crypto";
 
 import { db } from "@/db";
 import { notifications, type User } from "@/db/schema";
+import { publishCartUpdated } from "@/services/cart-events.service";
 import { cartSyncService } from "@/services/cart-sync.service";
+import { publishIotSessionUpdated } from "@/services/iot-session-events.service";
 import type { CartItem } from "@/types";
 
 export type IotShelfStatus = "open" | "updated" | "closed";
@@ -187,6 +189,8 @@ class IotSessionService {
       input.pickedCount,
       session.sessionId,
     );
+    publishCartUpdated(session.userId);
+    publishIotSessionUpdated(session.sessionId);
     await this.insertNotifications(session, nextShelf, "picked_count");
 
     return cloneSession(session);
@@ -219,6 +223,7 @@ class IotSessionService {
     session.message = `${shelf.inventoryName}: ประตูตู้ปิดแล้ว จำนวนในตะกร้าคือ ${shelf.pickedCount} ชิ้น`;
 
     sessionStore.set(session.sessionId, session);
+    publishIotSessionUpdated(session.sessionId);
     await this.insertNotifications(session, nextShelf, "door_closed");
 
     return cloneSession(session);

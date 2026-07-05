@@ -4,6 +4,9 @@ import {
   AuthenticationRequiredError,
   requireCurrentUser,
 } from "@/lib/auth";
+import { subscribeCartUpdated } from "@/services/cart-events.service";
+import { cartSyncService } from "@/services/cart-sync.service";
+import { clientVisitService } from "@/services/client-visit.service";
 import { subscribeCheckoutStatus } from "@/services/order-events.service";
 import { orderService } from "@/services/order.service";
 
@@ -43,8 +46,45 @@ export async function GET(request: NextRequest) {
           }
         }
 
+        async function sendLatestCart() {
+          if (closed) return;
+
+          try {
+            const activeVisit = await clientVisitService.getActiveVisitForUser(
+              user.id,
+            );
+            const cart = activeVisit
+              ? await cartSyncService.getCart(activeVisit.id)
+              : null;
+
+            controller.enqueue(
+              encodeEvent("cart-updated", {
+                visit: activeVisit
+                  ? {
+                      id: activeVisit.id,
+                      status: activeVisit.status,
+                    }
+                  : null,
+                cart,
+              }),
+            );
+          } catch (error) {
+            controller.enqueue(
+              encodeEvent("cart-error", {
+                message:
+                  error instanceof Error
+                    ? error.message
+                    : "Unable to read active cart",
+              }),
+            );
+          }
+        }
+
         const unsubscribe = subscribeCheckoutStatus(user.id, () => {
           void sendLatestStatus();
+        });
+        const unsubscribeCart = subscribeCartUpdated(user.id, () => {
+          void sendLatestCart();
         });
         const keepAliveId = setInterval(() => {
           if (!closed) controller.enqueue(encoder.encode(": keep-alive\n\n"));
@@ -56,12 +96,14 @@ export async function GET(request: NextRequest) {
             closed = true;
             clearInterval(keepAliveId);
             unsubscribe();
+            unsubscribeCart();
             controller.close();
           },
           { once: true },
         );
 
         void sendLatestStatus();
+        void sendLatestCart();
       },
     });
 

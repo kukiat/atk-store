@@ -105,13 +105,10 @@ export function ShelfOpenSession({
   useEffect(() => {
     if (!sessionId) return;
 
-    const intervalId = window.setInterval(async () => {
-      const response = await fetch(`/api/iot/sessions/${sessionId}`, {
-        cache: "no-store",
-      });
-      if (!response.ok) return;
+    const events = new EventSource(`/api/iot/sessions/${sessionId}/events`);
 
-      const body = (await response.json()) as IotSessionResponse;
+    function handleSessionUpdated(event: MessageEvent<string>) {
+      const body = JSON.parse(event.data) as IotSessionResponse;
       const session = body.session;
       if (!session) return;
 
@@ -127,11 +124,27 @@ export function ShelfOpenSession({
       setItemQuantity(cartItem ?? fallbackItem, nextCount);
 
       if (session.status === "closed" || session.status === "expired") {
-        window.clearInterval(intervalId);
+        events.close();
       }
-    }, 1500);
+    }
 
-    return () => window.clearInterval(intervalId);
+    function handleSessionError(event: MessageEvent<string>) {
+      const body = JSON.parse(event.data) as { message?: string };
+      setStatus("error");
+      setMessage(body.message ?? "ไม่สามารถอ่านสถานะตู้ได้");
+      events.close();
+    }
+
+    events.addEventListener(
+      "iot-session-updated",
+      handleSessionUpdated as EventListener,
+    );
+    events.addEventListener(
+      "iot-session-error",
+      handleSessionError as EventListener,
+    );
+
+    return () => events.close();
   }, [fallbackItem, product.id, sessionId, setItemQuantity]);
 
   const tone =

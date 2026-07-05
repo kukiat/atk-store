@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ATK Store Receipt Draft</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --ink: #172026;
+        --muted: #64727d;
+        --line: #d8e1e7;
+        --soft: #f5f8fa;
+        --accent: #0f766e;
+        --accent-soft: #e7f6f3;
+        --warn: #8a5a00;
+        --warn-soft: #fff5d7;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background: #edf2f5;
+        color: var(--ink);
+        font-family:
+          "Noto Sans Thai",
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        line-height: 1.55;
+      }
+
+      main {
+        display: grid;
+        gap: 18px;
+        width: min(100%, 920px);
+        margin: 0 auto;
+        padding: 32px 16px;
+      }
+
+      .receipt {
+        overflow: hidden;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgb(23 32 38 / 10%);
+      }
+
+      .receipt-header {
+        display: grid;
+        gap: 18px;
+        padding: 28px;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .brand-row,
+      .summary-row,
+      .total-row,
+      .meta-grid,
+      .payment-row {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .brand {
+        display: grid;
+        gap: 4px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 28px;
+        letter-spacing: 0;
+      }
+
+      .brand p,
+      .meta p,
+      .note p,
+      .data-map p {
+        margin: 0;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 28px;
+        border-radius: 999px;
+        padding: 4px 12px;
+        background: var(--accent-soft);
+        color: var(--accent);
+        font-size: 13px;
+        font-weight: 700;
+        white-space: nowrap;
+      }
+
+      .muted {
+        color: var(--muted);
+      }
+
+      .receipt-no {
+        text-align: right;
+      }
+
+      .receipt-no strong {
+        display: block;
+        font-size: 18px;
+      }
+
+      .receipt-body {
+        display: grid;
+        gap: 22px;
+        padding: 28px;
+      }
+
+      .meta-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .meta {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .meta span {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th {
+        border-bottom: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 700;
+        text-align: left;
+        text-transform: uppercase;
+      }
+
+      th,
+      td {
+        padding: 12px 0;
+        vertical-align: top;
+      }
+
+      td {
+        border-bottom: 1px solid #edf2f5;
+      }
+
+      .num {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+
+      .item-name {
+        font-weight: 700;
+      }
+
+      .item-sub {
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .summary {
+        display: grid;
+        gap: 8px;
+        margin-left: auto;
+        width: min(100%, 320px);
+      }
+
+      .summary-row {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .total-row {
+        margin-top: 8px;
+        padding-top: 12px;
+        border-top: 2px solid var(--ink);
+        font-size: 20px;
+        font-weight: 800;
+      }
+
+      .payment {
+        display: grid;
+        gap: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px;
+        background: var(--soft);
+      }
+
+      .payment-row {
+        font-variant-numeric: tabular-nums;
+      }
+
+      .receipt-footer {
+        padding: 20px 28px;
+        border-top: 1px dashed var(--line);
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
+      }
+
+      .note,
+      .data-map {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: #fff;
+        padding: 18px;
+      }
+
+      .note {
+        border-color: #efd58a;
+        background: var(--warn-soft);
+        color: var(--warn);
+      }
+
+      .data-map {
+        display: grid;
+        gap: 12px;
+      }
+
+      .data-map h2,
+      .note h2 {
+        margin: 0;
+        font-size: 16px;
+      }
+
+      .data-map ul {
+        display: grid;
+        gap: 8px;
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      code {
+        border-radius: 4px;
+        background: #eef3f6;
+        padding: 1px 5px;
+        color: #33434d;
+        font-family:
+          ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          Monaco,
+          Consolas,
+          monospace;
+        font-size: 0.92em;
+      }
+
+      @media (max-width: 680px) {
+        .brand-row,
+        .payment-row {
+          display: grid;
+        }
+
+        .receipt-no {
+          text-align: left;
+        }
+
+        .meta-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .receipt-header,
+        .receipt-body,
+        .receipt-footer {
+          padding-inline: 18px;
+        }
+
+        th:nth-child(2),
+        td:nth-child(2) {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <article class="receipt" aria-label="Receipt draft">
+        <header class="receipt-header">
+          <div class="brand-row">
+            <div class="brand">
+              <h1>ATK Store</h1>
+              <p class="muted">Smart shelf checkout receipt</p>
+              <p class="muted">Store profile/address/tax id: ยังไม่มีในระบบ</p>
+            </div>
+
+            <div class="receipt-no">
+              <span class="badge">PAID</span>
+              <strong>Receipt #RC-ตัวอย่าง</strong>
+              <p class="muted">ใช้ order UUID ได้ตอนนี้</p>
+            </div>
+          </div>
+        </header>
+
+        <section class="receipt-body">
+          <div class="meta-grid">
+            <div class="meta">
+              <span>Customer</span>
+              <p>Thanachot T.</p>
+              <p class="muted">thanachot@example.com</p>
+            </div>
+            <div class="meta">
+              <span>Order</span>
+              <p>Order ID: 8f9c...ตัวอย่าง</p>
+              <p class="muted">Issued: 6 Jul 2026, 00:20</p>
+            </div>
+            <div class="meta">
+              <span>Visit</span>
+              <p>Visit #128</p>
+              <p class="muted">Entered 00:12 · Exited 00:19</p>
+            </div>
+            <div class="meta">
+              <span>Payment</span>
+              <p>Wallet</p>
+              <p class="muted">Reference: wallet:ledger-entry-id</p>
+            </div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="num">Qty</th>
+                <th class="num">Unit Price</th>
+                <th class="num">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <div class="item-name">Mineral Water</div>
+                  <div class="item-sub">
+                    inventoryId snapshot available · unit name should be
+                    snapshotted
+                  </div>
+                </td>
+                <td class="num">2</td>
+                <td class="num">฿15.00</td>
+                <td class="num">฿30.00</td>
+              </tr>
+              <tr>
+                <td>
+                  <div class="item-name">Protein Bar</div>
+                  <div class="item-sub">
+                    counted by IOT cumulative pickedCount
+                  </div>
+                </td>
+                <td class="num">1</td>
+                <td class="num">฿45.00</td>
+                <td class="num">฿45.00</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <section class="summary" aria-label="Receipt totals">
+            <div class="summary-row">
+              <span>Subtotal</span>
+              <span>฿75.00</span>
+            </div>
+            <div class="summary-row muted">
+              <span>VAT</span>
+              <span>ยังไม่มีข้อมูล</span>
+            </div>
+            <div class="summary-row muted">
+              <span>Discount</span>
+              <span>ยังไม่มีข้อมูล</span>
+            </div>
+            <div class="total-row">
+              <span>Total</span>
+              <span>฿75.00</span>
+            </div>
+          </section>
+
+          <section class="payment" aria-label="Payment details">
+            <div class="payment-row">
+              <span>Wallet debit</span>
+              <strong>฿75.00</strong>
+            </div>
+            <div class="payment-row muted">
+              <span>Balance after payment</span>
+              <span>มีใน wallet ledger</span>
+            </div>
+            <div class="payment-row muted">
+              <span>Payment status</span>
+              <span>paid</span>
+            </div>
+          </section>
+        </section>
+
+        <footer class="receipt-footer">
+          ขอบคุณที่ใช้บริการ · Receipt generated from current order, visit,
+          wallet, and item snapshot data
+        </footer>
+      </article>
+
+      <section class="note">
+        <h2>ข้อจำกัดของ receipt จาก data ปัจจุบัน</h2>
+        <p>
+          โครงนี้ทำได้ด้วยข้อมูลที่มีแล้ว แต่ field อย่าง receipt number,
+          store profile, VAT, customer snapshot, unit name snapshot และราคาแบบ
+          minor unit ควรเพิ่มก่อนใช้เป็นใบเสร็จจริงใน production
+        </p>
+      </section>
+
+      <section class="data-map">
+        <h2>Data Mapping</h2>
+        <ul>
+          <li>
+            Header/order: <code>orders.id</code>,
+            <code>orders.createdAt</code>, <code>orders.status</code>,
+            <code>orders.paymentStatus</code>
+          </li>
+          <li>
+            Customer: <code>clientVisits.userId</code> join
+            <code>users.name</code>, <code>users.email</code>
+          </li>
+          <li>
+            Visit time: <code>clientVisits.enteredAt</code>,
+            <code>clientVisits.exitedAt</code>
+          </li>
+          <li>
+            Items: <code>orderItems.name</code>, <code>orderItems.price</code>,
+            <code>orderItems.amount</code>, <code>orderItems.inventoryId</code>
+          </li>
+          <li>
+            Payment: <code>orderPayments.paymentMethod</code>,
+            <code>orderPayments.amountMinor</code>,
+            <code>orderPayments.currency</code>,
+            <code>orders.paymentReference</code>
+          </li>
+          <li>
+            Wallet balance after:
+            <code>walletLedgerEntries.balanceAfterMinor</code>
+          </li>
+        </ul>
+      </section>
+    </main>
+  </body>
+</html>

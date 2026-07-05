@@ -163,6 +163,12 @@ export const orderPaymentMethodEnum = db_schema.enum("order_payment_method", [
   "wallet",
 ]);
 
+export const receiptStatusEnum = db_schema.enum("receipt_status", [
+  "issued",
+  "voided",
+  "refunded",
+]);
+
 export const notificationRecipientTypeEnum = db_schema.enum(
   "notification_recipient_type",
   ["client", "admin", "super_admin"],
@@ -665,6 +671,92 @@ export const orderItems = db_schema.table("order_items", {
   ...lifecycleColumns,
 });
 
+export const storeSettings = db_schema.table("store_settings", {
+  key: text("key").primaryKey().default("default"),
+  storeName: text("store_name").notNull().default("ATK Store"),
+  storeLegalName: text("store_legal_name"),
+  storeTaxId: text("store_tax_id"),
+  storeAddress: text("store_address"),
+  storePhone: text("store_phone"),
+  storeEmail: text("store_email"),
+  vatPercent: doublePrecision("vat_percent").notNull().default(0),
+  receiptPrefix: text("receipt_prefix").notNull().default("RC"),
+  currency: text("currency").notNull().default("THB"),
+  ...lifecycleColumns,
+});
+
+export const receipts = db_schema.table(
+  "receipts",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    orderId: uuid("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "restrict" }),
+    clientVisitId: integer("client_visit_id")
+      .notNull()
+      .references(() => clientVisits.id, { onDelete: "restrict" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    receiptNo: text("receipt_no").notNull(),
+    status: receiptStatusEnum("status").notNull().default("issued"),
+    issuedAt: timestamp("issued_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    customerName: text("customer_name"),
+    customerEmail: text("customer_email").notNull(),
+    storeName: text("store_name").notNull(),
+    storeLegalName: text("store_legal_name"),
+    storeTaxId: text("store_tax_id"),
+    storeAddress: text("store_address"),
+    storePhone: text("store_phone"),
+    storeEmail: text("store_email"),
+    subtotalMinor: integer("subtotal_minor").notNull(),
+    vatPercent: doublePrecision("vat_percent").notNull().default(0),
+    vatMinor: integer("vat_minor").notNull().default(0),
+    discountMinor: integer("discount_minor").notNull().default(0),
+    totalMinor: integer("total_minor").notNull(),
+    currency: text("currency").notNull().default("THB"),
+    paymentMethod: text("payment_method").notNull().default("wallet"),
+    paymentReference: text("payment_reference"),
+    walletBalanceAfterMinor: integer("wallet_balance_after_minor"),
+    metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    uniqueIndex("receipts_order_id_unique").on(table.orderId),
+    uniqueIndex("receipts_receipt_no_unique").on(table.receiptNo),
+  ],
+);
+
+export const receiptItems = db_schema.table("receipt_items", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  receiptId: uuid("receipt_id")
+    .notNull()
+    .references(() => receipts.id, { onDelete: "cascade" }),
+  orderItemId: uuid("order_item_id").references(() => orderItems.id, {
+    onDelete: "set null",
+  }),
+  inventoryId: uuid("inventory_id").references(() => inventories.id, {
+    onDelete: "set null",
+  }),
+  shelfId: uuid("shelf_id").references(() => shelfs.id, {
+    onDelete: "set null",
+  }),
+  name: text("name").notNull(),
+  unitName: text("unit_name").notNull(),
+  quantity: integer("quantity").notNull(),
+  unitPriceMinor: integer("unit_price_minor").notNull(),
+  lineSubtotalMinor: integer("line_subtotal_minor").notNull(),
+  vatMinor: integer("vat_minor").notNull().default(0),
+  discountMinor: integer("discount_minor").notNull().default(0),
+  lineTotalMinor: integer("line_total_minor").notNull(),
+  weightPerPiece: doublePrecision("weight_per_piece").notNull(),
+  imageUrl: text("image_url"),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  ...lifecycleColumns,
+});
+
 export const wallets = db_schema.table(
   "wallets",
   {
@@ -879,6 +971,7 @@ export const shelfsRelations = relations(shelfs, ({ many, one }) => ({
 export const unitsRelations = relations(units, ({ many }) => ({
   inventories: many(inventories),
   orderItems: many(orderItems),
+  receiptItems: many(receiptItems),
 }));
 
 export const inventoriesRelations = relations(inventories, ({ one }) => ({
@@ -899,6 +992,7 @@ export const ordersRelations = relations(orders, ({ many, one }) => ({
   }),
   items: many(orderItems),
   payment: one(orderPayments),
+  receipt: one(receipts),
 }));
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
@@ -913,6 +1007,42 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   unit: one(units, {
     fields: [orderItems.unitId],
     references: [units.id],
+  }),
+  receiptItem: one(receiptItems),
+}));
+
+export const receiptsRelations = relations(receipts, ({ many, one }) => ({
+  order: one(orders, {
+    fields: [receipts.orderId],
+    references: [orders.id],
+  }),
+  clientVisit: one(clientVisits, {
+    fields: [receipts.clientVisitId],
+    references: [clientVisits.id],
+  }),
+  user: one(users, {
+    fields: [receipts.userId],
+    references: [users.id],
+  }),
+  items: many(receiptItems),
+}));
+
+export const receiptItemsRelations = relations(receiptItems, ({ one }) => ({
+  receipt: one(receipts, {
+    fields: [receiptItems.receiptId],
+    references: [receipts.id],
+  }),
+  orderItem: one(orderItems, {
+    fields: [receiptItems.orderItemId],
+    references: [orderItems.id],
+  }),
+  inventory: one(inventories, {
+    fields: [receiptItems.inventoryId],
+    references: [inventories.id],
+  }),
+  shelf: one(shelfs, {
+    fields: [receiptItems.shelfId],
+    references: [shelfs.id],
   }),
 }));
 
@@ -998,6 +1128,9 @@ export type Unit = typeof units.$inferSelect;
 export type NewUnit = typeof units.$inferInsert;
 export type Order = typeof orders.$inferSelect;
 export type OrderItem = typeof orderItems.$inferSelect;
+export type StoreSettings = typeof storeSettings.$inferSelect;
+export type Receipt = typeof receipts.$inferSelect;
+export type ReceiptItem = typeof receiptItems.$inferSelect;
 export type Wallet = typeof wallets.$inferSelect;
 export type NewWallet = typeof wallets.$inferInsert;
 export type WalletLedgerEntry = typeof walletLedgerEntries.$inferSelect;
@@ -1082,3 +1215,6 @@ export type WalletFundingChannelCode =
 /** Top-up lifecycle. */
 export type WalletTopupStatus =
   (typeof walletTopupStatusEnum.enumValues)[number];
+
+/** Issued receipt lifecycle. */
+export type ReceiptStatus = (typeof receiptStatusEnum.enumValues)[number];

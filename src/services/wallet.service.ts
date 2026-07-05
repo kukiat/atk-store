@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gte, ne, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, ne, sql } from "drizzle-orm";
 import type Stripe from "stripe";
 
 import { db } from "@/db";
@@ -11,8 +11,13 @@ import {
   orderItems,
   orderPayments,
   orders,
+  receiptItems,
+  receipts,
+  storeSettings,
   stripeCustomers,
   stripeWebhookEvents,
+  units,
+  users,
   walletFundingChannels,
   walletLedgerEntries,
   wallets,
@@ -58,6 +63,35 @@ const DEFAULT_CHANNELS: {
     maxAmountMinor: 2000000,
   },
 ];
+
+const DEFAULT_STORE_SETTINGS = {
+  storeName: "ATK Store",
+  storeLegalName: null as string | null,
+  storeTaxId: null as string | null,
+  storeAddress: null as string | null,
+  storePhone: null as string | null,
+  storeEmail: null as string | null,
+  vatPercent: 0,
+  receiptPrefix: "RC",
+  currency: WALLET_CURRENCY,
+};
+
+function formatReceiptNo(
+  prefix: string,
+  issuedAt: Date,
+  orderId: string,
+): string {
+  const yyyy = issuedAt.getFullYear();
+  const mm = String(issuedAt.getMonth() + 1).padStart(2, "0");
+  const dd = String(issuedAt.getDate()).padStart(2, "0");
+  const orderSegment = orderId.replaceAll("-", "").slice(0, 12).toUpperCase();
+  return `${prefix}${yyyy}${mm}${dd}-${orderSegment}`;
+}
+
+function calculateIncludedVat(totalMinor: number, vatPercent: number): number {
+  if (vatPercent <= 0) return 0;
+  return Math.round((totalMinor * vatPercent) / (100 + vatPercent));
+}
 
 function stripeObjectId(value: string | { id: string } | null): string | null {
   if (!value) return null;
@@ -358,12 +392,13 @@ class WalletService {
       if (existingLedger) {
         const existingPayment = await tx.query.orderPayments.findFirst({
           where: eq(orderPayments.ledgerEntryId, existingLedger.id),
-          with: { order: true },
+          with: { order: { with: { receipt: true } } },
         });
         if (existingPayment?.order) {
           return {
             status: "paid" as const,
             order: existingPayment.order,
+            receipt: existingPayment.order.receipt ?? null,
             userId: visit.userId,
           };
         }
@@ -443,31 +478,139 @@ class WalletService {
         .returning();
       if (!order) throw new Error("Failed to create order");
 
-      await tx.insert(orderItems).values(
-        cart.items.map((item) => ({
-          orderId: order.id,
-          inventoryId: item.inventoryId,
-          name: item.name,
-          price: item.price,
-          amount: item.quantity,
-          weightPerPiece: item.weightPerPiece,
-          unitId: item.unitId,
-          imageUrl: item.imageUrl,
-          updatedAt: new Date(),
-        })),
-      );
+      const insertedOrderItems = await tx
+        .insert(orderItems)
+        .values(
+          cart.items.map((item) => ({
+            orderId: order.id,
+            inventoryId: item.inventoryId,
+            name: item.name,
+            price: item.price,
+            amount: item.quantity,
+            weightPerPiece: item.weightPerPiece,
+            unitId: item.unitId,
+            imageUrl: item.imageUrl,
+            updatedAt: new Date(),
+          })),
+        )
+        .returning();
 
-      await tx.insert(orderPayments).values({
-        orderId: order.id,
-        walletId: wallet.id,
-        ledgerEntryId: ledgerEntry.id,
-        paymentMethod: "wallet",
-        amountMinor: totalMinor,
-        currency: WALLET_CURRENCY,
-        status: "paid",
-        idempotencyKey,
-        updatedAt: new Date(),
-      });
+      const [payment] = await tx
+        .insert(orderPayments)
+        .values({
+          orderId: order.id,
+          walletId: wallet.id,
+          ledgerEntryId: ledgerEntry.id,
+          paymentMethod: "wallet",
+          amountMinor: totalMinor,
+          currency: WALLET_CURRENCY,
+          status: "paid",
+          idempotencyKey,
+          updatedAt: new Date(),
+        })
+        .returning();
+      if (!payment) throw new Error("Failed to create order payment");
+
+      const [customer] = await tx
+        .select({
+          name: users.name,
+          email: users.email,
+        })
+        .from(users)
+        .where(eq(users.id, visit.userId))
+        .limit(1);
+      if (!customer) throw new Error("Order customer was not found");
+
+      const [settings] = await tx
+        .select()
+        .from(storeSettings)
+        .where(eq(storeSettings.key, "default"))
+        .limit(1);
+      const effectiveStoreSettings = settings ?? DEFAULT_STORE_SETTINGS;
+      const unitRows = await tx
+        .select({ id: units.id, name: units.name })
+        .from(units)
+        .where(inArray(units.id, cart.items.map((item) => item.unitId)));
+      const unitNameById = new Map(unitRows.map((unit) => [unit.id, unit.name]));
+      const issuedAt = new Date();
+      const vatMinor = calculateIncludedVat(
+        totalMinor,
+        effectiveStoreSettings.vatPercent,
+      );
+      const subtotalMinor = totalMinor - vatMinor;
+      const [receipt] = await tx
+        .insert(receipts)
+        .values({
+          orderId: order.id,
+          clientVisitId,
+          userId: visit.userId,
+          receiptNo: formatReceiptNo(
+            effectiveStoreSettings.receiptPrefix,
+            issuedAt,
+            order.id,
+          ),
+          issuedAt,
+          customerName: customer.name,
+          customerEmail: customer.email,
+          storeName: effectiveStoreSettings.storeName,
+          storeLegalName: effectiveStoreSettings.storeLegalName,
+          storeTaxId: effectiveStoreSettings.storeTaxId,
+          storeAddress: effectiveStoreSettings.storeAddress,
+          storePhone: effectiveStoreSettings.storePhone,
+          storeEmail: effectiveStoreSettings.storeEmail,
+          subtotalMinor,
+          vatPercent: effectiveStoreSettings.vatPercent,
+          vatMinor,
+          discountMinor: 0,
+          totalMinor,
+          currency: effectiveStoreSettings.currency,
+          paymentMethod: payment.paymentMethod,
+          paymentReference: order.paymentReference,
+          walletBalanceAfterMinor: ledgerEntry.balanceAfterMinor,
+          metadata: {
+            cartSessionId: cart.sessionId,
+            checkoutSource: "wallet_exit",
+            vatMode: "included",
+          },
+          updatedAt: issuedAt,
+        })
+        .returning();
+      if (!receipt) throw new Error("Failed to create receipt");
+
+      await tx.insert(receiptItems).values(
+        insertedOrderItems.map((item) => {
+          const unitPriceMinor = bahtToMinorUnit(item.price);
+          const lineTotalMinor = unitPriceMinor * item.amount;
+          const lineVatMinor = calculateIncludedVat(
+            lineTotalMinor,
+            effectiveStoreSettings.vatPercent,
+          );
+
+          return {
+            receiptId: receipt.id,
+            orderItemId: item.id,
+            inventoryId: item.inventoryId,
+            shelfId:
+              cart.items.find(
+                (cartItem) => cartItem.inventoryId === item.inventoryId,
+              )?.shelfId ?? null,
+            name: item.name,
+            unitName: unitNameById.get(item.unitId ?? "") ?? "item",
+            quantity: item.amount,
+            unitPriceMinor,
+            lineSubtotalMinor: lineTotalMinor - lineVatMinor,
+            vatMinor: lineVatMinor,
+            discountMinor: 0,
+            lineTotalMinor,
+            weightPerPiece: item.weightPerPiece,
+            imageUrl: item.imageUrl,
+            metadata: {
+              cartSessionId: cart.sessionId,
+            },
+            updatedAt: issuedAt,
+          };
+        }),
+      );
 
       await tx
         .update(clientVisits)
@@ -478,7 +621,7 @@ class WalletService {
         })
         .where(eq(clientVisits.id, clientVisitId));
 
-      return { status: "paid" as const, order, userId: visit.userId };
+      return { status: "paid" as const, order, receipt, userId: visit.userId };
     });
 
     if (result.status === "insufficient") {

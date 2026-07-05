@@ -3,7 +3,7 @@ import "server-only";
 import { desc, eq } from "drizzle-orm";
 
 import { db } from "@/db";
-import { clientVisits, orders } from "@/db/schema";
+import { clientVisits, orders, receipts } from "@/db/schema";
 import { walletService } from "@/services/wallet.service";
 
 class OrderService {
@@ -47,8 +47,11 @@ class OrderService {
         paymentStatus: orders.paymentStatus,
         totalPrice: orders.totalPrice,
         createdAt: orders.createdAt,
+        receiptId: receipts.id,
+        receiptNo: receipts.receiptNo,
       })
       .from(orders)
+      .leftJoin(receipts, eq(receipts.orderId, orders.id))
       .where(eq(orders.clientVisitId, visit.id))
       .orderBy(desc(orders.createdAt))
       .limit(1);

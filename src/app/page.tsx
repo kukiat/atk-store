@@ -1,13 +1,8 @@
-import {
-  CheckCircle2,
-  QrCode,
-  ScanLine,
-  ShoppingCart,
-  WalletCards,
-} from "lucide-react";
+import { QrCode, ScanLine, ShoppingCart, WalletCards } from "lucide-react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { CheckoutPaidNotice } from "@/components/checkout-paid-notice";
 import { FaceAuthStatusNotice } from "@/components/face-auth-status-notice";
 import { FaceEnrollmentPrompt } from "@/components/face-enrollment-prompt";
 import { FaceVerificationDebugPrompt } from "@/components/face-verification-debug-prompt";
@@ -23,14 +18,22 @@ import {
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string | string[] }>;
+  searchParams: Promise<{
+    checkout?: string | string[];
+    receipt?: string | string[];
+  }>;
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
-  const checkoutParam = (await searchParams).checkout;
+  const resolvedSearchParams = await searchParams;
+  const checkoutParam = resolvedSearchParams.checkout;
   const checkout = Array.isArray(checkoutParam)
     ? checkoutParam[0]
     : checkoutParam;
+  const receiptParam = resolvedSearchParams.receipt;
+  const receiptNo = Array.isArray(receiptParam)
+    ? receiptParam[0]
+    : receiptParam;
   const scanEligibility = await storeAccessService.getScanEligibility(user.id);
 
   return (
@@ -61,13 +64,7 @@ export default async function HomePage({
 
         <div className="mx-auto grid w-full max-w-md gap-4 md:max-w-none">
           {checkout === "paid" ? (
-            <div className="flex items-start gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-4 text-sm text-emerald-700 dark:text-emerald-300">
-              <CheckCircle2 className="mt-0.5 size-5 shrink-0" />
-              <div>
-                <p className="font-semibold">ชำระเงินสำเร็จ</p>
-                <p className="mt-1 text-pretty">ขอบคุณที่ใช้บริการ</p>
-              </div>
-            </div>
+            <CheckoutPaidNotice receiptNo={receiptNo ?? null} />
           ) : null}
 
           <FaceEnrollmentPrompt />

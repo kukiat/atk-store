@@ -12,6 +12,11 @@ const tabs = [
   { href: "/admin/inventory/items", label: "Inventories", exact: false },
   { href: "/admin/inventory/qr", label: "QR Codes", exact: false },
   { href: "/admin/inventory/orders", label: "Orders & Alerts", exact: false },
+  {
+    href: "/admin/inventory/receipt-settings",
+    label: "Receipt Settings",
+    exact: false,
+  },
   { href: "/admin/inventory/iot-poc", label: "IOT PoC", exact: false },
 ] as const;
 

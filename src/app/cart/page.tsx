@@ -25,6 +25,7 @@ type ActiveVisitCheckoutStatus = {
     paymentStatus: "pending" | "paid" | "failed" | "cancelled";
     totalPrice: number;
     createdAt: string;
+    receiptNo: string | null;
   } | null;
 };
 
@@ -51,7 +52,9 @@ export default function CartPage() {
       ) {
         clear();
         events.close();
-        router.replace("/?checkout=paid");
+        const params = new URLSearchParams({ checkout: "paid" });
+        if (body.order.receiptNo) params.set("receipt", body.order.receiptNo);
+        router.replace(`/?${params.toString()}`);
         return;
       }
 

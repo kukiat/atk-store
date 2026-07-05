@@ -6,6 +6,7 @@ import {
   BriefcaseBusiness,
   ChevronDown,
   LogOut,
+  ReceiptText,
   ScanLine,
   ShieldCheck,
   ShoppingCart,
@@ -39,6 +40,7 @@ type ActiveVisitCheckoutStatus = {
   order: {
     status: "pending" | "paid" | "failed" | "cancelled";
     paymentStatus: "pending" | "paid" | "failed" | "cancelled";
+    receiptNo: string | null;
   } | null;
   walletBalanceAvailableMinor?: number;
 };
@@ -81,10 +83,13 @@ export function AccountNav({
       if (
         body.order?.status === "paid" &&
         body.order.paymentStatus === "paid" &&
-        hydrated
+        hydrated &&
+        cartCount > 0
       ) {
         clearCart();
-        router.replace("/?checkout=paid");
+        const params = new URLSearchParams({ checkout: "paid" });
+        if (body.order.receiptNo) params.set("receipt", body.order.receiptNo);
+        router.replace(`/?${params.toString()}`);
       }
     }
 
@@ -104,7 +109,7 @@ export function AccountNav({
     events.addEventListener("cart-updated", handleCartUpdated as EventListener);
 
     return () => events.close();
-  }, [clearCart, hydrated, isAdminPage, router, setCartItems]);
+  }, [cartCount, clearCart, hydrated, isAdminPage, router, setCartItems]);
 
   return (
     <header className="bg-background/95 sticky top-0 z-50 border-b">
@@ -233,6 +238,14 @@ export function AccountNav({
                         {cartCount} · {formatBaht(cartTotal)}
                       </span>
                     ) : null}
+                  </Menu.LinkItem>
+                  <Menu.LinkItem
+                    render={<Link href="/receipts" />}
+                    closeOnClick
+                    className="data-[highlighted]:bg-muted flex items-center gap-2 rounded-md px-2 py-2 outline-none"
+                  >
+                    <ReceiptText className="size-4" />
+                    History
                   </Menu.LinkItem>
                   {canAccessAdmin ? (
                     <Menu.LinkItem

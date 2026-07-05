@@ -48,3 +48,25 @@ export async function sendMockPickedCountAction(formData: FormData) {
   revalidatePath("/admin/inventory/iot-poc");
   revalidatePath("/admin/inventory/orders");
 }
+
+export async function sendMockDoorClosedAction(formData: FormData) {
+  const user = await requireCurrentUser();
+  await adminUserService.getActor(user);
+
+  const sessionId = readRequiredText(formData, "sessionId");
+  const shelfId = readRequiredText(formData, "shelfId");
+
+  await iotSessionService.closeDoor({
+    sessionId,
+    shelfId,
+    rawPayload: {
+      source: "admin-iot-poc",
+      type: "door_closed",
+      sessionId,
+      shelfId,
+    },
+  });
+
+  revalidatePath("/admin/inventory/iot-poc");
+  revalidatePath("/admin/inventory/orders");
+}

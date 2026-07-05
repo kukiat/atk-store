@@ -7,22 +7,11 @@ import {
   StoreScanNotAllowedError,
   storeAccessService,
 } from "@/services/store-access.service";
-import type { CartItem } from "@/types";
 
-function isCartItem(value: unknown): value is CartItem {
-  if (typeof value !== "object" || value === null) return false;
-  const item = value as Partial<CartItem>;
-  return (
-    typeof item.inventoryId === "string" &&
-    typeof item.shelfId === "string" &&
-    typeof item.name === "string" &&
-    typeof item.price === "number" &&
-    typeof item.weightPerPiece === "number" &&
-    typeof item.unitId === "string" &&
-    typeof item.quantity === "number" &&
-    Number.isFinite(item.quantity) &&
-    item.quantity > 0
-  );
+function readShelfId(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
 }
 
 export async function POST(request: NextRequest) {
@@ -53,18 +42,18 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 
-  const body = (await request.json()) as { items?: unknown };
-  const items = Array.isArray(body.items) ? body.items : [];
+  const body = (await request.json()) as { shelfId?: unknown };
+  const shelfId = readShelfId(body.shelfId);
 
-  if (!items.every(isCartItem)) {
+  if (!shelfId) {
     return NextResponse.json(
-      { error: "Invalid cart payload" },
+      { error: "shelfId is required" },
       { status: 400 },
     );
   }
 
   try {
-    const result = await iotService.watchCart(user, items);
+    const result = await iotService.openShelf(user, shelfId);
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(

@@ -23,6 +23,7 @@ import { formatBaht, formatPrice } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useHydrated } from "@/lib/use-hydrated";
 import { selectTotalCount, selectTotalPrice, useCartStore } from "@/store/cart";
+import type { CartItem } from "@/types";
 
 type AccountNavProps = {
   user: {
@@ -42,6 +43,11 @@ type ActiveVisitCheckoutStatus = {
   walletBalanceAvailableMinor?: number;
 };
 
+type ActiveCartResponse = {
+  visit: { id: number; status: "inside" | "exited" | "unknown_exit" } | null;
+  cart: { items: CartItem[] } | null;
+};
+
 export function AccountNav({
   user,
   canAccessAdmin,
@@ -55,6 +61,7 @@ export function AccountNav({
   const cartCount = useCartStore(selectTotalCount);
   const cartTotal = useCartStore(selectTotalPrice);
   const clearCart = useCartStore((state) => state.clear);
+  const setCartItems = useCartStore((state) => state.setItems);
   const [liveWalletBalanceMinor, setLiveWalletBalanceMinor] = useState<
     number | null
   >(null);
@@ -89,6 +96,32 @@ export function AccountNav({
 
     return () => events.close();
   }, [cartCount, clearCart, hydrated, router]);
+
+  useEffect(() => {
+    if (!hydrated || isAdminPage) return;
+
+    let disposed = false;
+
+    async function syncActiveCart() {
+      const response = await fetch("/api/cart/active", {
+        cache: "no-store",
+      }).catch(() => null);
+      if (!response?.ok || disposed) return;
+
+      const body = (await response.json()) as ActiveCartResponse;
+      if (!body.visit) return;
+
+      setCartItems(body.cart?.items ?? []);
+    }
+
+    void syncActiveCart();
+    const intervalId = window.setInterval(syncActiveCart, 2500);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalId);
+    };
+  }, [hydrated, isAdminPage, setCartItems]);
 
   return (
     <header className="bg-background/95 sticky top-0 z-50 border-b">

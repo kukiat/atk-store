@@ -9,6 +9,8 @@ type CartState = {
   items: CartItem[];
   addItem: (inventory: Inventory, quantity?: number) => void;
   addItems: (items: CartItem[]) => void;
+  setItems: (items: CartItem[]) => void;
+  setItemQuantity: (item: CartItem, quantity: number) => void;
   removeItem: (inventoryId: string) => void;
   setQty: (inventoryId: string, quantity: number) => void;
   clear: () => void;
@@ -71,6 +73,23 @@ export const useCartStore = create<CartState>()(
       addItems: (items) =>
         set((state) => ({
           items: mergeCartItems(state.items, items),
+        })),
+
+      setItems: (items) => set({ items }),
+
+      setItemQuantity: (item, quantity) =>
+        set((state) => ({
+          items:
+            quantity <= 0
+              ? state.items.filter(
+                  (cartItem) => cartItem.inventoryId !== item.inventoryId,
+                )
+              : [
+                  ...state.items.filter(
+                    (cartItem) => cartItem.inventoryId !== item.inventoryId,
+                  ),
+                  { ...item, quantity },
+                ],
         })),
 
       removeItem: (inventoryId) =>

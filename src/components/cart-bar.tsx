@@ -2,40 +2,30 @@
 
 import { ShoppingCart } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 import { formatBaht } from "@/lib/format";
 import { useHydrated } from "@/lib/use-hydrated";
 import {
-  selectOrderTotalCount,
-  selectOrderTotalPrice,
-  useOrderStore,
-} from "@/store/order";
+  selectTotalCount,
+  selectTotalPrice,
+  useCartStore,
+} from "@/store/cart";
 
 /**
- * Floating bar pinned to the bottom of the viewport that summarises the draft
- * order and links to /order. The verified cart is separate and only receives
- * items after IOT confirms the pick.
+ * Floating bar pinned to the bottom of the viewport that summarises the cart
+ * and links to the checkout cart view.
  */
 export function CartBar() {
-  const router = useRouter();
   const hydrated = useHydrated();
-  const count = useOrderStore(selectOrderTotalCount);
-  const total = useOrderStore(selectOrderTotalPrice);
+  const count = useCartStore(selectTotalCount);
+  const total = useCartStore(selectTotalPrice);
 
   if (!hydrated || count === 0) return null;
 
   return (
     <div className="fixed inset-x-0 bottom-0 z-50 p-4">
       <Link
-        href="/order"
-        onClick={(event) => {
-          const returnTo = `${window.location.pathname}${window.location.search}`;
-          if (returnTo === "/order") return;
-
-          event.preventDefault();
-          router.push(`/order?${new URLSearchParams({ returnTo }).toString()}`);
-        }}
+        href="/cart"
         className="bg-primary text-primary-foreground mx-auto flex max-w-md items-center justify-between rounded-full px-5 py-3 shadow-lg transition-opacity hover:opacity-90"
       >
         <span className="flex items-center gap-2 font-medium">
@@ -45,7 +35,7 @@ export function CartBar() {
               {count}
             </span>
           </span>
-          ดูรายการหยิบ
+          ดูตะกร้า
         </span>
         <span className="font-semibold">{formatBaht(total)}</span>
       </Link>

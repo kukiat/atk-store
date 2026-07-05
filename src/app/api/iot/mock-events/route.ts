@@ -24,6 +24,19 @@ export async function POST(request: NextRequest) {
   await adminUserService.getActor(user);
 
   const body = (await request.json()) as Record<string, unknown>;
+  const eventType = readOptionalText(body.type) ?? "picked_count";
+
+  if (eventType === "door_closed") {
+    const session = await iotSessionService.closeDoor({
+      sessionId: readOptionalText(body.sessionId),
+      channelId: readOptionalText(body.channelId),
+      shelfId: readOptionalText(body.shelfId),
+      rawPayload: body,
+    });
+
+    return NextResponse.json({ session });
+  }
+
   const pickedCount = Number(body.pickedCount);
   if (!Number.isInteger(pickedCount) || pickedCount < 0) {
     return NextResponse.json(

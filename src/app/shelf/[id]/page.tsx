@@ -2,12 +2,11 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 
-import { CartBar } from "@/components/cart-bar";
-import { ProductCard } from "@/components/product-card";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { shelfService } from "@/services/shelf.service";
 import { storeAccessService } from "@/services/store-access.service";
+import { ShelfOpenSession } from "./shelf-open-session";
 
 export default async function ShelfPage({
   params,
@@ -32,6 +31,9 @@ export default async function ShelfPage({
   const shelf = await shelfService.getShelfWithInventories(id);
 
   if (!shelf) notFound();
+  const product = shelf.inventories.find(
+    (inventory) => inventory.isActive && inventory.amount > 0,
+  );
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 px-4 pt-6 pb-28">
@@ -58,19 +60,13 @@ export default async function ShelfPage({
         </div>
       </header>
 
-      {shelf.inventories.length === 0 ? (
+      {!product ? (
         <p className="text-muted-foreground py-12 text-center">
           ยังไม่มีสินค้าบนชั้นนี้
         </p>
       ) : (
-        <div className="grid gap-4">
-          {shelf.inventories.map((product) => (
-            <ProductCard key={product.id} product={product} />
-          ))}
-        </div>
+        <ShelfOpenSession shelf={shelf} product={product} />
       )}
-
-      <CartBar />
     </main>
   );
 }

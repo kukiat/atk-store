@@ -1,86 +1,87 @@
 import "server-only";
 
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import { inventories, notifications, shelfs, type User } from "@/db/schema";
 import { clientVisitService } from "@/services/client-visit.service";
 import { iotSessionService } from "@/services/iot-session.service";
-import type { CartItem, IotTransaction } from "@/types";
+import type { CartItem } from "@/types";
 
-export type IotWatchResult = {
+export type IotOpenShelfResult = {
   clientVisitId: number;
   sessionId: string;
-  transactions: IotTransaction[];
-  status: "pending";
+  channelId: string;
+  shelfId: string;
+  sensorId: string | null;
+  status: "open";
+  inventory: CartItem;
   message: string;
 };
 
-type TrustedCartItem = CartItem & {
+type ShelfInventory = {
+  shelfId: string;
+  shelfName: string;
   sensorId: string | null;
+  inventoryId: string;
+  inventoryName: string;
+  price: number;
+  amount: number;
+  weightPerPiece: number;
+  unitId: string;
+  imageUrl: string | null;
 };
 
-function aggregateRequestedQuantities(items: CartItem[]): Map<string, number> {
-  const requested = new Map<string, number>();
-
-  for (const item of items) {
-    requested.set(
-      item.inventoryId,
-      (requested.get(item.inventoryId) ?? 0) + item.quantity,
-    );
-  }
-
-  return requested;
-}
-
 class IotService {
-  async watchCart(user: User, items: CartItem[]): Promise<IotWatchResult> {
-    if (items.length === 0) {
-      throw new Error("Cart is empty");
-    }
-
+  async openShelf(user: User, shelfId: string): Promise<IotOpenShelfResult> {
     const activeVisit = await clientVisitService.requireActiveVisitForUser(
       user.id,
     );
     const clientVisitId = activeVisit.id;
-    const trustedItems = await this.buildTrustedItems(items);
-    const shelvesToOpen = this.buildShelvesToOpen(trustedItems);
-    const cartItems = trustedItems.map((item) => ({
-      inventoryId: item.inventoryId,
-      shelfId: item.shelfId,
-      name: item.name,
-      price: item.price,
-      weightPerPiece: item.weightPerPiece,
-      unitId: item.unitId,
-      imageUrl: item.imageUrl,
-      quantity: item.quantity,
-    }));
+    const shelfInventory = await this.getSingleAvailableInventory(shelfId);
+
+    if (!shelfInventory) {
+      throw new Error("Shelf has no available inventory");
+    }
+
+    const cartItem = {
+      inventoryId: shelfInventory.inventoryId,
+      shelfId: shelfInventory.shelfId,
+      name: shelfInventory.inventoryName,
+      price: shelfInventory.price,
+      weightPerPiece: shelfInventory.weightPerPiece,
+      unitId: shelfInventory.unitId,
+      imageUrl: shelfInventory.imageUrl,
+    };
     const session = iotSessionService.createSession({
       clientVisitId,
       user,
-      items: cartItems,
-      shelves: shelvesToOpen,
+      shelf: {
+        shelfId: shelfInventory.shelfId,
+        sensorId: shelfInventory.sensorId,
+        inventoryId: shelfInventory.inventoryId,
+        inventoryName: shelfInventory.inventoryName,
+        cartItem,
+      },
     });
-    const transactions = session.shelves.map((shelf) => ({
-      shelfId: shelf.shelfId,
-      sensorId: shelf.sensorId,
-      channelId: shelf.channelId,
-      expectedCount: shelf.expectedCount,
-      expectedWeight: shelf.expectedWeight,
-    }));
+    const shelf = session.shelves[0];
+    const inventory = { ...cartItem, quantity: 0 };
 
     await db.insert(notifications).values([
       {
         clientVisitId,
         recipientType: "client",
         userId: user.id,
-        title: "IOT mock door opened",
-        message: "ระบบ mock เปิดตู้แล้ว กำลังรอผลการหยิบสินค้า",
+        title: "IOT shelf opened",
+        message: "ระบบเปิดตู้แล้ว รอข้อมูลจำนวนสินค้าที่หยิบจาก IOT",
         severity: "info",
         rawPayload: {
           iotServerUrl: process.env.IOT_SERVER_URL ?? null,
           sessionId: session.sessionId,
-          transactions,
+          channelId: shelf.channelId,
+          shelfId: shelf.shelfId,
+          sensorId: shelf.sensorId,
+          inventoryId: shelf.inventoryId,
           strict: true,
           mock: true,
         },
@@ -88,12 +89,15 @@ class IotService {
       {
         clientVisitId,
         recipientType: "admin",
-        title: "IOT watch started",
-        message: `${user.name ?? user.email} submitted ${trustedItems.length} cart lines.`,
+        title: "IOT shelf opened",
+        message: `${user.name ?? user.email} opened ${shelfInventory.shelfName}.`,
         severity: "info",
         rawPayload: {
           sessionId: session.sessionId,
-          transactions,
+          channelId: shelf.channelId,
+          shelfId: shelf.shelfId,
+          sensorId: shelf.sensorId,
+          inventoryId: shelf.inventoryId,
           strict: true,
           mock: true,
         },
@@ -101,12 +105,15 @@ class IotService {
       {
         clientVisitId,
         recipientType: "super_admin",
-        title: "IOT watch started",
-        message: `${user.name ?? user.email} submitted ${trustedItems.length} cart lines.`,
+        title: "IOT shelf opened",
+        message: `${user.name ?? user.email} opened ${shelfInventory.shelfName}.`,
         severity: "info",
         rawPayload: {
           sessionId: session.sessionId,
-          transactions,
+          channelId: shelf.channelId,
+          shelfId: shelf.shelfId,
+          sensorId: shelf.sensorId,
+          inventoryId: shelf.inventoryId,
           strict: true,
           mock: true,
         },
@@ -116,96 +123,53 @@ class IotService {
     return {
       clientVisitId,
       sessionId: session.sessionId,
-      transactions,
-      status: "pending",
-      message: "IOT mock door opened. Waiting for picked count.",
+      channelId: shelf.channelId,
+      shelfId: shelf.shelfId,
+      sensorId: shelf.sensorId,
+      status: "open",
+      inventory,
+      message: "เปิดตู้แล้ว หยิบสินค้าได้เลย",
     };
   }
 
-  private async buildTrustedItems(
-    items: CartItem[],
-  ): Promise<TrustedCartItem[]> {
-    const requested = aggregateRequestedQuantities(items);
-    const inventoryIds = Array.from(requested.keys());
+  private async getSingleAvailableInventory(
+    shelfId: string,
+  ): Promise<ShelfInventory | null> {
+    const normalizedShelfId = shelfId.trim();
+    if (!normalizedShelfId) return null;
+
     const rows = await db
       .select({
+        shelfId: shelfs.id,
+        shelfName: shelfs.name,
+        sensorId: shelfs.sensorId,
         inventoryId: inventories.id,
-        shelfId: inventories.shelfId,
-        name: inventories.name,
+        inventoryName: inventories.name,
         price: inventories.price,
         amount: inventories.amount,
         weightPerPiece: inventories.weightPerPiece,
         unitId: inventories.unitId,
         imageUrl: inventories.imageUrl,
-        sensorId: shelfs.sensorId,
       })
-      .from(inventories)
-      .innerJoin(shelfs, eq(inventories.shelfId, shelfs.id))
+      .from(shelfs)
+      .innerJoin(inventories, eq(inventories.shelfId, shelfs.id))
       .where(
         and(
-          inArray(inventories.id, inventoryIds),
+          eq(shelfs.id, normalizedShelfId),
+          isNull(shelfs.deletedAt),
           eq(inventories.isActive, true),
           isNull(inventories.deletedAt),
-          isNull(shelfs.deletedAt),
+          gt(inventories.amount, 0),
         ),
-      );
+      )
+      .orderBy(asc(inventories.name));
 
-    const byId = new Map(rows.map((row) => [row.inventoryId, row]));
-
-    return inventoryIds.map((inventoryId) => {
-      const row = byId.get(inventoryId);
-      const quantity = requested.get(inventoryId) ?? 0;
-
-      if (!row) throw new Error("Selected inventory is not available");
-      if (quantity > row.amount) {
-        throw new Error(`${row.name} has only ${row.amount} items available`);
-      }
-
-      return {
-        inventoryId: row.inventoryId,
-        shelfId: row.shelfId,
-        name: row.name,
-        price: row.price,
-        weightPerPiece: row.weightPerPiece,
-        unitId: row.unitId,
-        imageUrl: row.imageUrl,
-        sensorId: row.sensorId,
-        quantity,
-      };
-    });
-  }
-
-  private buildShelvesToOpen(items: TrustedCartItem[]) {
-    const shelvesById = new Map<
-      string,
-      {
-        shelfId: string;
-        sensorId: string | null;
-        inventoryId: string;
-        inventoryName: string;
-        expectedCount: number;
-        expectedWeight: number;
-      }
-    >();
-
-    for (const item of items) {
-      const existing = shelvesById.get(item.shelfId);
-      if (existing && existing.inventoryId !== item.inventoryId) {
-        throw new Error("Strict IOT PoC supports one inventory per shelf");
-      }
-
-      shelvesById.set(item.shelfId, {
-        shelfId: item.shelfId,
-        sensorId: item.sensorId,
-        inventoryId: item.inventoryId,
-        inventoryName: item.name,
-        expectedCount: (existing?.expectedCount ?? 0) + item.quantity,
-        expectedWeight:
-          (existing?.expectedWeight ?? 0) + item.quantity * item.weightPerPiece,
-      });
+    if (rows.length === 0) return null;
+    if (rows.length > 1) {
+      throw new Error("Strict IOT flow supports one inventory per shelf");
     }
 
-    return Array.from(shelvesById.values());
+    return rows[0];
   }
 }
 

@@ -1,7 +1,10 @@
 import { RotateCw } from "lucide-react";
 import Link from "next/link";
 
-import { sendMockPickedCountAction } from "@/app/admin/inventory/iot-poc/actions";
+import {
+  sendMockDoorClosedAction,
+  sendMockPickedCountAction,
+} from "@/app/admin/inventory/iot-poc/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -22,10 +25,10 @@ const inputClass =
   "h-9 w-24 rounded-md border border-input bg-background px-3 text-sm tabular-nums outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40";
 
 function statusVariant(status: IotSessionStatus) {
-  if (status === "over" || status === "short" || status === "expired") {
+  if (status === "expired") {
     return "destructive" as const;
   }
-  if (status === "matched") return "default" as const;
+  if (status === "updated" || status === "closed") return "default" as const;
   return "outline" as const;
 }
 
@@ -40,7 +43,7 @@ export default function IotPocPage() {
             <div>
               <CardTitle>IOT PoC Portal</CardTitle>
               <CardDescription>
-                Mock picked-count events for pending shelf sessions.
+                Mock cumulative picked-count and door-closed events by channel.
               </CardDescription>
             </div>
             <Link
@@ -55,8 +58,8 @@ export default function IotPocPage() {
         <CardContent>
           {sessions.length === 0 ? (
             <div className="text-muted-foreground rounded-lg border border-dashed p-6 text-sm">
-              No IOT PoC sessions yet. Submit a mobile cart to open a mock shelf
-              session.
+              No IOT PoC sessions yet. Scan a shelf on mobile to open a mock
+              shelf session.
             </div>
           ) : (
             <div className="grid gap-4">
@@ -136,57 +139,78 @@ export default function IotPocPage() {
                               </div>
                               <div>
                                 <dt className="text-muted-foreground">
-                                  Expected
+                                  Price
                                 </dt>
                                 <dd className="tabular-nums">
-                                  {shelf.expectedCount} pcs
+                                  {formatBaht(shelf.cartItem.price)}
                                 </dd>
                               </div>
                               <div>
                                 <dt className="text-muted-foreground">
-                                  Weight
+                                  Stock
                                 </dt>
                                 <dd className="tabular-nums">
-                                  {shelf.expectedWeight} g
+                                  live source
                                 </dd>
                               </div>
                               <div>
                                 <dt className="text-muted-foreground">
-                                  Picked
+                                  Cumulative
                                 </dt>
                                 <dd className="tabular-nums">
-                                  {shelf.pickedCount ?? "-"} pcs
+                                  {shelf.pickedCount} pcs
                                 </dd>
                               </div>
                             </dl>
 
-                            <form
-                              action={sendMockPickedCountAction}
-                              className="flex flex-wrap items-end gap-2"
-                            >
-                              <input
-                                type="hidden"
-                                name="sessionId"
-                                value={session.sessionId}
-                              />
-                              <input
-                                type="hidden"
-                                name="shelfId"
-                                value={shelf.shelfId}
-                              />
-                              <label className="grid gap-1 text-sm font-medium">
-                                Picked count
+                            <div className="flex flex-wrap items-end gap-2">
+                              <form
+                                action={sendMockPickedCountAction}
+                                className="flex flex-wrap items-end gap-2"
+                              >
                                 <input
-                                  className={inputClass}
-                                  type="number"
-                                  min={0}
-                                  name="pickedCount"
-                                  defaultValue={shelf.expectedCount}
-                                  required
+                                  type="hidden"
+                                  name="sessionId"
+                                  value={session.sessionId}
                                 />
-                              </label>
-                              <Button type="submit">Send mock event</Button>
-                            </form>
+                                <input
+                                  type="hidden"
+                                  name="shelfId"
+                                  value={shelf.shelfId}
+                                />
+                                <label className="grid gap-1 text-sm font-medium">
+                                  Cumulative count
+                                  <input
+                                    className={inputClass}
+                                    type="number"
+                                    min={0}
+                                    name="pickedCount"
+                                    defaultValue={shelf.pickedCount}
+                                    required
+                                  />
+                                </label>
+                                <Button type="submit">Send count</Button>
+                              </form>
+                              <form action={sendMockDoorClosedAction}>
+                                <input
+                                  type="hidden"
+                                  name="sessionId"
+                                  value={session.sessionId}
+                                />
+                                <input
+                                  type="hidden"
+                                  name="shelfId"
+                                  value={shelf.shelfId}
+                                />
+                                <Button
+                                  type="submit"
+                                  variant="outline"
+                                  disabled={shelf.status === "closed"}
+                                >
+                                  Door closed
+                                </Button>
+                              </form>
+                            </div>
                           </div>
                         ))}
                       </div>

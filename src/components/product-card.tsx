@@ -14,11 +14,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { formatBaht } from "@/lib/format";
-import { useOrderStore } from "@/store/order";
+import { useCartStore } from "@/store/cart";
 import type { Inventory } from "@/types";
 
 export function ProductCard({ product }: { product: Inventory }) {
-  const addItem = useOrderStore((state) => state.addItem);
+  const addItem = useCartStore((state) => state.addItem);
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
   const outOfStock = !product.isActive || product.amount <= 0;

@@ -168,6 +168,33 @@ class CartSyncService {
     return memoryStore.get(cartKey(clientVisitId, sessionId)) ?? null;
   }
 
+  async setCartItemQuantity(
+    clientVisitId: number,
+    item: CartItem,
+    quantity: number,
+    sessionId: string,
+  ): Promise<StoredCart> {
+    const existingCart = await this.getCart(clientVisitId);
+    const existingItems = existingCart?.items ?? [];
+    const nextItems =
+      quantity <= 0
+        ? existingItems.filter(
+            (cartItem) => cartItem.inventoryId !== item.inventoryId,
+          )
+        : [
+            ...existingItems.filter(
+              (cartItem) => cartItem.inventoryId !== item.inventoryId,
+            ),
+            { ...item, quantity },
+          ];
+
+    return this.setCart(
+      clientVisitId,
+      nextItems,
+      existingCart?.sessionId ?? sessionId,
+    );
+  }
+
   async clearCart(clientVisitId: number): Promise<void> {
     let sessionId: string | null = null;
 

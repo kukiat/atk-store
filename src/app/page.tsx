@@ -47,14 +47,14 @@ export default async function HomePage({
             </h1>
             <p className="text-muted-foreground text-pretty">
               สแกน QR ที่ชั้นวางสินค้า (smart shelf) ด้วยมือถือ
-              เพื่อดูและเลือกสินค้าบนชั้นนั้น แล้วใส่ตะกร้าได้ทันที
+              เพื่อเปิดตู้ แล้วระบบจะใส่สินค้าลงตะกร้าตามจำนวนที่หยิบจริง
             </p>
           </div>
 
           <div className="bg-muted text-muted-foreground flex w-full max-w-md items-center gap-2 rounded-lg px-4 py-3 text-sm md:max-w-none">
             <QrCode className="size-4 shrink-0" />
             <span className="text-left">
-              สแกน QR ที่ group หรือ shelf เพื่อเริ่มเลือกสินค้า
+              สแกน QR ที่ group หรือ shelf เพื่อเลือกตู้ที่ต้องการหยิบ
             </span>
           </div>
         </div>

@@ -23,6 +23,4 @@ export type IotTransaction = {
   shelfId: string;
   sensorId: string | null;
   channelId: string;
-  expectedCount: number;
-  expectedWeight: number;
 };

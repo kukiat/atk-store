@@ -4,6 +4,10 @@ import { hasSameOrigin, requireCurrentUser } from "@/lib/auth";
 import { isMobileOrTabletRequest } from "@/lib/device";
 import { decodeShelfQrPayload } from "@/lib/qr-payload";
 import { shelfService } from "@/services/shelf.service";
+import {
+  StoreScanNotAllowedError,
+  storeAccessService,
+} from "@/services/store-access.service";
 
 export async function POST(request: NextRequest) {
   if (!hasSameOrigin(request)) {
@@ -20,7 +24,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  await requireCurrentUser();
+  const user = await requireCurrentUser();
+  try {
+    await storeAccessService.requireScanEligibility(user.id);
+  } catch (error) {
+    if (error instanceof StoreScanNotAllowedError) {
+      return NextResponse.json(
+        { error: error.eligibility.message, reason: error.eligibility.reason },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
 
   const body = (await request.json()) as { encodedPayload?: unknown };
   if (typeof body.encodedPayload !== "string") {

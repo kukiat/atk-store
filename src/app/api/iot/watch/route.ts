@@ -3,6 +3,10 @@ import { type NextRequest, NextResponse } from "next/server";
 import { hasSameOrigin, requireCurrentUser } from "@/lib/auth";
 import { isMobileOrTabletRequest } from "@/lib/device";
 import { iotService } from "@/services/iot.service";
+import {
+  StoreScanNotAllowedError,
+  storeAccessService,
+} from "@/services/store-access.service";
 import type { CartItem } from "@/types";
 
 function isCartItem(value: unknown): value is CartItem {
@@ -37,6 +41,18 @@ export async function POST(request: NextRequest) {
   }
 
   const user = await requireCurrentUser();
+  try {
+    await storeAccessService.requireScanEligibility(user.id);
+  } catch (error) {
+    if (error instanceof StoreScanNotAllowedError) {
+      return NextResponse.json(
+        { error: error.eligibility.message, reason: error.eligibility.reason },
+        { status: 409 },
+      );
+    }
+    throw error;
+  }
+
   const body = (await request.json()) as { items?: unknown };
   const items = Array.isArray(body.items) ? body.items : [];
 

@@ -7,7 +7,12 @@ import { cn } from "@/lib/utils";
 
 const links = [
   { href: "/admin/users", label: "Users" },
-  { href: "/admin/inventory", label: "Inventory" },
+  {
+    href: "/admin/inventory",
+    label: "Inventory",
+    exclude: ["/admin/inventory/iot-poc"],
+  },
+  { href: "/admin/inventory/iot-poc", label: "IOT PoC" },
   { href: "/admin/wallets", label: "Wallets" },
 ] as const;
 
@@ -17,8 +22,14 @@ export function AdminNav() {
   return (
     <nav className="flex flex-wrap gap-2 rounded-lg border bg-card p-2 text-sm">
       {links.map((link) => {
+        const excluded =
+          "exclude" in link &&
+          link.exclude.some(
+            (href) => pathname === href || pathname.startsWith(`${href}/`),
+          );
         const active =
-          pathname === link.href || pathname.startsWith(`${link.href}/`);
+          !excluded &&
+          (pathname === link.href || pathname.startsWith(`${link.href}/`));
 
         return (
           <Link

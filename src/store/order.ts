@@ -5,34 +5,15 @@ import { persist } from "zustand/middleware";
 
 import type { CartItem, Inventory } from "@/types";
 
-type CartState = {
+type OrderState = {
   items: CartItem[];
   addItem: (inventory: Inventory, quantity?: number) => void;
-  addItems: (items: CartItem[]) => void;
   removeItem: (inventoryId: string) => void;
   setQty: (inventoryId: string, quantity: number) => void;
   clear: () => void;
 };
 
-function mergeCartItems(currentItems: CartItem[], nextItems: CartItem[]) {
-  const byInventoryId = new Map(
-    currentItems.map((item) => [item.inventoryId, item]),
-  );
-
-  for (const item of nextItems) {
-    const existing = byInventoryId.get(item.inventoryId);
-    byInventoryId.set(
-      item.inventoryId,
-      existing
-        ? { ...existing, quantity: existing.quantity + item.quantity }
-        : item,
-    );
-  }
-
-  return Array.from(byInventoryId.values());
-}
-
-export const useCartStore = create<CartState>()(
+export const useOrderStore = create<OrderState>()(
   persist(
     (set) => ({
       items: [],
@@ -51,6 +32,7 @@ export const useCartStore = create<CartState>()(
               ),
             };
           }
+
           return {
             items: [
               ...state.items,
@@ -67,11 +49,6 @@ export const useCartStore = create<CartState>()(
             ],
           };
         }),
-
-      addItems: (items) =>
-        set((state) => ({
-          items: mergeCartItems(state.items, items),
-        })),
 
       removeItem: (inventoryId) =>
         set((state) => ({
@@ -92,14 +69,12 @@ export const useCartStore = create<CartState>()(
 
       clear: () => set({ items: [] }),
     }),
-    { name: "atk-cart" },
+    { name: "atk-order" },
   ),
 );
 
-/** Total number of units across all cart lines. */
-export const selectTotalCount = (state: CartState): number =>
+export const selectOrderTotalCount = (state: OrderState): number =>
   state.items.reduce((sum, item) => sum + item.quantity, 0);
 
-/** Total price of the cart in baht. */
-export const selectTotalPrice = (state: CartState): number =>
+export const selectOrderTotalPrice = (state: OrderState): number =>
   state.items.reduce((sum, item) => sum + item.price * item.quantity, 0);

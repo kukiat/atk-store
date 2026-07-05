@@ -7,6 +7,7 @@ import { ProductCard } from "@/components/product-card";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
 import { shelfService } from "@/services/shelf.service";
+import { storeAccessService } from "@/services/store-access.service";
 
 export default async function ShelfPage({
   params,
@@ -17,6 +18,8 @@ export default async function ShelfPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
+  const scanEligibility = await storeAccessService.getScanEligibility(user.id);
+  if (!scanEligibility.canScan) redirect("/scan");
 
   const { id } = await params;
   const payloadParam = (await searchParams).payload;

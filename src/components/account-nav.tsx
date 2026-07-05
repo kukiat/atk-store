@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
@@ -33,6 +34,14 @@ type AccountNavProps = {
   walletBalanceMinor: number;
 };
 
+type ActiveVisitCheckoutStatus = {
+  order: {
+    status: "pending" | "paid" | "failed" | "cancelled";
+    paymentStatus: "pending" | "paid" | "failed" | "cancelled";
+  } | null;
+  walletBalanceAvailableMinor?: number;
+};
+
 export function AccountNav({
   user,
   canAccessAdmin,
@@ -45,7 +54,41 @@ export function AccountNav({
   const hydrated = useHydrated();
   const cartCount = useCartStore(selectTotalCount);
   const cartTotal = useCartStore(selectTotalPrice);
+  const clearCart = useCartStore((state) => state.clear);
+  const [liveWalletBalanceMinor, setLiveWalletBalanceMinor] = useState<
+    number | null
+  >(null);
+  const displayedWalletBalanceMinor =
+    liveWalletBalanceMinor ?? walletBalanceMinor;
   const showCartBadge = hydrated && cartCount > 0;
+
+  useEffect(() => {
+    const events = new EventSource("/api/orders/active-visit-events");
+
+    function handleCheckoutStatus(event: MessageEvent<string>) {
+      const body = JSON.parse(event.data) as ActiveVisitCheckoutStatus;
+      if (typeof body.walletBalanceAvailableMinor === "number") {
+        setLiveWalletBalanceMinor(body.walletBalanceAvailableMinor);
+      }
+
+      if (
+        body.order?.status === "paid" &&
+        body.order.paymentStatus === "paid" &&
+        hydrated &&
+        cartCount > 0
+      ) {
+        clearCart();
+        router.replace("/?checkout=paid");
+      }
+    }
+
+    events.addEventListener(
+      "checkout-status",
+      handleCheckoutStatus as EventListener,
+    );
+
+    return () => events.close();
+  }, [cartCount, clearCart, hydrated, router]);
 
   return (
     <header className="bg-background/95 sticky top-0 z-50 border-b">
@@ -102,7 +145,7 @@ export function AccountNav({
               </span>
               <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums">
                 <WalletCards className="size-3.5" />
-                {formatPrice(walletBalanceMinor)}
+                {formatPrice(displayedWalletBalanceMinor)}
               </span>
               {showCartBadge ? (
                 <span
@@ -142,7 +185,7 @@ export function AccountNav({
                       <span>Wallet</span>
                     </span>
                     <span className="text-muted-foreground text-xs tabular-nums">
-                      {formatPrice(walletBalanceMinor)}
+                      {formatPrice(displayedWalletBalanceMinor)}
                     </span>
                   </Menu.LinkItem>
                   <Menu.LinkItem

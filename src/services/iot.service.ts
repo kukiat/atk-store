@@ -1,15 +1,10 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
-import {
-  clientVisits,
-  inventories,
-  notifications,
-  shelfs,
-  type User,
-} from "@/db/schema";
+import { inventories, notifications, shelfs, type User } from "@/db/schema";
+import { clientVisitService } from "@/services/client-visit.service";
 import { iotSessionService } from "@/services/iot-session.service";
 import type { CartItem, IotTransaction } from "@/types";
 
@@ -39,41 +34,15 @@ function aggregateRequestedQuantities(items: CartItem[]): Map<string, number> {
 }
 
 class IotService {
-  async getActiveVisitForUser(userId: number): Promise<number> {
-    const [visit] = await db
-      .select({ id: clientVisits.id })
-      .from(clientVisits)
-      .where(
-        and(eq(clientVisits.userId, userId), eq(clientVisits.status, "inside")),
-      )
-      .orderBy(desc(clientVisits.createdAt))
-      .limit(1);
-
-    if (visit) return visit.id;
-
-    const [created] = await db
-      .insert(clientVisits)
-      .values({
-        userId,
-        status: "inside",
-        enteredAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .returning({ id: clientVisits.id });
-
-    if (!created) {
-      throw new Error("Unable to create client visit");
-    }
-
-    return created.id;
-  }
-
   async watchCart(user: User, items: CartItem[]): Promise<IotWatchResult> {
     if (items.length === 0) {
       throw new Error("Cart is empty");
     }
 
-    const clientVisitId = await this.getActiveVisitForUser(user.id);
+    const activeVisit = await clientVisitService.requireActiveVisitForUser(
+      user.id,
+    );
+    const clientVisitId = activeVisit.id;
     const trustedItems = await this.buildTrustedItems(items);
     const shelvesToOpen = this.buildShelvesToOpen(trustedItems);
     const cartItems = trustedItems.map((item) => ({
@@ -153,7 +122,9 @@ class IotService {
     };
   }
 
-  private async buildTrustedItems(items: CartItem[]): Promise<TrustedCartItem[]> {
+  private async buildTrustedItems(
+    items: CartItem[],
+  ): Promise<TrustedCartItem[]> {
     const requested = aggregateRequestedQuantities(items);
     const inventoryIds = Array.from(requested.keys());
     const rows = await db
@@ -230,8 +201,7 @@ class IotService {
         inventoryName: item.name,
         expectedCount: (existing?.expectedCount ?? 0) + item.quantity,
         expectedWeight:
-          (existing?.expectedWeight ?? 0) +
-          item.quantity * item.weightPerPiece,
+          (existing?.expectedWeight ?? 0) + item.quantity * item.weightPerPiece,
       });
     }
 

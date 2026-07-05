@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentUser } from "@/lib/auth";
 import { decodeShelfQrPayload } from "@/lib/qr-payload";
 import { shelfService } from "@/services/shelf.service";
+import { storeAccessService } from "@/services/store-access.service";
 
 export default async function ScanShelvesPage({
   searchParams,
@@ -15,6 +16,8 @@ export default async function ScanShelvesPage({
 }) {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
+  const scanEligibility = await storeAccessService.getScanEligibility(user.id);
+  if (!scanEligibility.canScan) redirect("/scan");
 
   const payloadParam = (await searchParams).payload;
   const encodedPayload = Array.isArray(payloadParam)

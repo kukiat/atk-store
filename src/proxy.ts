@@ -17,6 +17,7 @@ export function proxy(request: NextRequest) {
   const deviceType = userAgent(request).device.type;
   const mobileOnly =
     pathname === "/cart" ||
+    pathname === "/order" ||
     pathname === "/scan" ||
     pathname.startsWith("/scan/") ||
     pathname.startsWith("/shelf/");

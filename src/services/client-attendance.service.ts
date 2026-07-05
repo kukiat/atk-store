@@ -14,6 +14,8 @@ import {
   users,
 } from "@/db/schema";
 import { faceRecognitionService } from "@/services/face-recognition.service";
+import { publishCheckoutStatus } from "@/services/order-events.service";
+import { orderService } from "@/services/order.service";
 
 type RecognizeFrameInput = {
   imageBytes: Uint8Array;
@@ -34,6 +36,17 @@ export type ClientAttendanceRecognitionResult = {
   event: ClientAttendanceEvent;
   visit: ClientVisit | null;
   user: RecognizedUser | null;
+  checkout:
+    | {
+        status: "paid";
+        orderId: string;
+        totalPrice: number;
+      }
+    | {
+        status: "failed";
+        message: string;
+      }
+    | null;
 };
 
 async function getActiveUserById(
@@ -177,8 +190,29 @@ class ClientAttendanceService {
     }
 
     const visit = await applyVisitState(event, user);
+    let checkout: ClientAttendanceRecognitionResult["checkout"] = null;
 
-    return { event, visit, user };
+    if (user && event.direction === "exit" && visit?.status === "exited") {
+      try {
+        const order = await orderService.createPaidWalletOrderFromCart(
+          visit.id,
+        );
+        checkout = {
+          status: "paid",
+          orderId: order.id,
+          totalPrice: order.totalPrice,
+        };
+      } catch (error) {
+        publishCheckoutStatus(user.id);
+        checkout = {
+          status: "failed",
+          message:
+            error instanceof Error ? error.message : "Checkout failed",
+        };
+      }
+    }
+
+    return { event, visit, user, checkout };
   }
 }
 

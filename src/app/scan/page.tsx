@@ -5,10 +5,12 @@ import { redirect } from "next/navigation";
 import { QrScanner } from "@/app/scan/qr-scanner";
 import { buttonVariants } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/auth";
+import { storeAccessService } from "@/services/store-access.service";
 
 export default async function ScanPage() {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
+  const scanEligibility = await storeAccessService.getScanEligibility(user.id);
 
   return (
     <main className="mx-auto w-full max-w-md flex-1 px-4 pt-6 pb-8">
@@ -29,7 +31,13 @@ export default async function ScanPage() {
           <h1 className="text-balance text-xl font-bold">สแกน shelf QR</h1>
         </div>
       </header>
-      <QrScanner />
+      {scanEligibility.canScan ? (
+        <QrScanner />
+      ) : (
+        <div className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
+          {scanEligibility.message}
+        </div>
+      )}
     </main>
   );
 }

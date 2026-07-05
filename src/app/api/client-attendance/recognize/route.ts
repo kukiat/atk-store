@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
               exitedAt: result.visit.exitedAt,
             }
           : null,
+        checkout: result.checkout,
       },
       { headers: noStore },
     );

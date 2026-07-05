@@ -6,6 +6,7 @@ import type Stripe from "stripe";
 import { db } from "@/db";
 import {
   clientVisits,
+  inventories,
   notifications,
   orderItems,
   orderPayments,
@@ -26,6 +27,7 @@ import {
 } from "@/lib/money";
 import { getAppOrigin, getStripeClient, getStripeConfig } from "@/lib/stripe";
 import { cartSyncService } from "@/services/cart-sync.service";
+import { publishCheckoutStatus } from "@/services/order-events.service";
 
 export class WalletInsufficientBalanceError extends Error {
   constructor() {
@@ -147,7 +149,10 @@ class WalletService {
     return { wallet, channels, topups, ledgerEntries, livemode };
   }
 
-  async getTopupIntentForUserSession(userId: number, checkoutSessionId: string) {
+  async getTopupIntentForUserSession(
+    userId: number,
+    checkoutSessionId: string,
+  ) {
     const wallet = await this.getOrCreateWallet(userId);
     return db.query.walletTopupIntents.findFirst({
       where: and(
@@ -299,7 +304,8 @@ class WalletService {
         .update(stripeWebhookEvents)
         .set({
           processingStatus: "failed",
-          errorMessage: error instanceof Error ? error.message : "Unknown error",
+          errorMessage:
+            error instanceof Error ? error.message : "Unknown error",
           updatedAt: new Date(),
         })
         .where(eq(stripeWebhookEvents.id, storedEvent.id));
@@ -355,7 +361,11 @@ class WalletService {
           with: { order: true },
         });
         if (existingPayment?.order) {
-          return { status: "paid" as const, order: existingPayment.order };
+          return {
+            status: "paid" as const,
+            order: existingPayment.order,
+            userId: visit.userId,
+          };
         }
       }
 
@@ -379,6 +389,27 @@ class WalletService {
           status: "insufficient" as const,
           userId: visit.userId,
         };
+      }
+
+      for (const item of cart.items) {
+        const [updatedInventory] = await tx
+          .update(inventories)
+          .set({
+            amount: sql`${inventories.amount} - ${item.quantity}`,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(inventories.id, item.inventoryId),
+              eq(inventories.isActive, true),
+              gte(inventories.amount, item.quantity),
+            ),
+          )
+          .returning({ id: inventories.id });
+
+        if (!updatedInventory) {
+          throw new Error(`${item.name} does not have enough stock`);
+        }
       }
 
       const [ledgerEntry] = await tx
@@ -447,7 +478,7 @@ class WalletService {
         })
         .where(eq(clientVisits.id, clientVisitId));
 
-      return { status: "paid" as const, order };
+      return { status: "paid" as const, order, userId: visit.userId };
     });
 
     if (result.status === "insufficient") {
@@ -473,10 +504,12 @@ class WalletService {
           updatedAt: new Date(),
         },
       ]);
+      publishCheckoutStatus(result.userId);
       throw new WalletInsufficientBalanceError();
     }
 
     await cartSyncService.clearCart(clientVisitId);
+    publishCheckoutStatus(result.userId);
     console.info("[wallet] order paid from wallet", {
       clientVisitId,
       orderId: result.order.id,
@@ -609,7 +642,9 @@ class WalletService {
           balanceAvailableMinor: sql`${wallets.balanceAvailableMinor} + ${topup.amountMinor}`,
           updatedAt: new Date(),
         })
-        .where(and(eq(wallets.id, topup.walletId), eq(wallets.status, "active")))
+        .where(
+          and(eq(wallets.id, topup.walletId), eq(wallets.status, "active")),
+        )
         .returning();
       if (!updatedWallet) throw new Error("Active wallet was not found");
 

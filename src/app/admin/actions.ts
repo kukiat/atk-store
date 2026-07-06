@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/auth";
 import { adminInventoryService } from "@/services/admin-inventory.service";
 import { adminUserService } from "@/services/admin-user.service";
+import { clientAttendanceService } from "@/services/client-attendance.service";
 
 async function requireAdminActor() {
   const user = await requireCurrentUser();
@@ -18,6 +19,12 @@ function readUserId(formData: FormData): number {
     throw new Error("Invalid user id");
   }
   return userId;
+}
+
+function readManualAttendanceDirection(formData: FormData): "entry" | "exit" {
+  const raw = formData.get("direction");
+  if (raw === "entry" || raw === "exit") return raw;
+  throw new Error("Invalid attendance direction");
 }
 
 export async function grantAdminRoleAction(formData: FormData) {
@@ -88,6 +95,43 @@ export async function revokeAdminRoleAction(formData: FormData) {
 
   await adminUserService.revokeAdminRole(actor, userId);
   revalidatePath("/admin/users");
+  revalidatePath(`/admin/users/${userId}`);
+}
+
+export async function setManualAttendanceStatusAction(formData: FormData) {
+  const actor = await requireAdminActor();
+  const userId = readUserId(formData);
+  const direction = readManualAttendanceDirection(formData);
+  const target = (await adminUserService.listUsers(actor)).find(
+    (item) => item.user.id === userId,
+  );
+
+  if (!target) {
+    throw new Error("Cannot override attendance for this user");
+  }
+
+  const result = await clientAttendanceService.manualOverride({
+    actorUserId: actor.user.id,
+    targetUserId: userId,
+    direction,
+    metadata: {
+      adminPage: "/admin/attendance",
+    },
+  });
+
+  await adminUserService.writeAudit({
+    actorUserId: actor.user.id,
+    targetUserId: userId,
+    action: `client_attendance.manual_${direction}`,
+    metadata: {
+      eventId: result.event.id,
+      visitId: result.visit?.id ?? null,
+      checkoutStatus: result.checkout?.status ?? null,
+      cameraId: result.event.cameraId,
+    },
+  });
+
+  revalidatePath("/admin/attendance");
   revalidatePath(`/admin/users/${userId}`);
 }
 

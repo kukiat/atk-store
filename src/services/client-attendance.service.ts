@@ -32,6 +32,13 @@ type RecognizedUser = {
   avatarUrl: string | null;
 };
 
+type ManualOverrideInput = {
+  targetUserId: number;
+  actorUserId: number;
+  direction: Extract<AttendanceDirection, "entry" | "exit">;
+  metadata?: Record<string, unknown>;
+};
+
 export type ClientAttendanceRecognitionResult = {
   event: ClientAttendanceEvent;
   visit: ClientVisit | null;
@@ -151,6 +158,31 @@ async function applyVisitState(
   return getOpenVisit(user.id);
 }
 
+async function createCheckoutForExit(
+  user: RecognizedUser | null,
+  event: ClientAttendanceEvent,
+  visit: ClientVisit | null,
+): Promise<ClientAttendanceRecognitionResult["checkout"]> {
+  if (!user || event.direction !== "exit" || visit?.status !== "exited") {
+    return null;
+  }
+
+  try {
+    const order = await orderService.createPaidWalletOrderFromCart(visit.id);
+    return {
+      status: "paid",
+      orderId: order.id,
+      totalPrice: order.totalPrice,
+    };
+  } catch (error) {
+    publishCheckoutStatus(user.id);
+    return {
+      status: "failed",
+      message: error instanceof Error ? error.message : "Checkout failed",
+    };
+  }
+}
+
 class ClientAttendanceService {
   async recognizeFrame(
     input: RecognizeFrameInput,
@@ -190,27 +222,55 @@ class ClientAttendanceService {
     }
 
     const visit = await applyVisitState(event, user);
-    let checkout: ClientAttendanceRecognitionResult["checkout"] = null;
+    const checkout = await createCheckoutForExit(user, event, visit);
 
-    if (user && event.direction === "exit" && visit?.status === "exited") {
-      try {
-        const order = await orderService.createPaidWalletOrderFromCart(
-          visit.id,
-        );
-        checkout = {
-          status: "paid",
-          orderId: order.id,
-          totalPrice: order.totalPrice,
-        };
-      } catch (error) {
-        publishCheckoutStatus(user.id);
-        checkout = {
-          status: "failed",
-          message:
-            error instanceof Error ? error.message : "Checkout failed",
-        };
-      }
+    return { event, visit, user, checkout };
+  }
+
+  async manualOverride(
+    input: ManualOverrideInput,
+  ): Promise<ClientAttendanceRecognitionResult> {
+    const user = await getActiveUserById(input.targetUserId);
+    if (!user) {
+      throw new Error("Active user is required for attendance override");
     }
+
+    const now = new Date();
+    const imageSha256 = createHash("sha256")
+      .update(
+        [
+          "backoffice-manual",
+          input.targetUserId,
+          input.direction,
+          input.actorUserId,
+          now.toISOString(),
+        ].join(":"),
+      )
+      .digest("hex");
+
+    const [event] = await db
+      .insert(clientAttendanceEvents)
+      .values({
+        cameraId: "backoffice-manual",
+        direction: input.direction,
+        decision: "recognized",
+        matchedUserId: user.id,
+        imageSha256,
+        workerCapturedAt: now,
+        metadata: {
+          source: "backoffice_manual_override",
+          actorUserId: input.actorUserId,
+          ...input.metadata,
+        },
+      })
+      .returning();
+
+    if (!event) {
+      throw new Error("Failed to create client attendance event");
+    }
+
+    const visit = await applyVisitState(event, user);
+    const checkout = await createCheckoutForExit(user, event, visit);
 
     return { event, visit, user, checkout };
   }

@@ -215,7 +215,10 @@ class AdminUserService {
     });
   }
 
-  async revokeAdminRole(actor: AdminActor, targetUserId: number): Promise<void> {
+  async revokeAdminRole(
+    actor: AdminActor,
+    targetUserId: number,
+  ): Promise<void> {
     if (!actor.permissions.canManageAdmins) {
       throw new AdminAuthorizationError("Super admin permission is required");
     }
@@ -246,7 +249,8 @@ class AdminUserService {
         accountStatus: input.status,
         disabledUntil:
           input.status === "disabled" ? (input.disabledUntil ?? null) : null,
-        disabledReason: input.status === "active" ? null : (input.reason ?? null),
+        disabledReason:
+          input.status === "active" ? null : (input.reason ?? null),
         updatedAt: now,
       })
       .where(eq(users.id, input.targetUserId));
@@ -308,6 +312,20 @@ class AdminUserService {
     return readOptionalText(formData.get("reason"));
   }
 
+  async writeAudit(input: {
+    actorUserId: number;
+    targetUserId?: number | null;
+    action: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
+    await db.insert(adminAuditLogs).values({
+      actorUserId: input.actorUserId,
+      targetUserId: input.targetUserId ?? null,
+      action: input.action,
+      metadata: input.metadata ?? null,
+    });
+  }
+
   private async requireCanManage(
     actor: AdminActor,
     targetUserId: number,
@@ -320,20 +338,6 @@ class AdminUserService {
     }
 
     return target;
-  }
-
-  private async writeAudit(input: {
-    actorUserId: number;
-    targetUserId?: number | null;
-    action: string;
-    metadata?: Record<string, unknown>;
-  }): Promise<void> {
-    await db.insert(adminAuditLogs).values({
-      actorUserId: input.actorUserId,
-      targetUserId: input.targetUserId ?? null,
-      action: input.action,
-      metadata: input.metadata ?? null,
-    });
   }
 }
 

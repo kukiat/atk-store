@@ -139,18 +139,6 @@ async function revalidateInventoryAdmin() {
   revalidatePath("/admin/inventory", "layout");
 }
 
-export async function saveGroupAction(formData: FormData) {
-  const actor = await requireAdminActor();
-  await adminInventoryService.saveGroup(actor, formData);
-  await revalidateInventoryAdmin();
-}
-
-export async function deleteGroupAction(formData: FormData) {
-  const actor = await requireAdminActor();
-  await adminInventoryService.deleteGroup(actor, formData);
-  await revalidateInventoryAdmin();
-}
-
 export async function saveUnitAction(formData: FormData) {
   const actor = await requireAdminActor();
   await adminInventoryService.saveUnit(actor, formData);
@@ -160,18 +148,6 @@ export async function saveUnitAction(formData: FormData) {
 export async function deleteUnitAction(formData: FormData) {
   const actor = await requireAdminActor();
   await adminInventoryService.deleteUnit(actor, formData);
-  await revalidateInventoryAdmin();
-}
-
-export async function saveShelfAction(formData: FormData) {
-  const actor = await requireAdminActor();
-  await adminInventoryService.saveShelf(actor, formData);
-  await revalidateInventoryAdmin();
-}
-
-export async function deleteShelfAction(formData: FormData) {
-  const actor = await requireAdminActor();
-  await adminInventoryService.deleteShelf(actor, formData);
   await revalidateInventoryAdmin();
 }
 

@@ -2,27 +2,24 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { desc, eq } from "drizzle-orm";
+
 import { db } from "@/db";
-import { notifications, type User } from "@/db/schema";
+import {
+  inventories,
+  iotSessionEvents,
+  iotSessions,
+  notifications,
+  users,
+  type User,
+} from "@/db/schema";
 import { publishCartUpdated } from "@/services/cart-events.service";
 import { cartSyncService } from "@/services/cart-sync.service";
 import { publishIotSessionUpdated } from "@/services/iot-session-events.service";
 import type { CartItem } from "@/types";
 
-export type IotShelfStatus = "open" | "updated" | "closed";
 export type IotSessionStatus = "open" | "updated" | "closed" | "expired";
-
-export type IotShelfPick = {
-  shelfId: string;
-  sensorId: string | null;
-  channelId: string;
-  inventoryId: string;
-  inventoryName: string;
-  cartItem: CartItem;
-  pickedCount: number;
-  status: IotShelfStatus;
-  doorClosedAt: string | null;
-};
+export type IotSessionEventType = "picked_count" | "door_closed" | "error";
 
 export type IotSession = {
   sessionId: string;
@@ -30,9 +27,14 @@ export type IotSession = {
   userId: number;
   customerName: string | null;
   customerEmail: string;
+  inventoryId: string;
+  inventoryName: string;
+  branchCode: string;
   status: IotSessionStatus;
+  pickedCount: number;
+  currentQty: number | null;
+  inStoreQty: number | null;
   items: CartItem[];
-  shelves: IotShelfPick[];
   message: string;
   createdAt: string;
   updatedAt: string;
@@ -40,110 +42,189 @@ export type IotSession = {
   rawEvents: Array<Record<string, unknown>>;
 };
 
+type InventorySessionMaster = {
+  inventoryId: string;
+  inventoryName: string;
+  cartItem: Omit<CartItem, "quantity">;
+};
+
 type CreateIotSessionInput = {
+  sessionId?: string;
   clientVisitId: number;
   user: User;
-  shelf: {
-    shelfId: string;
-    sensorId: string | null;
-    inventoryId: string;
-    inventoryName: string;
-    cartItem: Omit<CartItem, "quantity">;
-  };
+  inventory: InventorySessionMaster;
+  branchCode: string;
+  inStoreQty?: number | null;
+  metadata?: Record<string, unknown>;
 };
 
 type ResolveSessionInput = {
   sessionId?: string | null;
-  channelId?: string | null;
-  shelfId?: string | null;
+  inventoryId?: string | null;
 };
 
 type ApplyPickedCountInput = ResolveSessionInput & {
   pickedCount: number;
+  currentQty?: number | null;
+  seq?: number | null;
+  rawPayload?: Record<string, unknown>;
+};
+
+type ApplyFinalCountInput = ResolveSessionInput & {
+  finalPickedCount: number;
   rawPayload?: Record<string, unknown>;
 };
 
 type CloseDoorInput = ResolveSessionInput & {
+  seq?: number | null;
   rawPayload?: Record<string, unknown>;
 };
 
-const globalForIotSessions = globalThis as unknown as {
-  atkIotSessions: Map<string, IotSession> | undefined;
+type ApplyErrorInput = ResolveSessionInput & {
+  message: string;
+  seq?: number | null;
+  rawPayload?: Record<string, unknown>;
 };
 
-const sessionStore =
-  globalForIotSessions.atkIotSessions ?? new Map<string, IotSession>();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForIotSessions.atkIotSessions = sessionStore;
+function toIso(value: Date | string | null): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-function cloneSession(session: IotSession): IotSession {
-  return structuredClone(session);
-}
-
-function upsertSessionItem(
-  items: CartItem[],
-  item: CartItem,
-  quantity: number,
-): CartItem[] {
-  if (quantity <= 0) {
-    return items.filter((cartItem) => cartItem.inventoryId !== item.inventoryId);
-  }
-
-  return [
-    ...items.filter((cartItem) => cartItem.inventoryId !== item.inventoryId),
-    { ...item, quantity },
-  ];
+function buildCartItem(input: {
+  inventoryId: string;
+  name: string;
+  price: number;
+  weightPerPiece: number;
+  unitId: string;
+  imageUrl: string | null;
+  quantity: number;
+}): CartItem {
+  return {
+    inventoryId: input.inventoryId,
+    name: input.name,
+    price: input.price,
+    weightPerPiece: input.weightPerPiece,
+    unitId: input.unitId,
+    imageUrl: input.imageUrl,
+    quantity: input.quantity,
+  };
 }
 
 class IotSessionService {
-  createSession(input: CreateIotSessionInput): IotSession {
-    const sessionId = randomUUID();
-    const channelId = randomUUID();
-    const now = new Date().toISOString();
-    const shelf: IotShelfPick = {
-      shelfId: input.shelf.shelfId,
-      sensorId: input.shelf.sensorId,
-      channelId,
-      inventoryId: input.shelf.inventoryId,
-      inventoryName: input.shelf.inventoryName,
-      cartItem: { ...input.shelf.cartItem, quantity: 0 },
-      pickedCount: 0,
-      status: "open",
-      doorClosedAt: null,
-    };
+  async createSession(input: CreateIotSessionInput): Promise<IotSession> {
+    const sessionId = input.sessionId ?? randomUUID();
+    const now = new Date();
 
-    const session: IotSession = {
-      sessionId,
+    await db.insert(iotSessions).values({
+      id: sessionId,
       clientVisitId: input.clientVisitId,
       userId: input.user.id,
-      customerName: input.user.name,
-      customerEmail: input.user.email,
+      inventoryId: input.inventory.inventoryId,
+      branchCode: input.branchCode,
       status: "open",
-      items: [],
-      shelves: [shelf],
-      message: "เปิดตู้แล้ว รอจำนวนสินค้าที่หยิบจาก IOT",
-      createdAt: now,
+      pickedCount: 0,
+      currentQty: input.inStoreQty ?? null,
+      inStoreQty: input.inStoreQty ?? null,
+      metadata: input.metadata,
+      openedAt: now,
       updatedAt: now,
-      completedAt: null,
-      rawEvents: [],
+    });
+
+    const session = await this.getSession(sessionId);
+    if (!session) throw new Error("Failed to create IOT session");
+    return session;
+  }
+
+  async getSession(sessionId: string): Promise<IotSession | null> {
+    const [row] = await db
+      .select({
+        id: iotSessions.id,
+        clientVisitId: iotSessions.clientVisitId,
+        userId: iotSessions.userId,
+        customerName: users.name,
+        customerEmail: users.email,
+        inventoryId: iotSessions.inventoryId,
+        inventoryName: inventories.name,
+        price: inventories.price,
+        weightPerPiece: inventories.weightPerPiece,
+        unitId: inventories.unitId,
+        imageUrl: inventories.imageUrl,
+        branchCode: iotSessions.branchCode,
+        status: iotSessions.status,
+        pickedCount: iotSessions.pickedCount,
+        currentQty: iotSessions.currentQty,
+        inStoreQty: iotSessions.inStoreQty,
+        createdAt: iotSessions.createdAt,
+        updatedAt: iotSessions.updatedAt,
+        closedAt: iotSessions.closedAt,
+      })
+      .from(iotSessions)
+      .innerJoin(inventories, eq(iotSessions.inventoryId, inventories.id))
+      .innerJoin(users, eq(iotSessions.userId, users.id))
+      .where(eq(iotSessions.id, sessionId))
+      .limit(1);
+
+    if (!row) return null;
+
+    const events = await db
+      .select({ rawPayload: iotSessionEvents.rawPayload })
+      .from(iotSessionEvents)
+      .where(eq(iotSessionEvents.sessionId, sessionId))
+      .orderBy(desc(iotSessionEvents.createdAt))
+      .limit(50);
+
+    const cartItem = buildCartItem({
+      inventoryId: row.inventoryId,
+      name: row.inventoryName,
+      price: row.price,
+      weightPerPiece: row.weightPerPiece,
+      unitId: row.unitId,
+      imageUrl: row.imageUrl,
+      quantity: row.pickedCount,
+    });
+    const items = row.pickedCount > 0 ? [cartItem] : [];
+
+    return {
+      sessionId: row.id,
+      clientVisitId: row.clientVisitId,
+      userId: row.userId,
+      customerName: row.customerName,
+      customerEmail: row.customerEmail,
+      inventoryId: row.inventoryId,
+      inventoryName: row.inventoryName,
+      branchCode: row.branchCode,
+      status: row.status,
+      pickedCount: row.pickedCount,
+      currentQty: row.currentQty,
+      inStoreQty: row.inStoreQty,
+      items,
+      message: this.buildMessage({
+        inventoryName: row.inventoryName,
+        status: row.status,
+        pickedCount: row.pickedCount,
+        currentQty: row.currentQty,
+      }),
+      createdAt: toIso(row.createdAt) ?? new Date().toISOString(),
+      updatedAt: toIso(row.updatedAt) ?? new Date().toISOString(),
+      completedAt: toIso(row.closedAt),
+      rawEvents: events
+        .map((event) => event.rawPayload)
+        .filter((event): event is Record<string, unknown> => Boolean(event)),
     };
-
-    sessionStore.set(sessionId, session);
-    return cloneSession(session);
   }
 
-  getSession(sessionId: string): IotSession | null {
-    const session = sessionStore.get(sessionId);
-    return session ? cloneSession(session) : null;
-  }
+  async listSessions(limit = 30): Promise<IotSession[]> {
+    const rows = await db
+      .select({ id: iotSessions.id })
+      .from(iotSessions)
+      .orderBy(desc(iotSessions.createdAt))
+      .limit(limit);
 
-  listSessions(limit = 30): IotSession[] {
-    return Array.from(sessionStore.values())
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-      .slice(0, limit)
-      .map(cloneSession);
+    const sessions = await Promise.all(
+      rows.map((row) => this.getSession(row.id)),
+    );
+    return sessions.filter((session): session is IotSession => Boolean(session));
   }
 
   async applyPickedCount(input: ApplyPickedCountInput): Promise<IotSession> {
@@ -151,122 +232,191 @@ class IotSessionService {
       throw new Error("pickedCount must be a non-negative integer");
     }
 
-    const { session, shelfIndex } = this.findSessionWithShelf(input);
-    if (!session) throw new Error("IOT session not found");
-    if (session.status === "closed") {
-      throw new Error("IOT session is already closed");
-    }
-    if (shelfIndex < 0) {
-      throw new Error("Shelf is not part of this IOT session");
-    }
+    const session = await this.requireSession(input);
+    if (session.status === "closed") return session;
 
-    const shelf = session.shelves[shelfIndex];
-    const nextShelf: IotShelfPick = {
-      ...shelf,
-      pickedCount: input.pickedCount,
-      status: input.pickedCount > 0 ? "updated" : "open",
-    };
-    const nextItem = { ...shelf.cartItem, quantity: input.pickedCount };
-    const now = new Date().toISOString();
+    const now = new Date();
+    const nextStatus = input.pickedCount > 0 ? "updated" : "open";
 
-    session.shelves = session.shelves.map((item, index) =>
-      index === shelfIndex ? nextShelf : item,
-    );
-    session.items = upsertSessionItem(session.items, nextItem, input.pickedCount);
-    session.status = input.pickedCount > 0 ? "updated" : "open";
-    session.updatedAt = now;
-    session.rawEvents.push(input.rawPayload ?? {});
-    session.message =
-      input.pickedCount > 0
-        ? `${shelf.inventoryName}: IOT ส่งจำนวนสะสม ${input.pickedCount} ชิ้นเข้าตะกร้าแล้ว`
-        : `${shelf.inventoryName}: IOT ส่งจำนวนสะสม 0 ชิ้น สินค้าถูกเอาออกจากตะกร้าแล้ว`;
+    await db
+      .update(iotSessions)
+      .set({
+        pickedCount: input.pickedCount,
+        currentQty: input.currentQty ?? session.currentQty,
+        status: nextStatus,
+        updatedAt: now,
+      })
+      .where(eq(iotSessions.id, session.sessionId));
 
-    sessionStore.set(session.sessionId, session);
+    await this.insertSessionEvent({
+      session,
+      messageKind: "event",
+      eventType: "picked_count",
+      seq: input.seq ?? null,
+      rawPayload: input.rawPayload,
+    });
+
+    const updatedSession = await this.requireSession({
+      sessionId: session.sessionId,
+    });
+    const cartItem = buildCartItem({
+      inventoryId: updatedSession.inventoryId,
+      name: updatedSession.inventoryName,
+      price: updatedSession.items[0]?.price ?? session.items[0]?.price ?? 0,
+      weightPerPiece:
+        updatedSession.items[0]?.weightPerPiece ??
+        session.items[0]?.weightPerPiece ??
+        0,
+      unitId: updatedSession.items[0]?.unitId ?? session.items[0]?.unitId ?? "",
+      imageUrl:
+        updatedSession.items[0]?.imageUrl ?? session.items[0]?.imageUrl ?? null,
+      quantity: input.pickedCount,
+    });
 
     await cartSyncService.setCartItemQuantity(
-      session.clientVisitId,
-      nextItem,
+      updatedSession.clientVisitId,
+      cartItem,
       input.pickedCount,
-      session.sessionId,
+      updatedSession.sessionId,
     );
-    publishCartUpdated(session.userId);
-    publishIotSessionUpdated(session.sessionId);
-    await this.insertNotifications(session, nextShelf, "picked_count");
+    publishCartUpdated(updatedSession.userId);
+    publishIotSessionUpdated(updatedSession.sessionId);
+    await this.insertNotifications(updatedSession, "picked_count");
 
-    return cloneSession(session);
+    return updatedSession;
+  }
+
+  async applyFinalCount(input: ApplyFinalCountInput): Promise<IotSession> {
+    return this.applyPickedCount({
+      ...input,
+      pickedCount: input.finalPickedCount,
+    });
   }
 
   async closeDoor(input: CloseDoorInput): Promise<IotSession> {
-    const { session, shelfIndex } = this.findSessionWithShelf(input);
-    if (!session) throw new Error("IOT session not found");
-    if (shelfIndex < 0) {
-      throw new Error("Shelf is not part of this IOT session");
+    const session = await this.requireSession(input);
+    if (session.status !== "closed") {
+      await db
+        .update(iotSessions)
+        .set({
+          status: "closed",
+          closedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(iotSessions.id, session.sessionId));
+
+      await this.insertSessionEvent({
+        session,
+        messageKind: "status",
+        eventType: "door_closed",
+        seq: input.seq ?? null,
+        rawPayload: input.rawPayload,
+      });
     }
 
-    const shelf = session.shelves[shelfIndex];
-    const now = new Date().toISOString();
-    const nextShelf: IotShelfPick = {
-      ...shelf,
-      status: "closed",
-      doorClosedAt: now,
-    };
-
-    session.shelves = session.shelves.map((item, index) =>
-      index === shelfIndex ? nextShelf : item,
-    );
-    session.status = session.shelves.every((item) => item.status === "closed")
-      ? "closed"
-      : session.status;
-    session.completedAt = session.status === "closed" ? now : session.completedAt;
-    session.updatedAt = now;
-    session.rawEvents.push(input.rawPayload ?? {});
-    session.message = `${shelf.inventoryName}: ประตูตู้ปิดแล้ว จำนวนในตะกร้าคือ ${shelf.pickedCount} ชิ้น`;
-
-    sessionStore.set(session.sessionId, session);
-    publishIotSessionUpdated(session.sessionId);
-    await this.insertNotifications(session, nextShelf, "door_closed");
-
-    return cloneSession(session);
+    const updatedSession = await this.requireSession({
+      sessionId: session.sessionId,
+    });
+    publishIotSessionUpdated(updatedSession.sessionId);
+    await this.insertNotifications(updatedSession, "door_closed");
+    return updatedSession;
   }
 
-  private findSessionWithShelf(input: ResolveSessionInput): {
-    session: IotSession | null;
-    shelfIndex: number;
-  } {
-    const session = input.sessionId
-      ? sessionStore.get(input.sessionId) ?? null
-      : input.channelId
-        ? Array.from(sessionStore.values()).find((item) =>
-            item.shelves.some((shelf) => shelf.channelId === input.channelId),
-          ) ?? null
-        : null;
+  async applyError(input: ApplyErrorInput): Promise<IotSession> {
+    const session = await this.requireSession(input);
+    await db
+      .update(iotSessions)
+      .set({
+        status: "expired",
+        closedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(iotSessions.id, session.sessionId));
 
-    if (!session) return { session: null, shelfIndex: -1 };
-
-    const shelfIndex = session.shelves.findIndex((shelf) => {
-      if (input.channelId) return shelf.channelId === input.channelId;
-      if (input.shelfId) return shelf.shelfId === input.shelfId;
-      return true;
+    await this.insertSessionEvent({
+      session,
+      messageKind: "event",
+      eventType: "error",
+      seq: input.seq ?? null,
+      rawPayload: input.rawPayload ?? { message: input.message },
     });
 
-    return { session, shelfIndex };
+    const updatedSession = await this.requireSession({
+      sessionId: session.sessionId,
+    });
+    publishIotSessionUpdated(updatedSession.sessionId);
+    await this.insertNotifications(updatedSession, "error");
+    return updatedSession;
+  }
+
+  private async requireSession(input: ResolveSessionInput): Promise<IotSession> {
+    const sessionId = input.sessionId?.trim();
+    if (!sessionId) throw new Error("IOT session id is required");
+
+    const session = await this.getSession(sessionId);
+    if (!session) throw new Error("IOT session not found");
+    if (input.inventoryId && session.inventoryId !== input.inventoryId) {
+      throw new Error("Inventory is not part of this IOT session");
+    }
+    return session;
+  }
+
+  private async insertSessionEvent(input: {
+    session: IotSession;
+    messageKind: "event" | "status";
+    eventType: IotSessionEventType;
+    seq: number | null;
+    rawPayload?: Record<string, unknown>;
+  }) {
+    await db.insert(iotSessionEvents).values({
+      sessionId: input.session.sessionId,
+      inventoryId: input.session.inventoryId,
+      branchCode: input.session.branchCode,
+      messageKind: input.messageKind,
+      eventType: input.eventType,
+      seq: input.seq,
+      rawPayload: input.rawPayload,
+      occurredAt: new Date(),
+      updatedAt: new Date(),
+    });
+  }
+
+  private buildMessage(input: {
+    inventoryName: string;
+    status: IotSessionStatus;
+    pickedCount: number;
+    currentQty: number | null;
+  }) {
+    if (input.status === "closed") {
+      return `${input.inventoryName}: ประตูตู้ปิดแล้ว จำนวนในตะกร้าคือ ${input.pickedCount} ชิ้น`;
+    }
+    if (input.status === "expired") {
+      return `${input.inventoryName}: IOT session expired`;
+    }
+    const stockText =
+      input.currentQty === null ? "" : ` คงเหลือในตู้ ${input.currentQty} ชิ้น`;
+    return input.pickedCount > 0
+      ? `${input.inventoryName}: IOT ส่งจำนวนสะสม ${input.pickedCount} ชิ้นเข้าตะกร้าแล้ว${stockText}`
+      : `${input.inventoryName}: เปิดตู้แล้ว รอจำนวนสินค้าที่หยิบจาก IOT${stockText}`;
   }
 
   private async insertNotifications(
     session: IotSession,
-    shelf: IotShelfPick,
-    eventType: "picked_count" | "door_closed",
+    eventType: IotSessionEventType,
   ): Promise<void> {
     const title =
-      eventType === "door_closed" ? "IOT door closed" : "IOT picked count";
+      eventType === "door_closed"
+        ? "IOT door closed"
+        : eventType === "error"
+          ? "IOT error"
+          : "IOT picked count";
     const rawPayload = {
       sessionId: session.sessionId,
-      channelId: shelf.channelId,
-      shelfId: shelf.shelfId,
-      sensorId: shelf.sensorId,
-      inventoryId: shelf.inventoryId,
-      pickedCount: shelf.pickedCount,
-      status: shelf.status,
+      inventoryId: session.inventoryId,
+      pickedCount: session.pickedCount,
+      currentQty: session.currentQty,
+      inStoreQty: session.inStoreQty,
+      status: session.status,
       eventType,
       strict: true,
     };

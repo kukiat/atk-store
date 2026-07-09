@@ -20,15 +20,16 @@ function fromBase64Url(value: string): Buffer {
   return Buffer.from(value, "base64url");
 }
 
-export type ShelfQrPayload = {
-  shelfIds: string[];
+export type InventoryQrPayload = {
+  inventoryIds: string[];
 };
 
-export function encodeShelfQrPayload(payload: ShelfQrPayload): string {
+export function encodeInventoryQrPayload(payload: InventoryQrPayload): string {
+  const inventoryIds = normalizeInventoryIds(payload.inventoryIds);
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
   const encrypted = Buffer.concat([
-    cipher.update(JSON.stringify(payload), "utf8"),
+    cipher.update(JSON.stringify({ inventoryIds }), "utf8"),
     cipher.final(),
   ]);
   const tag = cipher.getAuthTag();
@@ -36,7 +37,7 @@ export function encodeShelfQrPayload(payload: ShelfQrPayload): string {
   return [iv, tag, encrypted].map(toBase64Url).join(".");
 }
 
-export function decodeShelfQrPayload(encoded: string): ShelfQrPayload {
+export function decodeInventoryQrPayload(encoded: string): InventoryQrPayload {
   const [ivRaw, tagRaw, encryptedRaw] = encoded.split(".");
   if (!ivRaw || !tagRaw || !encryptedRaw) {
     throw new Error("Invalid encoded QR payload");
@@ -52,15 +53,25 @@ export function decodeShelfQrPayload(encoded: string): ShelfQrPayload {
     decipher.update(fromBase64Url(encryptedRaw)),
     decipher.final(),
   ]);
-  const payload = JSON.parse(decrypted.toString("utf8")) as ShelfQrPayload;
-
-  if (!Array.isArray(payload.shelfIds) || payload.shelfIds.length === 0) {
-    throw new Error("QR payload must contain shelfIds");
-  }
+  const payload = JSON.parse(decrypted.toString("utf8")) as InventoryQrPayload;
 
   return {
-    shelfIds: payload.shelfIds
-      .map((id) => String(id).trim())
-      .filter((id) => id.length > 0),
+    inventoryIds: normalizeInventoryIds(payload.inventoryIds),
   };
+}
+
+function normalizeInventoryIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    throw new Error("QR payload must contain inventoryIds");
+  }
+
+  const inventoryIds = value
+    .map((id) => String(id).trim())
+    .filter((id) => id.length > 0);
+
+  if (inventoryIds.length === 0) {
+    throw new Error("QR payload must contain inventoryIds");
+  }
+
+  return Array.from(new Set(inventoryIds));
 }

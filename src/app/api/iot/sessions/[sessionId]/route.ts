@@ -19,7 +19,7 @@ export async function GET(
 
   const user = await requireCurrentUser();
   const { sessionId } = await context.params;
-  const session = iotSessionService.getSession(sessionId);
+  const session = await iotSessionService.getSession(sessionId);
 
   if (!session || session.userId !== user.id) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });

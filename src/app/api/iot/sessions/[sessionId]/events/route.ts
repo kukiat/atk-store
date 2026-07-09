@@ -27,7 +27,7 @@ export async function GET(
 
   const user = await requireCurrentUser();
   const { sessionId } = await context.params;
-  const initialSession = iotSessionService.getSession(sessionId);
+  const initialSession = await iotSessionService.getSession(sessionId);
 
   if (!initialSession || initialSession.userId !== user.id) {
     return NextResponse.json({ error: "Session not found" }, { status: 404 });
@@ -37,12 +37,50 @@ export async function GET(
     start(controller) {
       let closed = false;
 
-      function sendLatestSession() {
+      function safeEnqueue(chunk: Uint8Array) {
         if (closed) return;
 
-        const session = iotSessionService.getSession(sessionId);
+        try {
+          controller.enqueue(chunk);
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ERR_INVALID_STATE"
+          ) {
+            closed = true;
+            return;
+          }
+
+          throw error;
+        }
+      }
+
+      function safeClose() {
+        if (closed) return;
+        closed = true;
+
+        try {
+          controller.close();
+        } catch (error) {
+          if (
+            error instanceof Error &&
+            "code" in error &&
+            error.code === "ERR_INVALID_STATE"
+          ) {
+            return;
+          }
+
+          throw error;
+        }
+      }
+
+      async function sendLatestSession() {
+        if (closed) return;
+
+        const session = await iotSessionService.getSession(sessionId);
         if (!session || session.userId !== user.id) {
-          controller.enqueue(
+          safeEnqueue(
             encodeEvent("iot-session-error", {
               message: "Session not found",
             }),
@@ -50,29 +88,27 @@ export async function GET(
           return;
         }
 
-        controller.enqueue(encodeEvent("iot-session-updated", { session }));
+        safeEnqueue(encodeEvent("iot-session-updated", { session }));
       }
 
-      const unsubscribe = subscribeIotSessionUpdated(
-        sessionId,
-        sendLatestSession,
-      );
+      const unsubscribe = subscribeIotSessionUpdated(sessionId, () => {
+        void sendLatestSession();
+      });
       const keepAliveId = setInterval(() => {
-        if (!closed) controller.enqueue(encoder.encode(": keep-alive\n\n"));
+        safeEnqueue(encoder.encode(": keep-alive\n\n"));
       }, 25_000);
 
       request.signal.addEventListener(
         "abort",
         () => {
-          closed = true;
           clearInterval(keepAliveId);
           unsubscribe();
-          controller.close();
+          safeClose();
         },
         { once: true },
       );
 
-      sendLatestSession();
+      void sendLatestSession();
     },
   });
 

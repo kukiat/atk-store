@@ -58,7 +58,6 @@ export const useCartStore = create<CartState>()(
               ...state.items,
               {
                 inventoryId: inventory.id,
-                shelfId: inventory.shelfId,
                 name: inventory.name,
                 price: inventory.price,
                 weightPerPiece: inventory.weightPerPiece,

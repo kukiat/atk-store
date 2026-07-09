@@ -5,17 +5,12 @@ import {
   FormPendingOverlay,
 } from "@/app/admin/confirm-submit-button";
 import {
-  deleteGroupAction,
   deleteQrCodeAction,
   deleteUnitAction,
   importInventoriesAction,
-  saveGroupAction,
   saveUnitAction,
 } from "@/app/admin/actions";
-import {
-  InventoriesEditor,
-  ShelvesEditor,
-} from "@/app/admin/inventory/_editable-panels";
+import { InventoriesEditor } from "@/app/admin/inventory/_editable-panels";
 import { QrCodeBuilder } from "@/app/admin/inventory/_qr-code-builder";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -46,22 +41,17 @@ export function InventorySummaryCards({ data }: { data: InventoryAdminData }) {
   ).length;
 
   return (
-    <section className="grid gap-3 md:grid-cols-4">
-      <SummaryCard
-        label="Groups"
-        value={data.groups.length}
-        href="/admin/inventory/groups"
-      />
-      <SummaryCard
-        label="Shelves"
-        value={data.shelfs.length}
-        href="/admin/inventory/shelfs"
-      />
+    <section className="grid gap-3 md:grid-cols-3">
       <SummaryCard
         label="Inventories"
         value={data.inventories.length}
         href="/admin/inventory/items"
         detail={`${totalStock} units`}
+      />
+      <SummaryCard
+        label="QR Codes"
+        value={data.qrCodes.length}
+        href="/admin/inventory/qr"
       />
       <SummaryCard
         label="Alerts"
@@ -93,81 +83,6 @@ function SummaryCard({
       <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
       {detail && <p className="text-xs text-muted-foreground">{detail}</p>}
     </Link>
-  );
-}
-
-export function GroupsPanel({ data }: { data: InventoryAdminData }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Groups</CardTitle>
-        <CardDescription>
-          Integrated boxes that contain shelves.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-4">
-        <form
-          action={saveGroupAction}
-          className="relative grid gap-3 sm:grid-cols-[1fr_auto]"
-        >
-          <FormPendingOverlay label="Saving group" />
-          <label className={labelClass}>
-            Group name
-            <input className={inputClass} name="name" required />
-          </label>
-          <ConfirmSubmitButton
-            title="Save group?"
-            description="This will create a new shelf group in the back-office inventory."
-            confirmLabel="Save group"
-            className="self-end"
-          >
-            Save group
-          </ConfirmSubmitButton>
-        </form>
-        <div className="grid gap-2">
-          {data.groups.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No groups yet. Create one to represent an integrated box.
-            </p>
-          ) : (
-            data.groups.map((group) => (
-              <form
-                key={group.id}
-                action={saveGroupAction}
-                className="relative grid gap-2 rounded-lg border p-3 sm:grid-cols-[1fr_auto_auto]"
-              >
-                <FormPendingOverlay label="Updating group" />
-                <input type="hidden" name="id" value={group.id} />
-                <input
-                  className={inputClass}
-                  name="name"
-                  defaultValue={group.name}
-                  aria-label={`Group ${group.name}`}
-                />
-                <ConfirmSubmitButton
-                  title="Update group?"
-                  description={`This will save the latest name for ${group.name}.`}
-                  confirmLabel="Update"
-                  variant="outline"
-                >
-                  Update
-                </ConfirmSubmitButton>
-                <ConfirmSubmitButton
-                  formAction={deleteGroupAction}
-                  title="Delete group?"
-                  description={`This will remove ${group.name} from active inventory groups.`}
-                  confirmLabel="Delete"
-                  variant="destructive"
-                  confirmVariant="destructive"
-                >
-                  Delete
-                </ConfirmSubmitButton>
-              </form>
-            ))
-          )}
-        </div>
-      </CardContent>
-    </Card>
   );
 }
 
@@ -245,69 +160,24 @@ export function UnitsPanel({ data }: { data: InventoryAdminData }) {
   );
 }
 
-export function ShelfsPanel({ data }: { data: InventoryAdminData }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Shelves</CardTitle>
-        <CardDescription>
-          Standalone shelves or shelves inside a group.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <ShelvesEditor
-          groups={data.groups.map((group) => ({
-            id: group.id,
-            name: group.name,
-          }))}
-          shelves={data.shelfs.map((shelf) => ({
-            id: shelf.id,
-            groupId: shelf.groupId,
-            name: shelf.name,
-            imageUrl: shelf.imageUrl,
-            sensorId: shelf.sensorId,
-          }))}
-          inventories={data.inventories.map((inventory) => ({
-            id: inventory.id,
-            shelfId: inventory.shelfId,
-            name: inventory.name,
-            description: inventory.description,
-            price: inventory.price,
-            amount: inventory.amount,
-            weightPerPiece: inventory.weightPerPiece,
-            unitId: inventory.unitId,
-            isActive: inventory.isActive,
-            imageUrl: inventory.imageUrl,
-          }))}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
 export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Inventories</CardTitle>
-        <CardDescription>Sellable items on each shelf.</CardDescription>
+        <CardDescription>
+          Inventory masters and in-store quantity display. IOT owns physical
+          shelf mapping.
+        </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         <InventoriesEditor
-          shelves={data.shelfs.map((shelf) => ({
-            id: shelf.id,
-            groupId: shelf.groupId,
-            name: shelf.name,
-            imageUrl: shelf.imageUrl,
-            sensorId: shelf.sensorId,
-          }))}
           units={data.units.map((unit) => ({
             id: unit.id,
             name: unit.name,
           }))}
           inventories={data.inventories.map((inventory) => ({
             id: inventory.id,
-            shelfId: inventory.shelfId,
             name: inventory.name,
             description: inventory.description,
             price: inventory.price,
@@ -329,7 +199,7 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
             <textarea
               className={textareaClass}
               name="csv"
-              placeholder="shelfId,name,description,price,amount,weightPerPiece,unitId,isActive,imageUrl"
+              placeholder="name,description,price,amount,weightPerPiece,unitId,isActive,imageUrl"
             />
           </label>
           <ConfirmSubmitButton
@@ -342,19 +212,20 @@ export function InventoriesPanel({ data }: { data: InventoryAdminData }) {
             Import / update
           </ConfirmSubmitButton>
         </form>
-
       </CardContent>
     </Card>
   );
 }
 
 export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
-  const shelfName = new Map(data.shelfs.map((shelf) => [shelf.id, shelf.name]));
+  const inventoryName = new Map(
+    data.inventories.map((inventory) => [inventory.id, inventory.name]),
+  );
 
-  function renderShelfNames(shelfIds: string) {
-    return shelfIds
+  function renderInventoryNames(inventoryIds: string) {
+    return inventoryIds
       .split(",")
-      .map((id) => shelfName.get(id.trim()) ?? id.trim())
+      .map((id) => inventoryName.get(id.trim()) ?? id.trim())
       .join(", ");
   }
 
@@ -366,8 +237,7 @@ export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
             <div>
               <CardTitle>QR Codes</CardTitle>
               <CardDescription>
-                Create as many QR codes as needed, then bind one or more shelves
-                to each code.
+                Create QR codes for one or more inventories.
               </CardDescription>
             </div>
             <Link
@@ -384,7 +254,7 @@ export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
               <thead className="bg-muted text-left">
                 <tr>
                   <th className="p-3">Description</th>
-                  <th className="p-3">Shelves</th>
+                  <th className="p-3">Inventories</th>
                   <th className="p-3">Created</th>
                   <th className="p-3">Payload</th>
                   <th className="p-3">Actions</th>
@@ -397,7 +267,7 @@ export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
                       className="p-6 text-center text-muted-foreground"
                       colSpan={5}
                     >
-                      No QR codes yet. Create one to bind shelves for scanning.
+                      No QR codes yet. Create one for inventory scanning.
                     </td>
                   </tr>
                 ) : (
@@ -407,7 +277,7 @@ export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
                         {qr.description ?? "QR code"}
                       </td>
                       <td className="max-w-72 p-3 text-muted-foreground">
-                        {renderShelfNames(qr.shelfIds)}
+                        {renderInventoryNames(qr.inventoryIds)}
                       </td>
                       <td className="p-3 tabular-nums">
                         {qr.createdAt.toLocaleDateString("th-TH")}
@@ -429,7 +299,7 @@ export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
                                     src={qr.imageUrl}
-                                    alt={`QR code for ${renderShelfNames(qr.shelfIds)}`}
+                                    alt={`QR code for ${renderInventoryNames(qr.inventoryIds)}`}
                                     className="size-28 object-contain"
                                   />
                                 ) : (
@@ -481,15 +351,15 @@ export function QrCodesPanel({ data }: { data: InventoryAdminData }) {
         <CardHeader>
           <CardTitle>Create QR Code</CardTitle>
           <CardDescription>
-            Choose shelves by name. Add multiple shelves for an integrated group
-            QR, or one shelf for a standalone QR.
+            Choose one inventory for standalone QR or multiple inventories for a
+            grouped QR.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <QrCodeBuilder
-            shelves={data.shelfs.map((shelf) => ({
-              id: shelf.id,
-              name: shelf.name,
+            inventories={data.inventories.map((inventory) => ({
+              id: inventory.id,
+              name: inventory.name,
             }))}
           />
         </CardContent>

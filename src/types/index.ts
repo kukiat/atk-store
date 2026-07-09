@@ -1,16 +1,10 @@
-import type { Inventory, Shelf } from "@/db/schema";
+import type { Inventory } from "@/db/schema";
 
-export type { Inventory, Shelf };
-
-/** A shelf together with active inventory items. */
-export type ShelfWithInventories = Shelf & {
-  inventories: Inventory[];
-};
+export type { Inventory };
 
 /** A single line in the client-side cart. */
 export type CartItem = {
   inventoryId: string;
-  shelfId: string;
   name: string;
   price: number;
   weightPerPiece: number;
@@ -20,7 +14,6 @@ export type CartItem = {
 };
 
 export type IotTransaction = {
-  shelfId: string;
-  sensorId: string | null;
+  inventoryId: string;
   channelId: string;
 };

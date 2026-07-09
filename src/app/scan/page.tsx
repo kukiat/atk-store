@@ -28,7 +28,7 @@ export default async function ScanPage() {
         </Link>
         <div>
           <p className="text-sm text-muted-foreground">QR scan</p>
-          <h1 className="text-balance text-xl font-bold">สแกน shelf QR</h1>
+          <h1 className="text-balance text-xl font-bold">สแกน inventory QR</h1>
         </div>
       </header>
       {scanEligibility.canScan ? (

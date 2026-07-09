@@ -10,7 +10,7 @@ export default function InventoryLayout({
       <header>
         <p className="text-sm text-muted-foreground">Back-office</p>
         <h1 className="text-balance text-2xl font-bold">
-          Shelf & Inventory Management
+          Inventory Management
         </h1>
       </header>
 

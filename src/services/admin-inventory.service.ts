@@ -1,34 +1,27 @@
 import "server-only";
 
-import { and, asc, desc, eq, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
 import {
-  groups,
   inventories,
   notifications,
   orderItems,
   orders,
   qrCodes,
-  shelfs,
   units,
-  type Group,
   type Inventory,
   type NewInventory,
-  type NewShelf,
   type NewUnit,
   type QrCode,
-  type Shelf,
   type Unit,
 } from "@/db/schema";
 import { generateQrDataUrl } from "@/lib/qr-image";
-import { encodeShelfQrPayload } from "@/lib/qr-payload";
+import { encodeInventoryQrPayload } from "@/lib/qr-payload";
 import type { AdminActor } from "@/services/admin-user.service";
 import { s3StorageService } from "@/services/s3-storage.service";
 
 export type InventoryAdminData = {
-  groups: Group[];
-  shelfs: Shelf[];
   units: Unit[];
   inventories: Inventory[];
   qrCodes: QrCode[];
@@ -86,8 +79,6 @@ class AdminInventoryService {
     requireInventoryPermission(actor);
 
     const [
-      groupRows,
-      shelfRows,
       unitRows,
       inventoryRows,
       qrRows,
@@ -95,16 +86,6 @@ class AdminInventoryService {
       orderRows,
       orderItemRows,
     ] = await Promise.all([
-      db
-        .select()
-        .from(groups)
-        .where(isNull(groups.deletedAt))
-        .orderBy(asc(groups.name)),
-      db
-        .select()
-        .from(shelfs)
-        .where(isNull(shelfs.deletedAt))
-        .orderBy(asc(shelfs.name)),
       db
         .select()
         .from(units)
@@ -141,8 +122,6 @@ class AdminInventoryService {
     ]);
 
     return {
-      groups: groupRows,
-      shelfs: shelfRows,
       units: unitRows,
       inventories: inventoryRows,
       qrCodes: qrRows,
@@ -150,31 +129,6 @@ class AdminInventoryService {
       orders: orderRows,
       orderItems: orderItemRows,
     };
-  }
-
-  async saveGroup(actor: AdminActor, formData: FormData): Promise<void> {
-    requireInventoryPermission(actor);
-    const id = readOptionalText(formData.get("id"));
-    const name = readRequiredText(formData, "name");
-    const now = new Date();
-
-    if (id) {
-      await db
-        .update(groups)
-        .set({ name, updatedAt: now })
-        .where(eq(groups.id, id));
-      return;
-    }
-
-    await db.insert(groups).values({ name, updatedAt: now });
-  }
-
-  async deleteGroup(actor: AdminActor, formData: FormData): Promise<void> {
-    requireInventoryPermission(actor);
-    await db
-      .update(groups)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(groups.id, readId(formData)));
   }
 
   async saveUnit(actor: AdminActor, formData: FormData): Promise<void> {
@@ -201,77 +155,15 @@ class AdminInventoryService {
       .where(eq(units.id, readId(formData)));
   }
 
-  async saveShelf(actor: AdminActor, formData: FormData): Promise<void> {
-    requireInventoryPermission(actor);
-    const id = readOptionalText(formData.get("id"));
-    const sensorId = readOptionalText(formData.get("sensorId"));
-
-    if (sensorId) {
-      const conditions = [eq(shelfs.sensorId, sensorId), isNull(shelfs.deletedAt)];
-      if (id) conditions.push(ne(shelfs.id, id));
-
-      const [existingSensorShelf] = await db
-        .select({ id: shelfs.id })
-        .from(shelfs)
-        .where(and(...conditions))
-        .limit(1);
-
-      if (existingSensorShelf) {
-        throw new Error("This sensor ID is already assigned to another shelf");
-      }
-    }
-
-    const uploadedImageUrl = await s3StorageService.uploadImageFile(
-      readImageFile(formData),
-      "shelf",
-    );
-    const values: NewShelf = {
-      groupId: readOptionalText(formData.get("groupId")),
-      name: readRequiredText(formData, "name"),
-      imageUrl: uploadedImageUrl ?? readOptionalText(formData.get("imageUrl")),
-      sensorId,
-      updatedAt: new Date(),
-    };
-
-    if (id) {
-      await db.update(shelfs).set(values).where(eq(shelfs.id, id));
-      return;
-    }
-
-    await db.insert(shelfs).values(values);
-  }
-
-  async deleteShelf(actor: AdminActor, formData: FormData): Promise<void> {
-    requireInventoryPermission(actor);
-    const shelfId = readId(formData);
-    const [existingInventory] = await db
-      .select({ id: inventories.id })
-      .from(inventories)
-      .where(and(eq(inventories.shelfId, shelfId), isNull(inventories.deletedAt)))
-      .limit(1);
-
-    if (existingInventory) {
-      throw new Error("Cannot delete a shelf that still has inventory");
-    }
-
-    await db
-      .update(shelfs)
-      .set({ deletedAt: new Date(), updatedAt: new Date() })
-      .where(eq(shelfs.id, shelfId));
-  }
-
   async saveInventory(actor: AdminActor, formData: FormData): Promise<void> {
     requireInventoryPermission(actor);
     const id = readOptionalText(formData.get("id"));
-    const shelfId = readRequiredText(formData, "shelfId");
-    await this.requireShelfInventorySlot(shelfId, id);
 
     const uploadedImageUrl = await s3StorageService.uploadImageFile(
       readImageFile(formData),
       "product",
     );
     const values: NewInventory = {
-      shelfId,
       name: readRequiredText(formData, "name"),
       description: readOptionalText(formData.get("description")),
       price: readRequiredNumber(formData, "price"),
@@ -320,12 +212,10 @@ class AdminInventoryService {
       const row = Object.fromEntries(
         headers.map((header, index) => [header, values[index] ?? ""]),
       );
-      const shelfId = String(row.shelfId ?? "").trim();
       const name = String(row.name ?? "").trim();
-      if (!shelfId || !name) continue;
+      if (!name) continue;
 
       const payload: NewInventory = {
-        shelfId,
         name,
         description: String(row.description ?? "").trim() || null,
         price: Number(row.price ?? 0),
@@ -340,7 +230,7 @@ class AdminInventoryService {
       const [existing] = await db
         .select({ id: inventories.id })
         .from(inventories)
-        .where(and(eq(inventories.shelfId, shelfId), isNull(inventories.deletedAt)))
+        .where(and(eq(inventories.name, name), isNull(inventories.deletedAt)))
         .limit(1);
 
       if (existing) {
@@ -354,43 +244,22 @@ class AdminInventoryService {
     }
   }
 
-  private async requireShelfInventorySlot(
-    shelfId: string,
-    currentInventoryId: string | null,
-  ): Promise<void> {
-    const conditions = [
-      eq(inventories.shelfId, shelfId),
-      isNull(inventories.deletedAt),
-    ];
-    if (currentInventoryId) conditions.push(ne(inventories.id, currentInventoryId));
-
-    const [existingInventory] = await db
-      .select({ id: inventories.id })
-      .from(inventories)
-      .where(and(...conditions))
-      .limit(1);
-
-    if (existingInventory) {
-      throw new Error("This shelf already has an inventory item");
-    }
-  }
-
   async createQrCode(actor: AdminActor, formData: FormData): Promise<void> {
     requireInventoryPermission(actor);
-    const shelfIds = readRequiredText(formData, "shelfIds")
+    const inventoryIds = readRequiredText(formData, "inventoryIds")
       .split(",")
       .map((id) => id.trim())
       .filter(Boolean);
-    if (shelfIds.length === 0)
-      throw new Error("At least one shelf is required");
+    if (inventoryIds.length === 0)
+      throw new Error("At least one inventory is required");
 
-    const encodedPayload = encodeShelfQrPayload({ shelfIds });
+    const encodedPayload = encodeInventoryQrPayload({ inventoryIds });
     const imageUrl = await s3StorageService.uploadQrDataUrl(
       await generateQrDataUrl(encodedPayload),
     );
 
     await db.insert(qrCodes).values({
-      shelfIds: shelfIds.join(","),
+      inventoryIds: inventoryIds.join(","),
       encodedPayload,
       imageUrl,
       description: readOptionalText(formData.get("description")),

@@ -8,99 +8,73 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { formatBaht } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/store/cart";
-import type { CartItem, Inventory, Shelf } from "@/types";
+import type { CartItem, Inventory } from "@/types";
 
 type SessionStatus = "open" | "updated" | "closed" | "expired";
-
-type SessionShelf = {
-  shelfId: string;
-  channelId: string;
-  pickedCount: number;
-  status: "open" | "updated" | "closed";
-  doorClosedAt: string | null;
-};
 
 type IotSessionResponse = {
   session?: {
     status: SessionStatus;
     message: string;
     items: CartItem[];
-    shelves: SessionShelf[];
+    pickedCount: number;
+    currentQty: number | null;
+    inStoreQty: number | null;
   };
 };
 
-type OpenShelfResponse = {
+type OpenInventoryResponse = {
   error?: string;
   message?: string;
   sessionId?: string;
   channelId?: string;
   inventory?: CartItem;
+  currentQty?: number | null;
+  inStoreQty?: number | null;
 };
 
-export function ShelfOpenSession({
-  shelf,
-  product,
-}: {
-  shelf: Shelf;
-  product: Inventory;
-}) {
+export function InventoryOpenSession({ inventory }: { inventory: Inventory }) {
   const setItemQuantity = useCartStore((state) => state.setItemQuantity);
   const [status, setStatus] = useState<
     "opening" | "open" | "updated" | "closed" | "error"
   >("opening");
-  const [message, setMessage] = useState("กำลังเปิดตู้...");
+  const [message, setMessage] = useState("กำลังเปิด session...");
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [channelId, setChannelId] = useState<string | null>(null);
+  const [cartInventory, setCartInventory] = useState<CartItem | null>(null);
   const [pickedCount, setPickedCount] = useState(0);
+  const [currentQty, setCurrentQty] = useState<number | null>(null);
   const openedRef = useRef(false);
-  const fallbackItem: CartItem = useMemo(
-    () => ({
-      inventoryId: product.id,
-      shelfId: product.shelfId,
-      name: product.name,
-      price: product.price,
-      weightPerPiece: product.weightPerPiece,
-      unitId: product.unitId,
-      imageUrl: product.imageUrl,
-      quantity: 0,
-    }),
-    [
-      product.id,
-      product.imageUrl,
-      product.name,
-      product.price,
-      product.shelfId,
-      product.unitId,
-      product.weightPerPiece,
-    ],
-  );
+  const fallbackItem = useMemo(() => cartInventory, [cartInventory]);
 
   useEffect(() => {
     if (openedRef.current) return;
     openedRef.current = true;
 
-    async function openShelf() {
+    async function openInventory() {
       const response = await fetch("/api/iot/watch", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ shelfId: shelf.id }),
+        body: JSON.stringify({ inventoryId: inventory.id }),
       });
-      const body = (await response.json()) as OpenShelfResponse;
+      const body = (await response.json()) as OpenInventoryResponse;
 
       if (!response.ok) {
         setStatus("error");
-        setMessage(body.error ?? "ไม่สามารถเปิดตู้ได้");
+        setMessage(body.error ?? "ไม่สามารถเปิด session ได้");
         return;
       }
 
       setStatus("open");
       setSessionId(body.sessionId ?? null);
       setChannelId(body.channelId ?? null);
-      setMessage(body.message ?? "เปิดตู้แล้ว หยิบสินค้าได้เลย");
+      setCartInventory(body.inventory ?? null);
+      setCurrentQty(body.currentQty ?? body.inStoreQty ?? null);
+      setMessage(body.message ?? "เปิด session แล้ว หยิบสินค้าได้เลย");
     }
 
-    void openShelf();
-  }, [shelf.id]);
+    void openInventory();
+  }, [inventory.id]);
 
   useEffect(() => {
     if (!sessionId) return;
@@ -112,16 +86,18 @@ export function ShelfOpenSession({
       const session = body.session;
       if (!session) return;
 
-      const shelfStatus = session.shelves[0];
-      const cartItem = session.items.find(
-        (item) => item.inventoryId === product.id,
-      );
-      const nextCount = shelfStatus?.pickedCount ?? cartItem?.quantity ?? 0;
+      const cartItem =
+        session.items[0] ??
+        (fallbackItem
+          ? { ...fallbackItem, quantity: session.pickedCount ?? 0 }
+          : null);
+      const nextCount = session.pickedCount ?? cartItem?.quantity ?? 0;
 
       setPickedCount(nextCount);
+      setCurrentQty(session.currentQty ?? session.inStoreQty ?? null);
       setMessage(session.message);
       setStatus(session.status === "expired" ? "error" : session.status);
-      setItemQuantity(cartItem ?? fallbackItem, nextCount);
+      if (cartItem) setItemQuantity(cartItem, nextCount);
 
       if (session.status === "closed" || session.status === "expired") {
         events.close();
@@ -131,7 +107,7 @@ export function ShelfOpenSession({
     function handleSessionError(event: MessageEvent<string>) {
       const body = JSON.parse(event.data) as { message?: string };
       setStatus("error");
-      setMessage(body.message ?? "ไม่สามารถอ่านสถานะตู้ได้");
+      setMessage(body.message ?? "ไม่สามารถอ่านสถานะ session ได้");
       events.close();
     }
 
@@ -145,7 +121,7 @@ export function ShelfOpenSession({
     );
 
     return () => events.close();
-  }, [fallbackItem, product.id, sessionId, setItemQuantity]);
+  }, [fallbackItem, sessionId, setItemQuantity]);
 
   const tone =
     status === "error"
@@ -176,11 +152,11 @@ export function ShelfOpenSession({
 
       <div className="overflow-hidden rounded-lg border">
         <div className="aspect-[4/3] bg-muted">
-          {product.imageUrl ? (
+          {inventory.imageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={product.imageUrl}
-              alt={`${product.name} product image`}
+              src={inventory.imageUrl}
+              alt={`${inventory.name} inventory image`}
               className="size-full object-cover"
             />
           ) : (
@@ -192,11 +168,15 @@ export function ShelfOpenSession({
         <div className="grid gap-3 p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="text-base font-semibold">{product.name}</h2>
-              <p className="text-muted-foreground text-sm">{shelf.name}</p>
+              <h2 className="text-base font-semibold">{inventory.name}</h2>
+              {currentQty !== null && (
+                <p className="text-muted-foreground text-sm">
+                  คงเหลือในตู้ {currentQty} ชิ้น
+                </p>
+              )}
             </div>
             <span className="font-semibold tabular-nums">
-              {formatBaht(product.price)}
+              {formatBaht(inventory.price)}
             </span>
           </div>
 

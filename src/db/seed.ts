@@ -9,10 +9,8 @@ import { eq, inArray } from "drizzle-orm";
 import postgres from "postgres";
 
 import {
-  groups,
   inventories,
   roles,
-  shelfs,
   units,
   userRoles,
   users,
@@ -31,10 +29,8 @@ if (!connectionString) {
 const client = postgres(connectionString, { max: 1 });
 const db = drizzle(client, {
   schema: {
-    groups,
     inventories,
     roles,
-    shelfs,
     units,
     userRoles,
     users,
@@ -203,8 +199,6 @@ async function main() {
 
   // Idempotent reset so re-running gives a clean dataset.
   await db.delete(inventories);
-  await db.delete(shelfs);
-  await db.delete(groups);
   await db.delete(units);
 
   const [gram] = await db
@@ -213,40 +207,9 @@ async function main() {
     .returning({ id: units.id });
   if (!gram) throw new Error("Failed to seed gram unit");
 
-  const [atkGroup] = await db
-    .insert(groups)
-    .values({ name: "ATK Integrated Box", updatedAt: new Date() })
-    .returning({ id: groups.id });
-  if (!atkGroup) throw new Error("Failed to seed group");
-
-  const insertedShelves = await db
-    .insert(shelfs)
-    .values([
-      {
-        groupId: atkGroup.id,
-        name: "ชั้นชุดตรวจ ATK",
-        sensorId: "mock-sensor-atk",
-        updatedAt: new Date(),
-      },
-      {
-        groupId: null,
-        name: "ชั้นหน้ากากอนามัย",
-        sensorId: "mock-sensor-mask",
-        updatedAt: new Date(),
-      },
-    ])
-    .returning({ id: shelfs.id, name: shelfs.name });
-
-  const atkShelf = insertedShelves.find((shelf) => shelf.name.includes("ATK"));
-  const maskShelf = insertedShelves.find((shelf) =>
-    shelf.name.includes("หน้ากาก"),
-  );
-  if (!atkShelf || !maskShelf) throw new Error("Failed to seed shelves");
-
   await db.insert(inventories).values(
-    INVENTORIES.map((inventory, index) => ({
+    INVENTORIES.map((inventory) => ({
       ...inventory,
-      shelfId: index < 3 ? atkShelf.id : maskShelf.id,
       unitId: gram.id,
       isActive: true,
       updatedAt: new Date(),
@@ -254,7 +217,7 @@ async function main() {
   );
 
   console.log(
-    `Seeded ${insertedShelves.length} shelves, ${INVENTORIES.length} inventories, and ${MOCK_CLIENTS.length} mock clients.`,
+    `Seeded ${INVENTORIES.length} inventories and ${MOCK_CLIENTS.length} mock clients.`,
   );
 }
 

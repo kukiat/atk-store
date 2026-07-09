@@ -6,7 +6,6 @@ import type Stripe from "stripe";
 import { db } from "@/db";
 import {
   clientVisits,
-  inventories,
   notifications,
   orderItems,
   orderPayments,
@@ -426,27 +425,6 @@ class WalletService {
         };
       }
 
-      for (const item of cart.items) {
-        const [updatedInventory] = await tx
-          .update(inventories)
-          .set({
-            amount: sql`${inventories.amount} - ${item.quantity}`,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(inventories.id, item.inventoryId),
-              eq(inventories.isActive, true),
-              gte(inventories.amount, item.quantity),
-            ),
-          )
-          .returning({ id: inventories.id });
-
-        if (!updatedInventory) {
-          throw new Error(`${item.name} does not have enough stock`);
-        }
-      }
-
       const [ledgerEntry] = await tx
         .insert(walletLedgerEntries)
         .values({
@@ -530,8 +508,15 @@ class WalletService {
       const unitRows = await tx
         .select({ id: units.id, name: units.name })
         .from(units)
-        .where(inArray(units.id, cart.items.map((item) => item.unitId)));
-      const unitNameById = new Map(unitRows.map((unit) => [unit.id, unit.name]));
+        .where(
+          inArray(
+            units.id,
+            cart.items.map((item) => item.unitId),
+          ),
+        );
+      const unitNameById = new Map(
+        unitRows.map((unit) => [unit.id, unit.name]),
+      );
       const issuedAt = new Date();
       const vatMinor = calculateIncludedVat(
         totalMinor,
@@ -590,10 +575,6 @@ class WalletService {
             receiptId: receipt.id,
             orderItemId: item.id,
             inventoryId: item.inventoryId,
-            shelfId:
-              cart.items.find(
-                (cartItem) => cartItem.inventoryId === item.inventoryId,
-              )?.shelfId ?? null,
             name: item.name,
             unitName: unitNameById.get(item.unitId ?? "") ?? "item",
             quantity: item.amount,

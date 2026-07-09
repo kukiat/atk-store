@@ -7,8 +7,7 @@ import { cn } from "@/lib/utils";
 
 const tabs = [
   { href: "/admin/inventory", label: "Overview", exact: true },
-  { href: "/admin/inventory/groups", label: "Groups & Units", exact: false },
-  { href: "/admin/inventory/shelfs", label: "Shelves", exact: false },
+  { href: "/admin/inventory/units", label: "Units", exact: false },
   { href: "/admin/inventory/items", label: "Inventories", exact: false },
   { href: "/admin/inventory/qr", label: "QR Codes", exact: false },
   { href: "/admin/inventory/orders", label: "Orders & Alerts", exact: false },

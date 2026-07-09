@@ -2,8 +2,8 @@ import { type NextRequest, NextResponse } from "next/server";
 
 import { hasSameOrigin, requireCurrentUser } from "@/lib/auth";
 import { isMobileOrTabletRequest } from "@/lib/device";
-import { decodeShelfQrPayload } from "@/lib/qr-payload";
-import { shelfService } from "@/services/shelf.service";
+import { decodeInventoryQrPayload } from "@/lib/qr-payload";
+import { inventoryService } from "@/services/inventory.service";
 import {
   StoreScanNotAllowedError,
   storeAccessService,
@@ -46,10 +46,15 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const payload = decodeShelfQrPayload(body.encodedPayload);
-    const shelves = await shelfService.listShelvesByIds(payload.shelfIds);
+    const payload = decodeInventoryQrPayload(body.encodedPayload);
+    const inventories = await inventoryService.listActiveInventoriesByIds(
+      payload.inventoryIds,
+    );
 
-    return NextResponse.json({ shelfIds: payload.shelfIds, shelves });
+    return NextResponse.json({
+      inventoryIds: payload.inventoryIds,
+      inventories,
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Invalid QR payload" },

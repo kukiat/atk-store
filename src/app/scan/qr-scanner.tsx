@@ -17,8 +17,8 @@ declare global {
 }
 
 type DecodeResult = {
-  shelfIds: string[];
-  shelves: Array<{ id: string; name: string; imageUrl: string | null }>;
+  inventoryIds: string[];
+  inventories: Array<{ id: string; name: string; imageUrl: string | null }>;
   error?: string;
 };
 
@@ -51,13 +51,13 @@ export function QrScanner() {
       return;
     }
 
-    if (result.shelfIds.length === 1) {
-      router.push(`/shelf/${result.shelfIds[0]}`);
+    if (result.inventoryIds.length === 1) {
+      router.push(`/inventory/${result.inventoryIds[0]}`);
       return;
     }
 
     const params = new URLSearchParams({ payload: value });
-    router.push(`/scan/shelves?${params.toString()}`);
+    router.push(`/scan/inventories?${params.toString()}`);
   }
 
   async function startCamera() {

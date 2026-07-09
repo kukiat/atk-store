@@ -8,7 +8,7 @@ import {
   storeAccessService,
 } from "@/services/store-access.service";
 
-function readShelfId(value: unknown): string | null {
+function readInventoryId(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim()
     : null;
@@ -42,18 +42,18 @@ export async function POST(request: NextRequest) {
     throw error;
   }
 
-  const body = (await request.json()) as { shelfId?: unknown };
-  const shelfId = readShelfId(body.shelfId);
+  const body = (await request.json()) as { inventoryId?: unknown };
+  const inventoryId = readInventoryId(body.inventoryId);
 
-  if (!shelfId) {
+  if (!inventoryId) {
     return NextResponse.json(
-      { error: "shelfId is required" },
+      { error: "inventoryId is required" },
       { status: 400 },
     );
   }
 
   try {
-    const result = await iotService.openShelf(user, shelfId);
+    const result = await iotService.openInventory(user, inventoryId);
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json(

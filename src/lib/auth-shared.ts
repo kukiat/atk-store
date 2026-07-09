@@ -13,8 +13,8 @@ export const GOOGLE_OAUTH_NONCE_COOKIE = "atk_google_oauth_nonce";
 /**
  * Short-lived cookie holding the verified Google ID token. It is the input to
  * the Cognito credential bridge for face enrollment. Path-scoped to the face
- * API so it is never sent on ordinary page or shelf requests, and it naturally
- * expires roughly when the Google ID token does (~1 hour).
+ * API so it is never sent on ordinary page or inventory requests, and it
+ * naturally expires roughly when the Google ID token does (~1 hour).
  */
 export const GOOGLE_ID_TOKEN_COOKIE = "atk_g_idt";
 export const GOOGLE_ID_TOKEN_COOKIE_PATH = "/api/face";

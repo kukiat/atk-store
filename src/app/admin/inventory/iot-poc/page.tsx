@@ -32,8 +32,8 @@ function statusVariant(status: IotSessionStatus) {
   return "outline" as const;
 }
 
-export default function IotPocPage() {
-  const sessions = iotSessionService.listSessions(50);
+export default async function IotPocPage() {
+  const sessions = await iotSessionService.listSessions(50);
 
   return (
     <div className="grid gap-4">
@@ -43,7 +43,7 @@ export default function IotPocPage() {
             <div>
               <CardTitle>IOT PoC Portal</CardTitle>
               <CardDescription>
-                Mock cumulative picked-count and door-closed events by channel.
+                Mock cumulative picked-count and shelf-closed loadcell events.
               </CardDescription>
             </div>
             <Link
@@ -57,9 +57,9 @@ export default function IotPocPage() {
         </CardHeader>
         <CardContent>
           {sessions.length === 0 ? (
-            <div className="text-muted-foreground rounded-lg border border-dashed p-6 text-sm">
-              No IOT PoC sessions yet. Scan a shelf on mobile to open a mock
-              shelf session.
+            <div className="rounded-lg border border-dashed p-6 text-sm text-muted-foreground">
+              No IOT PoC sessions yet. Scan an inventory QR on mobile to open a
+              mock inventory session.
             </div>
           ) : (
             <div className="grid gap-4">
@@ -68,6 +68,7 @@ export default function IotPocPage() {
                   (sum, item) => sum + item.price * item.quantity,
                   0,
                 );
+                const item = session.items[0];
 
                 return (
                   <Card key={session.sessionId}>
@@ -108,111 +109,103 @@ export default function IotPocPage() {
                         </div>
                       </div>
 
-                      <div className="grid gap-3">
-                        {session.shelves.map((shelf) => (
-                          <div
-                            key={shelf.shelfId}
-                            className="grid gap-3 rounded-lg border p-3"
-                          >
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                              <div className="min-w-0">
-                                <p className="font-medium">
-                                  {shelf.inventoryName}
-                                </p>
-                                <p className="text-muted-foreground truncate font-mono text-xs">
-                                  {shelf.channelId}
-                                </p>
-                              </div>
-                              <Badge variant={statusVariant(shelf.status)}>
-                                {shelf.status}
-                              </Badge>
-                            </div>
-
-                            <dl className="grid gap-2 text-sm sm:grid-cols-4">
-                              <div>
-                                <dt className="text-muted-foreground">
-                                  Sensor
-                                </dt>
-                                <dd className="font-mono text-xs">
-                                  {shelf.sensorId ?? "not set"}
-                                </dd>
-                              </div>
-                              <div>
-                                <dt className="text-muted-foreground">
-                                  Price
-                                </dt>
-                                <dd className="tabular-nums">
-                                  {formatBaht(shelf.cartItem.price)}
-                                </dd>
-                              </div>
-                              <div>
-                                <dt className="text-muted-foreground">
-                                  Stock
-                                </dt>
-                                <dd className="tabular-nums">
-                                  live source
-                                </dd>
-                              </div>
-                              <div>
-                                <dt className="text-muted-foreground">
-                                  Cumulative
-                                </dt>
-                                <dd className="tabular-nums">
-                                  {shelf.pickedCount} pcs
-                                </dd>
-                              </div>
-                            </dl>
-
-                            <div className="flex flex-wrap items-end gap-2">
-                              <form
-                                action={sendMockPickedCountAction}
-                                className="flex flex-wrap items-end gap-2"
-                              >
-                                <input
-                                  type="hidden"
-                                  name="sessionId"
-                                  value={session.sessionId}
-                                />
-                                <input
-                                  type="hidden"
-                                  name="shelfId"
-                                  value={shelf.shelfId}
-                                />
-                                <label className="grid gap-1 text-sm font-medium">
-                                  Cumulative count
-                                  <input
-                                    className={inputClass}
-                                    type="number"
-                                    min={0}
-                                    name="pickedCount"
-                                    defaultValue={shelf.pickedCount}
-                                    required
-                                  />
-                                </label>
-                                <Button type="submit">Send count</Button>
-                              </form>
-                              <form action={sendMockDoorClosedAction}>
-                                <input
-                                  type="hidden"
-                                  name="sessionId"
-                                  value={session.sessionId}
-                                />
-                                <input
-                                  type="hidden"
-                                  name="shelfId"
-                                  value={shelf.shelfId}
-                                />
-                                <Button
-                                  type="submit"
-                                  variant="outline"
-                                  disabled={shelf.status === "closed"}
-                                >
-                                  Door closed
-                                </Button>
-                              </form>
-                            </div>
+                      <div className="grid gap-3 rounded-lg border p-3">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="font-medium">
+                              {session.inventoryName}
+                            </p>
+                            <p className="truncate font-mono text-xs text-muted-foreground">
+                              {session.inventoryId}
+                            </p>
                           </div>
-                        ))}
+                          <Badge variant={statusVariant(session.status)}>
+                            {session.status}
+                          </Badge>
+                        </div>
+
+                        <dl className="grid gap-2 text-sm sm:grid-cols-4">
+                          <div>
+                            <dt className="text-muted-foreground">Price</dt>
+                            <dd className="tabular-nums">
+                              {item ? formatBaht(item.price) : "-"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground">
+                              In-store remaining
+                            </dt>
+                            <dd className="tabular-nums">
+                              {session.currentQty ?? session.inStoreQty ?? "-"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground">
+                              Cumulative
+                            </dt>
+                            <dd className="tabular-nums">
+                              {session.pickedCount} pcs
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-muted-foreground">Branch</dt>
+                            <dd className="tabular-nums">
+                              {session.branchCode}
+                            </dd>
+                          </div>
+                        </dl>
+
+                        <div className="flex flex-wrap items-end gap-2">
+                          <form
+                            action={sendMockPickedCountAction}
+                            className="flex flex-wrap items-end gap-2"
+                          >
+                            <input
+                              type="hidden"
+                              name="sessionId"
+                              value={session.sessionId}
+                            />
+                            <label className="grid gap-1 text-sm font-medium">
+                              Cumulative count
+                              <input
+                                className={inputClass}
+                                type="number"
+                                min={0}
+                                name="pickedCount"
+                                defaultValue={session.pickedCount}
+                                required
+                              />
+                            </label>
+                            <label className="grid gap-1 text-sm font-medium">
+                              Current qty
+                              <input
+                                className={inputClass}
+                                type="number"
+                                min={0}
+                                name="currentQty"
+                                defaultValue={
+                                  session.currentQty ?? session.inStoreQty ?? 0
+                                }
+                                required
+                              />
+                            </label>
+                            <Button type="submit">Send count</Button>
+                          </form>
+                          <form action={sendMockDoorClosedAction}>
+                            <input
+                              type="hidden"
+                              name="sessionId"
+                              value={session.sessionId}
+                            />
+                            <Button
+                              type="submit"
+                              variant="outline"
+                              disabled={session.status === "closed"}
+                            >
+                              Door closed
+                            </Button>
+                          </form>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>

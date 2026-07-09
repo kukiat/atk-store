@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "iot:mqtt": "tsx script/iot-mqtt-worker.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -30,6 +31,7 @@
     "html-to-image": "^1.11.13",
     "jose": "^6.2.3",
     "lucide-react": "^1.21.0",
+    "mqtt": "^5.15.2",
     "next": "16.2.9",
     "postgres": "^3.4.9",
     "qrcode": "^1.5.0",

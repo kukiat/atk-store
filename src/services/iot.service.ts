@@ -1,30 +1,36 @@
 import "server-only";
 
-import { and, asc, eq, gt, isNull } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+
+import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@/db";
-import { inventories, notifications, shelfs, type User } from "@/db/schema";
+import { inventories, notifications, type User } from "@/db/schema";
 import { clientVisitService } from "@/services/client-visit.service";
 import { iotSessionService } from "@/services/iot-session.service";
+import {
+  getMockIotProduct,
+  isMockIotServerEnabled,
+  setMockIotTopic,
+} from "@/services/mock-iot-server.service";
 import type { CartItem } from "@/types";
 
-export type IotOpenShelfResult = {
+export type IotOpenInventoryResult = {
   clientVisitId: number;
   sessionId: string;
   channelId: string;
-  shelfId: string;
-  sensorId: string | null;
+  inventoryId: string;
   status: "open";
   inventory: CartItem;
+  inStoreQty: number | null;
+  currentQty: number | null;
+  branchCode: string;
   message: string;
 };
 
-type ShelfInventory = {
-  shelfId: string;
-  shelfName: string;
-  sensorId: string | null;
-  inventoryId: string;
-  inventoryName: string;
+type InventoryMaster = {
+  id: string;
+  name: string;
   price: number;
   amount: number;
   weightPerPiece: number;
@@ -32,144 +38,209 @@ type ShelfInventory = {
   imageUrl: string | null;
 };
 
+type IotProductResponse = {
+  productId?: unknown;
+  inStoreQty?: unknown;
+};
+
+function getIotServerUrl() {
+  return process.env.IOT_SERVER_URL?.trim().replace(/\/$/, "") || null;
+}
+
+function getBranchCode() {
+  return process.env.BRANCH_CODE?.trim() || "main";
+}
+
+function getIotHeaders() {
+  const apiKey = process.env.IOT_API_KEY?.trim();
+  return {
+    "Content-Type": "application/json",
+    ...(apiKey ? { "x-iot-api-key": apiKey } : {}),
+  };
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
 class IotService {
-  async openShelf(user: User, shelfId: string): Promise<IotOpenShelfResult> {
+  async openInventory(
+    user: User,
+    inventoryId: string,
+  ): Promise<IotOpenInventoryResult> {
     const activeVisit = await clientVisitService.requireActiveVisitForUser(
       user.id,
     );
     const clientVisitId = activeVisit.id;
-    const shelfInventory = await this.getSingleAvailableInventory(shelfId);
+    const inventoryMaster = await this.getInventoryMaster(inventoryId);
+    if (!inventoryMaster) throw new Error("Inventory not found");
 
-    if (!shelfInventory) {
-      throw new Error("Shelf has no available inventory");
-    }
+    const sessionId = randomUUID();
+    const branchCode = getBranchCode();
+    const productConfig = await this.getIotProductConfig(inventoryMaster.id);
+    await this.setIotTopic(sessionId);
 
     const cartItem = {
-      inventoryId: shelfInventory.inventoryId,
-      shelfId: shelfInventory.shelfId,
-      name: shelfInventory.inventoryName,
-      price: shelfInventory.price,
-      weightPerPiece: shelfInventory.weightPerPiece,
-      unitId: shelfInventory.unitId,
-      imageUrl: shelfInventory.imageUrl,
+      inventoryId: inventoryMaster.id,
+      name: inventoryMaster.name,
+      price: inventoryMaster.price,
+      weightPerPiece: inventoryMaster.weightPerPiece,
+      unitId: inventoryMaster.unitId,
+      imageUrl: inventoryMaster.imageUrl,
     };
-    const session = iotSessionService.createSession({
+
+    const session = await iotSessionService.createSession({
+      sessionId,
       clientVisitId,
       user,
-      shelf: {
-        shelfId: shelfInventory.shelfId,
-        sensorId: shelfInventory.sensorId,
-        inventoryId: shelfInventory.inventoryId,
-        inventoryName: shelfInventory.inventoryName,
+      inventory: {
+        inventoryId: inventoryMaster.id,
+        inventoryName: inventoryMaster.name,
         cartItem,
       },
+      branchCode,
+      inStoreQty: productConfig.inStoreQty,
+      metadata: {
+        productConfig,
+      },
     });
-    const shelf = session.shelves[0];
     const inventory = { ...cartItem, quantity: 0 };
 
-    await db.insert(notifications).values([
-      {
-        clientVisitId,
-        recipientType: "client",
-        userId: user.id,
-        title: "IOT shelf opened",
-        message: "ระบบเปิดตู้แล้ว รอข้อมูลจำนวนสินค้าที่หยิบจาก IOT",
-        severity: "info",
-        rawPayload: {
-          iotServerUrl: process.env.IOT_SERVER_URL ?? null,
-          sessionId: session.sessionId,
-          channelId: shelf.channelId,
-          shelfId: shelf.shelfId,
-          sensorId: shelf.sensorId,
-          inventoryId: shelf.inventoryId,
-          strict: true,
-          mock: true,
-        },
-      },
-      {
-        clientVisitId,
-        recipientType: "admin",
-        title: "IOT shelf opened",
-        message: `${user.name ?? user.email} opened ${shelfInventory.shelfName}.`,
-        severity: "info",
-        rawPayload: {
-          sessionId: session.sessionId,
-          channelId: shelf.channelId,
-          shelfId: shelf.shelfId,
-          sensorId: shelf.sensorId,
-          inventoryId: shelf.inventoryId,
-          strict: true,
-          mock: true,
-        },
-      },
-      {
-        clientVisitId,
-        recipientType: "super_admin",
-        title: "IOT shelf opened",
-        message: `${user.name ?? user.email} opened ${shelfInventory.shelfName}.`,
-        severity: "info",
-        rawPayload: {
-          sessionId: session.sessionId,
-          channelId: shelf.channelId,
-          shelfId: shelf.shelfId,
-          sensorId: shelf.sensorId,
-          inventoryId: shelf.inventoryId,
-          strict: true,
-          mock: true,
-        },
-      },
-    ]);
+    await this.insertOpenNotifications({
+      user,
+      clientVisitId,
+      sessionId: session.sessionId,
+      inventory,
+      inStoreQty: productConfig.inStoreQty,
+      branchCode,
+    });
 
     return {
       clientVisitId,
       sessionId: session.sessionId,
-      channelId: shelf.channelId,
-      shelfId: shelf.shelfId,
-      sensorId: shelf.sensorId,
+      channelId: session.sessionId,
+      inventoryId: inventoryMaster.id,
       status: "open",
       inventory,
-      message: "เปิดตู้แล้ว หยิบสินค้าได้เลย",
+      inStoreQty: productConfig.inStoreQty,
+      currentQty: productConfig.inStoreQty,
+      branchCode,
+      message: "เปิด session แล้ว หยิบสินค้าได้เลย",
     };
   }
 
-  private async getSingleAvailableInventory(
-    shelfId: string,
-  ): Promise<ShelfInventory | null> {
-    const normalizedShelfId = shelfId.trim();
-    if (!normalizedShelfId) return null;
-
-    const rows = await db
+  private async getInventoryMaster(
+    inventoryId: string,
+  ): Promise<InventoryMaster | null> {
+    const [inventory] = await db
       .select({
-        shelfId: shelfs.id,
-        shelfName: shelfs.name,
-        sensorId: shelfs.sensorId,
-        inventoryId: inventories.id,
-        inventoryName: inventories.name,
+        id: inventories.id,
+        name: inventories.name,
         price: inventories.price,
         amount: inventories.amount,
         weightPerPiece: inventories.weightPerPiece,
         unitId: inventories.unitId,
         imageUrl: inventories.imageUrl,
       })
-      .from(shelfs)
-      .innerJoin(inventories, eq(inventories.shelfId, shelfs.id))
+      .from(inventories)
       .where(
         and(
-          eq(shelfs.id, normalizedShelfId),
-          isNull(shelfs.deletedAt),
+          eq(inventories.id, inventoryId.trim()),
           eq(inventories.isActive, true),
           isNull(inventories.deletedAt),
-          gt(inventories.amount, 0),
         ),
       )
-      .orderBy(asc(inventories.name));
+      .limit(1);
 
-    if (rows.length === 0) return null;
-    if (rows.length > 1) {
-      throw new Error("Strict IOT flow supports one inventory per shelf");
+    return inventory ?? null;
+  }
+
+  private async getIotProductConfig(inventoryId: string) {
+    if (isMockIotServerEnabled()) {
+      return getMockIotProduct(inventoryId);
     }
 
-    return rows[0];
+    const iotServerUrl = getIotServerUrl();
+    if (!iotServerUrl) return { productId: inventoryId, inStoreQty: null };
+
+    const response = await fetch(`${iotServerUrl}/product/${inventoryId}`, {
+      headers: getIotHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`IOT product config failed with status ${response.status}`);
+    }
+
+    const body = (await response.json()) as IotProductResponse;
+    return {
+      productId: inventoryId,
+      inStoreQty: readNumber(body.inStoreQty),
+    };
+  }
+
+  private async setIotTopic(sessionId: string) {
+    if (isMockIotServerEnabled()) {
+      await setMockIotTopic(sessionId);
+      return;
+    }
+
+    const iotServerUrl = getIotServerUrl();
+    if (!iotServerUrl) return;
+
+    const response = await fetch(`${iotServerUrl}/set-topic`, {
+      method: "POST",
+      headers: getIotHeaders(),
+      body: JSON.stringify({ uuid: sessionId }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`IOT set-topic failed with status ${response.status}`);
+    }
+  }
+
+  private async insertOpenNotifications(input: {
+    user: User;
+    clientVisitId: number;
+    sessionId: string;
+    inventory: CartItem;
+    inStoreQty: number | null;
+    branchCode: string;
+  }) {
+    const rawPayload = {
+      iotServerUrl: process.env.IOT_SERVER_URL ?? null,
+      sessionId: input.sessionId,
+      inventoryId: input.inventory.inventoryId,
+      inStoreQty: input.inStoreQty,
+      branchCode: input.branchCode,
+      strict: true,
+    };
+
+    await db.insert(notifications).values([
+      {
+        clientVisitId: input.clientVisitId,
+        recipientType: "client",
+        userId: input.user.id,
+        title: "IOT inventory session opened",
+        message: "ระบบเปิด session แล้ว รอข้อมูลจำนวนสินค้าที่หยิบจาก IOT",
+        severity: "info",
+        rawPayload,
+      },
+      {
+        clientVisitId: input.clientVisitId,
+        recipientType: "admin",
+        title: "IOT inventory session opened",
+        message: `${input.user.name ?? input.user.email} opened ${input.inventory.name}.`,
+        severity: "info",
+        rawPayload,
+      },
+      {
+        clientVisitId: input.clientVisitId,
+        recipientType: "super_admin",
+        title: "IOT inventory session opened",
+        message: `${input.user.name ?? input.user.email} opened ${input.inventory.name}.`,
+        severity: "info",
+        rawPayload,
+      },
+    ]);
   }
 }
 

@@ -179,6 +179,23 @@ export const notificationSeverityEnum = db_schema.enum(
   ["info", "warning", "error"],
 );
 
+export const iotSessionStatusEnum = db_schema.enum("iot_session_status", [
+  "open",
+  "updated",
+  "closed",
+  "expired",
+]);
+
+export const iotSessionEventMessageKindEnum = db_schema.enum(
+  "iot_session_event_message_kind",
+  ["event", "status"],
+);
+
+export const iotSessionEventTypeEnum = db_schema.enum(
+  "iot_session_event_type",
+  ["picked_count", "door_closed", "error"],
+);
+
 const lifecycleColumns = {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -589,37 +606,15 @@ export const clientVisitsRelations = relations(clientVisits, ({ one }) => ({
   }),
 }));
 
-/** A physical integrated box/group that can contain multiple shelves. */
-export const groups = db_schema.table("groups", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  ...lifecycleColumns,
-});
-
-/** A physical smart shelf. Group is optional for standalone shelves. */
-export const shelfs = db_schema.table("shelfs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  groupId: uuid("group_id").references(() => groups.id, {
-    onDelete: "set null",
-  }),
-  name: text("name").notNull(),
-  imageUrl: text("image_url"),
-  sensorId: text("sensor_id"),
-  ...lifecycleColumns,
-});
-
 export const units = db_schema.table("units", {
   id: uuid("id").primaryKey().defaultRandom(),
   name: text("name").notNull().unique(),
   ...lifecycleColumns,
 });
 
-/** Sellable inventory item. This replaces the older products table. */
+/** Product master configured in back-office; IOT owns in-store shelf mapping. */
 export const inventories = db_schema.table("inventories", {
   id: uuid("id").primaryKey().defaultRandom(),
-  shelfId: uuid("shelf_id")
-    .notNull()
-    .references(() => shelfs.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   description: text("description"),
   price: doublePrecision("price").notNull(),
@@ -636,7 +631,7 @@ export const inventories = db_schema.table("inventories", {
 export const qrCodes = db_schema.table("qr_codes", {
   id: uuid("id").primaryKey().defaultRandom(),
   imageUrl: text("image_url"),
-  shelfIds: text("shelf_ids").notNull(),
+  inventoryIds: text("inventory_ids").notNull(),
   encodedPayload: text("encoded_payload").notNull(),
   description: text("description"),
   ...lifecycleColumns,
@@ -740,9 +735,6 @@ export const receiptItems = db_schema.table("receipt_items", {
   inventoryId: uuid("inventory_id").references(() => inventories.id, {
     onDelete: "set null",
   }),
-  shelfId: uuid("shelf_id").references(() => shelfs.id, {
-    onDelete: "set null",
-  }),
   name: text("name").notNull(),
   unitName: text("unit_name").notNull(),
   quantity: integer("quantity").notNull(),
@@ -754,6 +746,47 @@ export const receiptItems = db_schema.table("receipt_items", {
   weightPerPiece: doublePrecision("weight_per_piece").notNull(),
   imageUrl: text("image_url"),
   metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  ...lifecycleColumns,
+});
+
+export const iotSessions = db_schema.table("iot_sessions", {
+  id: uuid("id").primaryKey(),
+  clientVisitId: integer("client_visit_id")
+    .notNull()
+    .references(() => clientVisits.id, { onDelete: "cascade" }),
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  inventoryId: uuid("inventory_id")
+    .notNull()
+    .references(() => inventories.id, { onDelete: "restrict" }),
+  branchCode: text("branch_code").notNull(),
+  status: iotSessionStatusEnum("status").notNull().default("open"),
+  pickedCount: integer("picked_count").notNull().default(0),
+  currentQty: integer("current_qty"),
+  inStoreQty: integer("in_store_qty"),
+  openedAt: timestamp("opened_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  closedAt: timestamp("closed_at", { withTimezone: true }),
+  metadata: jsonb("metadata").$type<Record<string, unknown>>(),
+  ...lifecycleColumns,
+});
+
+export const iotSessionEvents = db_schema.table("iot_session_events", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  sessionId: uuid("session_id")
+    .notNull()
+    .references(() => iotSessions.id, { onDelete: "cascade" }),
+  inventoryId: uuid("inventory_id")
+    .notNull()
+    .references(() => inventories.id, { onDelete: "restrict" }),
+  branchCode: text("branch_code").notNull(),
+  messageKind: iotSessionEventMessageKindEnum("message_kind").notNull(),
+  eventType: iotSessionEventTypeEnum("event_type").notNull(),
+  seq: integer("seq"),
+  rawPayload: jsonb("raw_payload").$type<Record<string, unknown>>(),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }),
   ...lifecycleColumns,
 });
 
@@ -956,18 +989,6 @@ export const notifications = db_schema.table("notifications", {
   ...lifecycleColumns,
 });
 
-export const groupsRelations = relations(groups, ({ many }) => ({
-  shelfs: many(shelfs),
-}));
-
-export const shelfsRelations = relations(shelfs, ({ many, one }) => ({
-  group: one(groups, {
-    fields: [shelfs.groupId],
-    references: [groups.id],
-  }),
-  inventories: many(inventories),
-}));
-
 export const unitsRelations = relations(units, ({ many }) => ({
   inventories: many(inventories),
   orderItems: many(orderItems),
@@ -975,10 +996,6 @@ export const unitsRelations = relations(units, ({ many }) => ({
 }));
 
 export const inventoriesRelations = relations(inventories, ({ one }) => ({
-  shelf: one(shelfs, {
-    fields: [inventories.shelfId],
-    references: [shelfs.id],
-  }),
   unit: one(units, {
     fields: [inventories.unitId],
     references: [units.id],
@@ -1040,11 +1057,37 @@ export const receiptItemsRelations = relations(receiptItems, ({ one }) => ({
     fields: [receiptItems.inventoryId],
     references: [inventories.id],
   }),
-  shelf: one(shelfs, {
-    fields: [receiptItems.shelfId],
-    references: [shelfs.id],
-  }),
 }));
+
+export const iotSessionsRelations = relations(iotSessions, ({ many, one }) => ({
+  clientVisit: one(clientVisits, {
+    fields: [iotSessions.clientVisitId],
+    references: [clientVisits.id],
+  }),
+  user: one(users, {
+    fields: [iotSessions.userId],
+    references: [users.id],
+  }),
+  inventory: one(inventories, {
+    fields: [iotSessions.inventoryId],
+    references: [inventories.id],
+  }),
+  events: many(iotSessionEvents),
+}));
+
+export const iotSessionEventsRelations = relations(
+  iotSessionEvents,
+  ({ one }) => ({
+    session: one(iotSessions, {
+      fields: [iotSessionEvents.sessionId],
+      references: [iotSessions.id],
+    }),
+    inventory: one(inventories, {
+      fields: [iotSessionEvents.inventoryId],
+      references: [inventories.id],
+    }),
+  }),
+);
 
 export const walletsRelations = relations(wallets, ({ many, one }) => ({
   user: one(users, {
@@ -1117,10 +1160,6 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   }),
 }));
 
-export type Group = typeof groups.$inferSelect;
-export type NewGroup = typeof groups.$inferInsert;
-export type Shelf = typeof shelfs.$inferSelect;
-export type NewShelf = typeof shelfs.$inferInsert;
 export type Inventory = typeof inventories.$inferSelect;
 export type NewInventory = typeof inventories.$inferInsert;
 export type QrCode = typeof qrCodes.$inferSelect;
@@ -1131,6 +1170,10 @@ export type OrderItem = typeof orderItems.$inferSelect;
 export type StoreSettings = typeof storeSettings.$inferSelect;
 export type Receipt = typeof receipts.$inferSelect;
 export type ReceiptItem = typeof receiptItems.$inferSelect;
+export type IotSessionRecord = typeof iotSessions.$inferSelect;
+export type NewIotSessionRecord = typeof iotSessions.$inferInsert;
+export type IotSessionEventRecord = typeof iotSessionEvents.$inferSelect;
+export type NewIotSessionEventRecord = typeof iotSessionEvents.$inferInsert;
 export type Wallet = typeof wallets.$inferSelect;
 export type NewWallet = typeof wallets.$inferInsert;
 export type WalletLedgerEntry = typeof walletLedgerEntries.$inferSelect;

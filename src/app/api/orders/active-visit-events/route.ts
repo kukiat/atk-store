@@ -27,15 +27,53 @@ export async function GET(request: NextRequest) {
       start(controller) {
         let closed = false;
 
+        function safeEnqueue(chunk: Uint8Array) {
+          if (closed) return;
+
+          try {
+            controller.enqueue(chunk);
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              "code" in error &&
+              error.code === "ERR_INVALID_STATE"
+            ) {
+              closed = true;
+              return;
+            }
+
+            throw error;
+          }
+        }
+
+        function safeClose() {
+          if (closed) return;
+          closed = true;
+
+          try {
+            controller.close();
+          } catch (error) {
+            if (
+              error instanceof Error &&
+              "code" in error &&
+              error.code === "ERR_INVALID_STATE"
+            ) {
+              return;
+            }
+
+            throw error;
+          }
+        }
+
         async function sendLatestStatus() {
           if (closed) return;
 
           try {
             const status =
               await orderService.getLatestVisitCheckoutStatusForUser(user.id);
-            controller.enqueue(encodeEvent("checkout-status", status));
+            safeEnqueue(encodeEvent("checkout-status", status));
           } catch (error) {
-            controller.enqueue(
+            safeEnqueue(
               encodeEvent("checkout-error", {
                 message:
                   error instanceof Error
@@ -57,7 +95,7 @@ export async function GET(request: NextRequest) {
               ? await cartSyncService.getCart(activeVisit.id)
               : null;
 
-            controller.enqueue(
+            safeEnqueue(
               encodeEvent("cart-updated", {
                 visit: activeVisit
                   ? {
@@ -69,7 +107,7 @@ export async function GET(request: NextRequest) {
               }),
             );
           } catch (error) {
-            controller.enqueue(
+            safeEnqueue(
               encodeEvent("cart-error", {
                 message:
                   error instanceof Error
@@ -87,17 +125,16 @@ export async function GET(request: NextRequest) {
           void sendLatestCart();
         });
         const keepAliveId = setInterval(() => {
-          if (!closed) controller.enqueue(encoder.encode(": keep-alive\n\n"));
+          safeEnqueue(encoder.encode(": keep-alive\n\n"));
         }, 25_000);
 
         request.signal.addEventListener(
           "abort",
           () => {
-            closed = true;
             clearInterval(keepAliveId);
             unsubscribe();
             unsubscribeCart();
-            controller.close();
+            safeClose();
           },
           { once: true },
         );

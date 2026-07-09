@@ -19,7 +19,7 @@ export function proxy(request: NextRequest) {
     pathname === "/cart" ||
     pathname === "/scan" ||
     pathname.startsWith("/scan/") ||
-    pathname.startsWith("/shelf/");
+    pathname.startsWith("/inventory/");
   const isPublic = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );

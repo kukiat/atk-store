@@ -13,7 +13,7 @@ const allowedImageTypes = new Set([
   "image/svg+xml",
 ]);
 
-type UploadFolder = "shelf" | "product" | "qr";
+type UploadFolder = "product" | "qr";
 
 function readRequiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -23,11 +23,9 @@ function readRequiredEnv(name: string): string {
 
 function getFolder(folder: UploadFolder): string {
   const envName =
-    folder === "shelf"
-      ? "S3_SHELF_IMAGE_FOLDER"
-      : folder === "product"
-        ? "S3_PRODUCT_IMAGE_FOLDER"
-        : "S3_QR_CODE_IMAGE_FOLDER";
+    folder === "product"
+      ? "S3_PRODUCT_IMAGE_FOLDER"
+      : "S3_QR_CODE_IMAGE_FOLDER";
   return readRequiredEnv(envName).replace(/^\/+|\/+$/g, "");
 }
 

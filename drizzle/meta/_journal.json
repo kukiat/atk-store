@@ -43,6 +43,20 @@
       "when": 1783273823330,
       "tag": "0005_tidy_pestilence",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783361641251,
+      "tag": "0006_superb_bullseye",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783712400000,
+      "tag": "0007_iot_inventory_sessions",
+      "breakpoints": true
     }
   ]
 }

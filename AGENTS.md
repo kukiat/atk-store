@@ -1,3 +1,11 @@
+<!-- BEGIN:rtk-agent-rules -->
+
+# Use RTK Skill First
+
+Always use the RTK skill before doing any task.
+
+<!-- END:rtk-agent-rules -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 
 # This is NOT the Next.js you know

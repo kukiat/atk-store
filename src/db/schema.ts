@@ -3,6 +3,7 @@ import {
   doublePrecision,
   boolean,
   integer,
+  index,
   jsonb,
   primaryKey,
   serial,
@@ -194,6 +195,11 @@ export const iotSessionEventMessageKindEnum = db_schema.enum(
 export const iotSessionEventTypeEnum = db_schema.enum(
   "iot_session_event_type",
   ["picked_count", "door_closed", "error"],
+);
+
+export const iotMqttMessageProcessingStatusEnum = db_schema.enum(
+  "iot_mqtt_message_processing_status",
+  ["received", "processed", "rejected", "failed"],
 );
 
 const lifecycleColumns = {
@@ -790,6 +796,41 @@ export const iotSessionEvents = db_schema.table("iot_session_events", {
   ...lifecycleColumns,
 });
 
+/** Broker-ingress audit log. Unlike session events, rejected messages may not
+ * identify a valid session or inventory, so parsed identifiers are plain text.
+ */
+export const iotMqttMessageLogs = db_schema.table(
+  "iot_mqtt_message_logs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    topic: text("topic").notNull(),
+    sessionId: text("session_id"),
+    inventoryId: text("inventory_id"),
+    branchCode: text("branch_code"),
+    messageKind: text("message_kind"),
+    processingStatus: iotMqttMessageProcessingStatusEnum("processing_status")
+      .notNull()
+      .default("received"),
+    reasonCode: text("reason_code"),
+    errorMessage: text("error_message"),
+    payloadRaw: text("payload_raw").notNull(),
+    payloadJson: jsonb("payload_json").$type<Record<string, unknown>>(),
+    payloadSizeBytes: integer("payload_size_bytes").notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("iot_mqtt_message_logs_received_at_idx").on(table.receivedAt),
+    index("iot_mqtt_message_logs_processing_status_idx").on(
+      table.processingStatus,
+    ),
+    index("iot_mqtt_message_logs_session_id_idx").on(table.sessionId),
+    index("iot_mqtt_message_logs_inventory_id_idx").on(table.inventoryId),
+  ],
+);
+
 export const wallets = db_schema.table(
   "wallets",
   {
@@ -1174,6 +1215,8 @@ export type IotSessionRecord = typeof iotSessions.$inferSelect;
 export type NewIotSessionRecord = typeof iotSessions.$inferInsert;
 export type IotSessionEventRecord = typeof iotSessionEvents.$inferSelect;
 export type NewIotSessionEventRecord = typeof iotSessionEvents.$inferInsert;
+export type IotMqttMessageLogRecord = typeof iotMqttMessageLogs.$inferSelect;
+export type NewIotMqttMessageLogRecord = typeof iotMqttMessageLogs.$inferInsert;
 export type Wallet = typeof wallets.$inferSelect;
 export type NewWallet = typeof wallets.$inferInsert;
 export type WalletLedgerEntry = typeof walletLedgerEntries.$inferSelect;

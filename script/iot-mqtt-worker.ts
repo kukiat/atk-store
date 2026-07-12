@@ -1,11 +1,12 @@
 import mqtt from "mqtt";
 
-import {
-  loadcellSubscribeTopics,
-  normalizeLoadcellMessage,
-  parseLoadcellPayload,
-} from "@/services/iot-loadcell-contract";
+import { loadcellSubscribeTopics } from "@/services/iot-loadcell-contract";
 import { iotEventProcessorService } from "@/services/iot-event-processor.service";
+import { handleIotMqttMessage } from "@/services/iot-mqtt-message-handler";
+import {
+  IOT_MQTT_MAX_PAYLOAD_BYTES,
+  iotMqttMessageLogService,
+} from "@/services/iot-mqtt-message-log.service";
 
 process.loadEnvFile();
 
@@ -21,16 +22,12 @@ function logEvent(
     | "mqtt_subscribed"
     | "mqtt_received"
     | "event_processed"
-    | "event_process_failed",
-  data: {
-    brokerUrl?: string;
-    topic?: string;
-    topics?: string[];
-    payload?: unknown;
-    result?: unknown;
-    error?: string;
-    granted?: unknown;
-  },
+    | "event_process_failed"
+    | "mqtt_audit_log_failed"
+    | "mqtt_connection_closed"
+    | "mqtt_reconnecting"
+    | "mqtt_offline",
+  data: Record<string, unknown>,
 ) {
   console.log(JSON.stringify({ action, ...data }));
 }
@@ -70,17 +67,18 @@ client.on("connect", () => {
 });
 
 client.on("message", async (receivedTopic, payload) => {
-  let parsedPayload: Record<string, unknown> | null = null;
-
   try {
-    parsedPayload = parseLoadcellPayload(payload);
-    logEvent("mqtt_received", {
-      topic: receivedTopic,
-      payload: parsedPayload,
-    });
-
-    const event = normalizeLoadcellMessage(receivedTopic, parsedPayload);
-    const result = await iotEventProcessorService.process(event);
+    logEvent("mqtt_received", { topic: receivedTopic });
+    const { payload: parsedPayload, result } = await handleIotMqttMessage(
+      receivedTopic,
+      payload,
+      {
+        messageLog: iotMqttMessageLogService,
+        eventProcessor: iotEventProcessorService,
+        log: (action, data) =>
+          logEvent(action as "mqtt_audit_log_failed", data),
+      },
+    );
     logEvent("event_processed", {
       topic: receivedTopic,
       payload: parsedPayload,
@@ -89,7 +87,7 @@ client.on("message", async (receivedTopic, payload) => {
   } catch (error) {
     logEvent("event_process_failed", {
       topic: receivedTopic,
-      payload: parsedPayload ?? payload.toString("utf8"),
+      payload: payload.subarray(0, IOT_MQTT_MAX_PAYLOAD_BYTES).toString("utf8"),
       error: error instanceof Error ? error.message : "Unknown MQTT error",
     });
   }
@@ -98,6 +96,10 @@ client.on("message", async (receivedTopic, payload) => {
 client.on("error", (error) => {
   console.error("MQTT worker error", error);
 });
+
+client.on("reconnect", () => logEvent("mqtt_reconnecting", { brokerUrl }));
+client.on("offline", () => logEvent("mqtt_offline", { brokerUrl }));
+client.on("close", () => logEvent("mqtt_connection_closed", { brokerUrl }));
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {

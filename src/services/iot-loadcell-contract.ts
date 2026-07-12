@@ -63,8 +63,16 @@ function defaultBranchCode() {
 }
 
 function occurredAt(payload: Record<string, unknown>) {
-  return readString(payload, "timestamp") ?? new Date().toISOString();
+  const timestamp = readString(payload, "timestamp");
+  if (timestamp) {
+    const parsed = new Date(timestamp);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  return new Date().toISOString();
 }
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function loadcellSubscribeTopics(branchCode = defaultBranchCode()) {
   return [
@@ -79,9 +87,11 @@ export function parseLoadcellTopic(topic: string): IotLoadcellTopic {
 
   if (
     !sessionId ||
+    !uuidPattern.test(sessionId) ||
     namespace !== "loadcell" ||
     !branchCode ||
     !inventoryId ||
+    !uuidPattern.test(inventoryId) ||
     (messageKind !== "event" && messageKind !== "status") ||
     rest.length > 0
   ) {

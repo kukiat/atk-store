@@ -57,6 +57,13 @@
       "when": 1783712400000,
       "tag": "0007_iot_inventory_sessions",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783834781290,
+      "tag": "0008_loose_revanche",
+      "breakpoints": true
     }
   ]
 }

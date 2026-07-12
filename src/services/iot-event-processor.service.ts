@@ -20,6 +20,7 @@ class IotEventProcessorService {
         pickedCount: event.pickedCount,
         currentQty: event.currentQty,
         seq: event.seq,
+        occurredAt: event.occurredAt,
         rawPayload: event.rawPayload,
       });
       return {
@@ -33,6 +34,7 @@ class IotEventProcessorService {
       sessionId: event.sessionId,
       inventoryId: event.inventoryId,
       seq: event.seq,
+      occurredAt: event.occurredAt,
       rawPayload: event.rawPayload,
     });
 

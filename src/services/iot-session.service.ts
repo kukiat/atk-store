@@ -67,6 +67,7 @@ type ApplyPickedCountInput = ResolveSessionInput & {
   pickedCount: number;
   currentQty?: number | null;
   seq?: number | null;
+  occurredAt?: string | null;
   rawPayload?: Record<string, unknown>;
 };
 
@@ -77,6 +78,7 @@ type ApplyFinalCountInput = ResolveSessionInput & {
 
 type CloseDoorInput = ResolveSessionInput & {
   seq?: number | null;
+  occurredAt?: string | null;
   rawPayload?: Record<string, unknown>;
 };
 
@@ -88,7 +90,9 @@ type ApplyErrorInput = ResolveSessionInput & {
 
 function toIso(value: Date | string | null): string | null {
   if (!value) return null;
-  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+  return value instanceof Date
+    ? value.toISOString()
+    : new Date(value).toISOString();
 }
 
 function buildCartItem(input: {
@@ -224,7 +228,9 @@ class IotSessionService {
     const sessions = await Promise.all(
       rows.map((row) => this.getSession(row.id)),
     );
-    return sessions.filter((session): session is IotSession => Boolean(session));
+    return sessions.filter((session): session is IotSession =>
+      Boolean(session),
+    );
   }
 
   async applyPickedCount(input: ApplyPickedCountInput): Promise<IotSession> {
@@ -253,6 +259,7 @@ class IotSessionService {
       messageKind: "event",
       eventType: "picked_count",
       seq: input.seq ?? null,
+      occurredAt: input.occurredAt,
       rawPayload: input.rawPayload,
     });
 
@@ -310,6 +317,7 @@ class IotSessionService {
         messageKind: "status",
         eventType: "door_closed",
         seq: input.seq ?? null,
+        occurredAt: input.occurredAt,
         rawPayload: input.rawPayload,
       });
     }
@@ -349,7 +357,9 @@ class IotSessionService {
     return updatedSession;
   }
 
-  private async requireSession(input: ResolveSessionInput): Promise<IotSession> {
+  private async requireSession(
+    input: ResolveSessionInput,
+  ): Promise<IotSession> {
     const sessionId = input.sessionId?.trim();
     if (!sessionId) throw new Error("IOT session id is required");
 
@@ -366,6 +376,7 @@ class IotSessionService {
     messageKind: "event" | "status";
     eventType: IotSessionEventType;
     seq: number | null;
+    occurredAt?: string | null;
     rawPayload?: Record<string, unknown>;
   }) {
     await db.insert(iotSessionEvents).values({
@@ -376,7 +387,7 @@ class IotSessionService {
       eventType: input.eventType,
       seq: input.seq,
       rawPayload: input.rawPayload,
-      occurredAt: new Date(),
+      occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
       updatedAt: new Date(),
     });
   }

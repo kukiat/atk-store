@@ -280,7 +280,7 @@ class IotSessionService {
       updatedSession.sessionId,
     );
     publishCartUpdated(updatedSession.userId);
-    publishIotSessionUpdated(updatedSession.sessionId);
+    await publishIotSessionUpdated(updatedSession.sessionId);
     await this.insertNotifications(updatedSession, "picked_count");
 
     return updatedSession;
@@ -317,7 +317,7 @@ class IotSessionService {
     const updatedSession = await this.requireSession({
       sessionId: session.sessionId,
     });
-    publishIotSessionUpdated(updatedSession.sessionId);
+    await publishIotSessionUpdated(updatedSession.sessionId);
     await this.insertNotifications(updatedSession, "door_closed");
     return updatedSession;
   }
@@ -344,7 +344,7 @@ class IotSessionService {
     const updatedSession = await this.requireSession({
       sessionId: session.sessionId,
     });
-    publishIotSessionUpdated(updatedSession.sessionId);
+    await publishIotSessionUpdated(updatedSession.sessionId);
     await this.insertNotifications(updatedSession, "error");
     return updatedSession;
   }

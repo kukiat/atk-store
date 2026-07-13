@@ -15,11 +15,28 @@ export async function POST(request: Request) {
   }
 
   try {
-    const body = (await request.json()) as { uuid?: unknown };
+    const body = (await request.json()) as {
+      uuid?: unknown;
+      email?: unknown;
+      sku?: unknown;
+    };
     if (typeof body.uuid !== "string") {
       throw new MockIotServerError("uuid is required");
     }
-    return NextResponse.json(await setMockIotTopic(body.uuid));
+    if (typeof body.email !== "string") {
+      throw new MockIotServerError("email is required");
+    }
+    if (typeof body.sku !== "string") {
+      throw new MockIotServerError("sku is required");
+    }
+
+    return NextResponse.json(
+      await setMockIotTopic({
+        uuid: body.uuid,
+        email: body.email,
+        sku: body.sku,
+      }),
+    );
   } catch (error) {
     if (error instanceof MockIotServerError) {
       return NextResponse.json(

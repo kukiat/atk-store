@@ -78,7 +78,11 @@ class IotService {
     const sessionId = randomUUID();
     const branchCode = getBranchCode();
     const productConfig = await this.getIotProductConfig(inventoryMaster.id);
-    await this.setIotTopic(sessionId);
+    await this.setIotTopic({
+      uuid: sessionId,
+      email: user.email,
+      sku: inventoryMaster.id,
+    });
 
     const cartItem = {
       inventoryId: inventoryMaster.id,
@@ -177,9 +181,9 @@ class IotService {
     };
   }
 
-  private async setIotTopic(sessionId: string) {
+  private async setIotTopic(input: { uuid: string; email: string; sku: string }) {
     if (isMockIotServerEnabled()) {
-      await setMockIotTopic(sessionId);
+      await setMockIotTopic(input);
       return;
     }
 
@@ -189,7 +193,7 @@ class IotService {
     const response = await fetch(`${iotServerUrl}/set-topic`, {
       method: "POST",
       headers: getIotHeaders(),
-      body: JSON.stringify({ uuid: sessionId }),
+      body: JSON.stringify(input),
     });
 
     if (!response.ok) {

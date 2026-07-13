@@ -54,11 +54,25 @@ export async function getMockIotProduct(productId: string) {
   };
 }
 
-export async function setMockIotTopic(uuid: string) {
-  const normalizedUuid = uuid.trim();
+export async function setMockIotTopic(input: {
+  uuid: string;
+  email: string;
+  sku: string;
+}) {
+  const normalizedUuid = input.uuid.trim();
   if (!normalizedUuid) throw new MockIotServerError("uuid is required");
+  const normalizedEmail = input.email.trim();
+  if (!normalizedEmail) throw new MockIotServerError("email is required");
+  const normalizedSku = input.sku.trim();
+  if (!normalizedSku) throw new MockIotServerError("sku is required");
+
   mockTopics.add(normalizedUuid);
-  return { accepted: true, uuid: normalizedUuid };
+  return {
+    accepted: true,
+    uuid: normalizedUuid,
+    email: normalizedEmail,
+    sku: normalizedSku,
+  };
 }
 
 function readNumber(value: unknown): number | null {

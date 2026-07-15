@@ -1,7 +1,6 @@
 "use client";
 
 import { ShieldAlert } from "lucide-react";
-import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -72,7 +71,7 @@ export function FaceAuthStatusNotice() {
             เพื่อความปลอดภัย ระบบต้องยืนยันบัญชีของคุณใหม่ก่อนเริ่มสแกนใบหน้า
           </p>
         </div>
-        <Link
+        <a
           href="/api/auth/signin/google"
           className={buttonVariants({
             size: "sm",
@@ -82,7 +81,7 @@ export function FaceAuthStatusNotice() {
           })}
         >
           Sign in Google อีกครั้ง
-        </Link>
+        </a>
       </div>
     </div>
   );

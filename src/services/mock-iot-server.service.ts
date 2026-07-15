@@ -54,7 +54,7 @@ export async function getMockIotProduct(productId: string) {
   };
 }
 
-export async function setMockIotTopic(input: {
+export async function createMockIotPickSession(input: {
   uuid: string;
   email: string;
   sku: string;

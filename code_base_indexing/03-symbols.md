@@ -1,125 +1,254 @@
-# 03 — Symbol Index
+# 03 — Symbols
 
-Flat lookup of exported symbols → location & signature. Grouped by kind.
+Generated: 2026-07-15 Asia/Bangkok
 
-## Components (React)
+## Service Exports
 
-| Symbol                                                                 | File                                                | Props / notes                           |
-| ---------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------- |
-| `RootLayout` (default)                                                 | `src/app/layout.tsx`                                | `{ children }` — root HTML/body shell   |
-| `HomePage` (default)                                                   | `src/app/page.tsx`                                  | Landing page                            |
-| `ShelfPage` (default, async)                                           | `src/app/shelf/[id]/page.tsx`                       | `{ params: Promise<{ id }> }`           |
-| `CartPage` (default)                                                   | `src/app/cart/page.tsx`                             | Client cart UI                          |
-| `SignInPage` (default, async)                                          | `src/app/signin/page.tsx`                           | `{ searchParams: Promise<{ error? }> }` |
-| `RegisterFacePage` (default, async)                                    | `src/app/register-face/page.tsx`                    | Gated face-enrollment page              |
-| `VerifyFacePage` (default, async)                                      | `src/app/verify-face/page.tsx`                      | Debug face verification page            |
-| `FaceAuthStatusNotice`                                                 | `src/components/face-auth-status-notice.tsx`        | Client face token preflight notice      |
-| `FaceEnrollmentPrompt` (async)                                         | `src/components/face-enrollment-prompt.tsx`         | Quiet face-registration CTA             |
-| `FaceLivenessRegistration`                                             | `src/components/face-liveness-registration.tsx`     | Client liveness + recognition UI        |
-| `FaceVerificationDebugPrompt` (async)                                  | `src/components/face-verification-debug-prompt.tsx` | Debug verify CTA; env + profile gated   |
-| `FaceVerificationDebug`                                                | `src/components/face-verification-debug.tsx`        | Client verification proof UI            |
-| `CartBar`                                                              | `src/components/cart-bar.tsx`                       | No props; reads cart store              |
-| `ProductCard`                                                          | `src/components/product-card.tsx`                   | `{ product: Product }`                  |
-| `QuantityStepper`                                                      | `src/components/quantity-stepper.tsx`               | `{ value, onChange, min? }`             |
-| `Badge`, `badgeVariants`                                               | `src/components/ui/badge.tsx`                       | shadcn                                  |
-| `Button`, `buttonVariants`                                             | `src/components/ui/button.tsx`                      | shadcn (`render` slot)                  |
-| `Card`, `CardHeader`, `CardTitle`, `CardContent`, `CardFooter` (+more) | `src/components/ui/card.tsx`                        | shadcn                                  |
-| `Separator`                                                            | `src/components/ui/separator.tsx`                   | shadcn                                  |
-| `Sheet`, `SheetContent`, `SheetTrigger` (+more)                        | `src/components/ui/sheet.tsx`                       | shadcn                                  |
+| File | Exports | Purpose |
+| --- | --- | --- |
+| src/services/admin-attendance.service.ts | AdminAttendanceSummary, adminAttendanceService | admin attendance views และ mock/status operations |
+| src/services/admin-inventory.service.ts | InventoryAdminData, adminInventoryService | CRUD inventory, units, QR, settings และ admin inventory queries |
+| src/services/admin-user.service.ts | AdminActor, AdminAuthorizationError, AdminRoleGrantSummary, AdminUserDetail, AdminUserSummary, adminUserService | admin user management, roles และ account status |
+| src/services/animation.service.ts | AnimationUser, animationService | source file |
+| src/services/cart-events.service.ts | publishCartUpdated, subscribeCartUpdated | source file |
+| src/services/cart-sync.service.ts | cartSyncService | เก็บ active cart ต่อ visit ใน Redis ถ้ามี หรือ fallback memory สำหรับ local/dev |
+| src/services/client-attendance.service.ts | ClientAttendanceRecognitionResult, clientAttendanceService | ประมวลผล camera entry/exit และ visit state |
+| src/services/client-visit.service.ts | ActiveClientVisitRequiredError, clientVisitService | source file |
+| src/services/face-enrollment.service.ts | CredentialBridgeError, DetectorCredentials, FaceAlreadyRegisteredError, FaceAttemptResult, FaceNotRegisteredError, LivenessAttemptInProgressError, LivenessAttemptNotFoundError, faceEnrollmentService | orchestrate Face Liveness sessions/results และ persist recognition outcome |
+| src/services/face-recognition.service.ts | FaceAlreadyBelongsToAnotherUserError, FaceCouldNotBeIndexedError, FaceReferenceImageMissingError, FaceRegistrationResult, FaceVerificationResult, faceRecognitionService | Search/Index Rekognition Face Collection และ map FaceId กับ user |
+| src/services/inventory.service.ts | inventoryService | source file |
+| src/services/iot-event-processor.service.ts | ProcessIotEventResult, iotEventProcessorService | ประมวลผล IoT/loadcell event ให้เป็น session event |
+| src/services/iot-inventory-catalog.service.ts | IotInventoryCatalogItem, ListIotInventoriesInput, iotInventoryCatalogService | source file |
+| src/services/iot-loadcell-contract.ts | IotLoadcellMessageKind, IotLoadcellTopic, IotNormalizedLoadcellEvent, loadcellSubscribeTopics, normalizeLoadcellMessage, parseLoadcellPayload, parseLoadcellTopic | source file |
+| src/services/iot-mqtt-message-handler.ts | IotMqttHandlerLog, handleIotMqttMessage | รับ MQTT payload, validate contract และบันทึก processing log |
+| src/services/iot-mqtt-message-log.contract.ts | IOT_MQTT_MAX_PAYLOAD_BYTES, IotMqttMessageLogStatus | source file |
+| src/services/iot-mqtt-message-log.service.ts | IOT_MQTT_LOG_RETENTION_DAYS, iotMqttMessageLogService | source file |
+| src/services/iot-session-events.service.ts | publishIotSessionUpdated, subscribeIotSessionUpdated | pub/sub IoT session updates ด้วย Redis เมื่อ config พร้อม และ fallback local listeners |
+| src/services/iot-session.service.ts | IotSession, IotSessionEventType, IotSessionStatus, iotSessionService | จัดการ IoT session lifecycle, picked count, door close/error และ cart updates |
+| src/services/iot.service.ts | IotOpenInventoryResult, iotService | source file |
+| src/services/mock-iot-server.service.ts | MockIotServerError, createMockIotPickSession, getMockIotProduct, isMockIotServerEnabled | service ฝั่ง mock IoT server |
+| src/services/order-events.service.ts | publishCheckoutStatus, subscribeCheckoutStatus | source file |
+| src/services/order.service.ts | orderService | สร้าง/อ่าน order จาก active visit/cart |
+| src/services/product.service.ts | productService | source file |
+| src/services/receipt.service.ts | StoreSettingsInput, receiptService | สร้างและอ่าน receipts หลัง payment/checkout |
+| src/services/role.service.ts | roleService | source file |
+| src/services/s3-storage.service.ts | s3StorageService | source file |
+| src/services/store-access.service.ts | StoreScanEligibility, StoreScanNotAllowedError, storeAccessService | ตัดสินสิทธิ์ scan จาก active visit, wallet balance และ inventory availability |
+| src/services/user.service.ts | AccountNotActiveError, OAuthIdentityConflictError, userService | source file |
+| src/services/wallet.service.ts | WalletInsufficientBalanceError, walletService | wallet, ledger, Stripe top-up และ checkout debit |
 
-## Route handlers
+## Route Handler Exports
 
-| Symbol | File                                        | Signature                                                                                              |
-| ------ | ------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `GET`  | `src/app/api/shelf/[id]/route.ts`           | `(request, { params: Promise<{ id }> }) → NextResponse`                                                |
-| `GET`  | `src/app/api/auth/signin/google/route.ts`   | `() → OAuth redirect with state/PKCE/nonce cookies`                                                    |
-| `GET`  | `src/app/api/auth/callback/google/route.ts` | `(request) → validate correlation + Google ID token, upsert user, set hashed session cookie, redirect` |
-| `POST` | `src/app/api/auth/signout/route.ts`         | `(same-origin request) → delete session, clear cookie, redirect`                                       |
-| `GET`  | `src/app/api/face/auth-status/route.ts`     | `(auth request) → cheap Google ID token freshness status; no AWS calls`                                |
-| `GET`  | `src/app/api/face/credentials/route.ts`     | `(auth request) → Google ID token cookie → Cognito Identity Pool → detector-scoped temp creds`         |
-| `POST` | `src/app/api/face/session/route.ts`         | `(same-origin auth request, optional intent) → create/reuse liveness session`                          |
-| `POST` | `src/app/api/face/result/route.ts`          | `(same-origin auth request, sessionId) → liveness result + Face Collection register/verify decision`   |
+| Route | Methods | File |
+| --- | --- | --- |
+| /api/animation-api/users | GET | src/app/api/animation-api/users/route.ts |
+| /api/auth/callback/google | GET | src/app/api/auth/callback/google/route.ts |
+| /api/auth/signin/google | GET | src/app/api/auth/signin/google/route.ts |
+| /api/auth/signout | POST | src/app/api/auth/signout/route.ts |
+| /api/cart/active | GET | src/app/api/cart/active/route.ts |
+| /api/client-attendance/exit-order | POST | src/app/api/client-attendance/exit-order/route.ts |
+| /api/client-attendance/recognize | POST | src/app/api/client-attendance/recognize/route.ts |
+| /api/face/auth-status | GET | src/app/api/face/auth-status/route.ts |
+| /api/face/credentials | GET | src/app/api/face/credentials/route.ts |
+| /api/face/result | POST | src/app/api/face/result/route.ts |
+| /api/face/session | POST | src/app/api/face/session/route.ts |
+| /api/health-check | GET | src/app/api/health-check/route.ts |
+| /api/iot/catalog/inventories | GET | src/app/api/iot/catalog/inventories/route.ts |
+| /api/iot/catalog/shelves | GET | src/app/api/iot/catalog/shelves/route.ts |
+| /api/iot/events | POST | src/app/api/iot/events/route.ts |
+| /api/iot/mock-events | POST | src/app/api/iot/mock-events/route.ts |
+| /api/iot/sessions/[sessionId] | GET | src/app/api/iot/sessions/[sessionId]/route.ts |
+| /api/iot/sessions/[sessionId]/events | GET | src/app/api/iot/sessions/[sessionId]/events/route.ts |
+| /api/iot/watch | POST | src/app/api/iot/watch/route.ts |
+| /api/mock-iot-server/pick-sessions | POST | src/app/api/mock-iot-server/pick-sessions/route.ts |
+| /api/mock-iot-server/product/[productId] | GET | src/app/api/mock-iot-server/product/[productId]/route.ts |
+| /api/mock-iot-server/shelves/open | POST | src/app/api/mock-iot-server/shelves/open/route.ts |
+| /api/orders/active-visit-events | GET | src/app/api/orders/active-visit-events/route.ts |
+| /api/orders/active-visit-status | GET | src/app/api/orders/active-visit-status/route.ts |
+| /api/qr/decode | POST | src/app/api/qr/decode/route.ts |
+| /api/shelf/[id] | GET | src/app/api/shelf/[id]/route.ts |
+| /api/stripe/webhook | POST | src/app/api/stripe/webhook/route.ts |
+| /inventories | GET | src/app/inventories/route.ts |
 
-## Proxy (Next.js 16 route guard)
+## Component Exports
 
-| Symbol   | File           | Signature                                                           |
-| -------- | -------------- | ------------------------------------------------------------------- |
-| `proxy`  | `src/proxy.ts` | `(request: NextRequest) → NextResponse` — optimistic auth redirects |
-| `config` | `src/proxy.ts` | `{ matcher }` — excludes api/\_next/static/assets                   |
+| File | Exports | Purpose |
+| --- | --- | --- |
+| src/components/account-nav.tsx | AccountNav | UI component สำหรับ flow หน้าเว็บ |
+| src/components/authenticated-nav.tsx | AuthenticatedNav | UI component สำหรับ flow หน้าเว็บ |
+| src/components/cart-bar.tsx | CartBar | UI component สำหรับ flow หน้าเว็บ |
+| src/components/checkout-paid-notice.tsx | CheckoutPaidNotice | UI component สำหรับ flow หน้าเว็บ |
+| src/components/face-auth-status-notice.tsx | FaceAuthStatusNotice | UI component สำหรับ flow หน้าเว็บ |
+| src/components/face-enrollment-prompt.tsx | FaceEnrollmentPrompt | UI component สำหรับ flow หน้าเว็บ |
+| src/components/face-liveness-registration.tsx | FaceLivenessRegistration | UI component สำหรับ flow หน้าเว็บ |
+| src/components/face-verification-debug-prompt.tsx | FaceVerificationDebugPrompt | UI component สำหรับ flow หน้าเว็บ |
+| src/components/face-verification-debug.tsx | FaceVerificationDebug | UI component สำหรับ flow หน้าเว็บ |
+| src/components/image-preview-dialog.tsx | ImageGalleryButton, ImagePreviewThumbnail | UI component สำหรับ flow หน้าเว็บ |
+| src/components/image-upload-field.tsx | ImageUploadField | UI component สำหรับ flow หน้าเว็บ |
+| src/components/product-card.tsx | ProductCard | UI component สำหรับ flow หน้าเว็บ |
+| src/components/quantity-stepper.tsx | QuantityStepper | UI component สำหรับ flow หน้าเว็บ |
+| src/components/receipt-document.tsx | ReceiptDocument | UI component สำหรับ flow หน้าเว็บ |
+| src/components/theme-toggle.tsx | ThemeToggle | UI component สำหรับ flow หน้าเว็บ |
+| src/components/ui/badge.tsx | - | primitive UI component |
+| src/components/ui/button.tsx | - | primitive UI component |
+| src/components/ui/card.tsx | - | primitive UI component |
+| src/components/ui/separator.tsx | - | primitive UI component |
+| src/components/ui/sheet.tsx | - | primitive UI component |
 
-## Services (server-only singletons)
+## Library Exports
 
-| Symbol                       | File                                                                                  | Methods                                                                                                                                                               |
-| ---------------------------- | ------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `shelfService`               | `src/services/shelf.service.ts`                                                       | `getShelfWithProducts(shelfId: string): Promise<ShelfWithProducts \| null>`                                                                                           |
-| `productService`             | `src/services/product.service.ts`                                                     | `getProductById(id: number): Promise<Product \| null>`, `isInStock(product): boolean`                                                                                 |
-| `userService`                | `src/services/user.service.ts`                                                        | `upsertOAuthUser(input): Promise<User>`, `createSession(userId): Promise<{token, expiresAt}>`, `getUserBySession(token): Promise<User\|null>`, `deleteSession(token)` |
-| `OAuthIdentityConflictError` | `src/services/user.service.ts`                                                        | Refuses silent email-to-different-provider-sub account linking                                                                                                        |
-| `faceEnrollmentService`      | `src/services/face-enrollment.service.ts`                                             | `getDetectorCredentials(googleIdToken)`, `createOrReuseAttempt(userId, intent?)`, `getAttemptResult(userId, sessionId)`                                               |
-| `faceRecognitionService`     | `src/services/face-recognition.service.ts`                                            | `registerFaceFromAttempt(attempt)`, `verifyFaceFromAttempt(expectedUserId, attempt)`, `getProfileByUserId(userId)`                                                    |
-| face domain errors           | `src/services/face-enrollment.service.ts`, `src/services/face-recognition.service.ts` | route-safe errors for already registered, not registered, duplicate face, missing reference, not indexed                                                              |
+| File | Exports | Purpose |
+| --- | --- | --- |
+| src/lib/auth-shared.ts | GOOGLE_ID_TOKEN_COOKIE, GOOGLE_ID_TOKEN_COOKIE_PATH, GOOGLE_OAUTH_NONCE_COOKIE, GOOGLE_OAUTH_PKCE_COOKIE, GOOGLE_OAUTH_STATE_COOKIE, PUBLIC_PATHS, SESSION_COOKIE, SIGN_IN_PATH, googleIdTokenCookieOptions, oauthCookieOptions, sessionCookieOptions | helper/config/state utility |
+| src/lib/auth-tokens.ts | createOpaqueToken, createPkceChallenge, hashSessionToken, tokensMatch | helper/config/state utility |
+| src/lib/auth.ts | AuthenticationRequiredError, getCurrentUser, hasSameOrigin, requireCurrentUser | helper/config/state utility |
+| src/lib/aws-face-recognition.ts | FaceRecognitionConfig, FaceRecognitionConfigError, getFaceRecognitionConfig | helper/config/state utility |
+| src/lib/aws-liveness.ts | GOOGLE_LOGINS_KEY, LivenessConfig, LivenessConfigError, getCognitoIdentityClient, getLivenessConfig, getRekognitionClient | helper/config/state utility |
+| src/lib/client-attendance-auth.ts | ClientAttendanceAuthConfigError, ClientAttendanceAuthError, getClientAttendanceMaxImageBytes, requireClientAttendanceApiKey | helper/config/state utility |
+| src/lib/device.ts | isMobileOrTabletRequest | helper/config/state utility |
+| src/lib/face-camera-cleanup.ts | stopFaceCameraStreams, useFaceCameraCleanup | helper/config/state utility |
+| src/lib/face-recognition-state.ts | FaceMatchDecision, createExternalImageId, decideFaceVerification | helper/config/state utility |
+| src/lib/face-token.ts | FaceTokenStatus, getFaceTokenStatus | helper/config/state utility |
+| src/lib/format.ts | formatBaht, formatPrice | helper/config/state utility |
+| src/lib/google-id-token-claims.ts | GoogleIdTokenValidationError, GoogleIdentity, getGoogleIdentityFromClaims | helper/config/state utility |
+| src/lib/google-id-token.ts | verifyGoogleIdToken | helper/config/state utility |
+| src/lib/iot-api-auth.ts | IotApiAuthorizationError, requireIotApiKey | helper/config/state utility |
+| src/lib/liveness-state.ts | LivenessDecision, LivenessOutcome, RekognitionLivenessStatus, attemptStatusForOutcome, decideLivenessOutcome, isAttemptReusable | helper/config/state utility |
+| src/lib/money.ts | WALLET_CURRENCY, assertPositiveMinorUnit, bahtToMinorUnit, formatMinorBaht | helper/config/state utility |
+| src/lib/permissions.ts | PermissionSet, ROLE_CODES, RoleCode, canManageTarget, getHighestRole, getPermissions, normalizeRoleCodes | helper/config/state utility |
+| src/lib/qr-image.ts | generateQrDataUrl | helper/config/state utility |
+| src/lib/qr-payload.ts | InventoryQrPayload, decodeInventoryQrPayload, encodeInventoryQrPayload | helper/config/state utility |
+| src/lib/stripe.ts | StripeConfigError, getAppOrigin, getStripeClient, getStripeConfig | helper/config/state utility |
+| src/lib/use-hydrated.ts | useHydrated | helper/config/state utility |
+| src/lib/use-suppress-readable-stream-cancel-error.ts | ReadableStreamCancelErrorSilencer, useSuppressReadableStreamCancelError | helper/config/state utility |
+| src/lib/utils.ts | cn | helper/config/state utility |
 
-## Auth / DAL
+## Database Symbols
 
-| Symbol                                                                        | File                                                   | Signature                                                                             |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------- |
-| `getCurrentUser`                                                              | `src/lib/auth.ts`                                      | `(): Promise<User \| null>` — React-cached, DB-backed                                 |
-| `requireCurrentUser`                                                          | `src/lib/auth.ts`                                      | `(): Promise<User>` — throws when a private Route Handler/Action has no valid session |
-| `hasSameOrigin`                                                               | `src/lib/auth.ts`                                      | `(request) => boolean` — POST mutation origin guard                                   |
-| `createOpaqueToken`, `hashSessionToken`, `tokensMatch`, `createPkceChallenge` | `src/lib/auth-tokens.ts`                               | OAuth/session security primitives                                                     |
-| `verifyGoogleIdToken`                                                         | `src/lib/google-id-token.ts`                           | `(idToken, nonce) => verified Google identity`                                        |
-| `getGoogleIdentityFromClaims`                                                 | `src/lib/google-id-token-claims.ts`                    | Pure identity-claim validation                                                        |
-| `getLivenessConfig`, `getRekognitionClient`, `getCognitoIdentityClient`       | `src/lib/aws-liveness.ts`                              | Lazy-validated liveness/Cognito config and AWS clients                                |
-| `getFaceRecognitionConfig`                                                    | `src/lib/aws-face-recognition.ts`                      | Lazy-validated Face Collection config (`AWS_FACE_COLLECTION_ID`, threshold)           |
-| `getFaceTokenStatus`                                                          | `src/lib/face-token.ts`                                | `(token?) → ready/reauth freshness result for face credential bridge UX`              |
-| `createExternalImageId`, `decideFaceVerification`                             | `src/lib/face-recognition-state.ts`                    | Pure recognition helpers for non-PII external IDs and expected-user matching          |
-| `stopFaceCameraStreams`, `useFaceCameraCleanup`                               | `src/lib/face-camera-cleanup.ts`                       | Best-effort cleanup for Amplify-owned camera streams                                  |
-| `useSuppressReadableStreamCancelError`                                        | `src/lib/use-suppress-readable-stream-cancel-error.ts` | Client hook suppressing known Amplify stream cleanup noise while camera is active     |
-| `SESSION_COOKIE`                                                              | `src/lib/auth-shared.ts`                               | `"atk_session"`                                                                       |
-| `SIGN_IN_PATH`                                                                | `src/lib/auth-shared.ts`                               | `"/signin"`                                                                           |
-| `PUBLIC_PATHS`                                                                | `src/lib/auth-shared.ts`                               | `string[]` — routes reachable without a session                                       |
-| `sessionCookieOptions`                                                        | `src/lib/auth-shared.ts`                               | `(expiresAt: Date) → cookie options`                                                  |
+### Tables
 
-## State store (Zustand)
+| Symbol | Table |
+| --- | --- |
+| users | users |
+| roles | roles |
+| userRoles | user_roles |
+| roleGrants | role_grants |
+| adminAuditLogs | admin_audit_logs |
+| sessions | sessions |
+| faceLivenessAttempts | face_liveness_attempts |
+| userFaceProfiles | user_face_profiles |
+| clientAttendanceEvents | client_attendance_events |
+| clientVisits | client_visits |
+| units | units |
+| inventories | inventories |
+| qrCodes | qr_codes |
+| orders | orders |
+| orderItems | order_items |
+| storeSettings | store_settings |
+| receipts | receipts |
+| receiptItems | receipt_items |
+| iotSessions | iot_sessions |
+| iotSessionEvents | iot_session_events |
+| iotMqttMessageLogs | iot_mqtt_message_logs |
+| wallets | wallets |
+| walletLedgerEntries | wallet_ledger_entries |
+| stripeCustomers | stripe_customers |
+| walletFundingChannels | wallet_funding_channels |
+| walletTopupIntents | wallet_topup_intents |
+| stripeWebhookEvents | stripe_webhook_events |
+| orderPayments | order_payments |
+| notifications | notifications |
 
-| Symbol             | File                | Signature                                                                                |
-| ------------------ | ------------------- | ---------------------------------------------------------------------------------------- |
-| `useCartStore`     | `src/store/cart.ts` | store: `items`, `addItem(product, qty?)`, `removeItem(id)`, `setQty(id, qty)`, `clear()` |
-| `selectTotalCount` | `src/store/cart.ts` | `(state) => number` — total units                                                        |
-| `selectTotalCents` | `src/store/cart.ts` | `(state) => number` — total satang                                                       |
+### Enums
 
-## Database
+| Symbol | Enum |
+| --- | --- |
+| authMethodEnum | auth_method |
+| userAccountStatusEnum | user_account_status |
+| roleGrantStatusEnum | role_grant_status |
+| faceEnrollmentStatusEnum | face_enrollment_status |
+| livenessAttemptStatusEnum | liveness_attempt_status |
+| faceLivenessIntentEnum | face_liveness_intent |
+| faceRecognitionOutcomeEnum | face_recognition_outcome |
+| attendanceDirectionEnum | attendance_direction |
+| attendanceRecognitionDecisionEnum | attendance_recognition_decision |
+| clientVisitStatusEnum | client_visit_status |
+| orderStatusEnum | order_status |
+| paymentStatusEnum | payment_status |
+| walletStatusEnum | wallet_status |
+| walletLedgerDirectionEnum | wallet_ledger_direction |
+| walletLedgerTypeEnum | wallet_ledger_type |
+| walletFundingProviderEnum | wallet_funding_provider |
+| walletFundingChannelEnum | wallet_funding_channel |
+| walletTopupStatusEnum | wallet_topup_status |
+| stripeWebhookProcessingStatusEnum | stripe_webhook_processing_status |
+| orderPaymentMethodEnum | order_payment_method |
+| receiptStatusEnum | receipt_status |
+| notificationRecipientTypeEnum | notification_recipient_type |
+| notificationSeverityEnum | notification_severity |
+| iotSessionStatusEnum | iot_session_status |
+| iotSessionEventMessageKindEnum | iot_session_event_message_kind |
+| iotSessionEventTypeEnum | iot_session_event_type |
+| iotMqttMessageProcessingStatusEnum | iot_mqtt_message_processing_status |
 
-| Symbol                                                                                                                            | File               | Kind                                            |
-| --------------------------------------------------------------------------------------------------------------------------------- | ------------------ | ----------------------------------------------- |
-| `db`                                                                                                                              | `src/db/index.ts`  | Drizzle client (server-only)                    |
-| `shelves`, `products`, `shelfProducts`                                                                                            | `src/db/schema.ts` | catalog/shelf pgTables                          |
-| `users`, `sessions`                                                                                                               | `src/db/schema.ts` | auth/session pgTables                           |
-| `faceLivenessAttempts`, `userFaceProfiles`                                                                                        | `src/db/schema.ts` | liveness attempt + user↔FaceId mapping pgTables |
-| `authMethodEnum`, `faceEnrollmentStatusEnum`, `livenessAttemptStatusEnum`, `faceLivenessIntentEnum`, `faceRecognitionOutcomeEnum` | `src/db/schema.ts` | pgEnums                                         |
-| `*Relations`                                                                                                                      | `src/db/schema.ts` | Drizzle relations                               |
+### Inferred Types
 
-## Hooks & utilities
-
-| Symbol        | File                      | Signature                              |
-| ------------- | ------------------------- | -------------------------------------- |
-| `useHydrated` | `src/lib/use-hydrated.ts` | `(): boolean`                          |
-| `formatPrice` | `src/lib/format.ts`       | `(cents: number): string` → `"฿35.00"` |
-| `cn`          | `src/lib/utils.ts`        | `(...inputs: ClassValue[]): string`    |
-
-## Types
-
-| Symbol                                                                                          | File                                         | Definition                                                 |
-| ----------------------------------------------------------------------------------------------- | -------------------------------------------- | ---------------------------------------------------------- |
-| `Shelf`                                                                                         | `src/db/schema.ts` (re-exported `src/types`) | `typeof shelves.$inferSelect`                              |
-| `Product`                                                                                       | `src/db/schema.ts` (re-exported `src/types`) | `typeof products.$inferSelect`                             |
-| `ShelfProduct`                                                                                  | `src/db/schema.ts`                           | `typeof shelfProducts.$inferSelect`                        |
-| `User`                                                                                          | `src/db/schema.ts`                           | `typeof users.$inferSelect`                                |
-| `NewUser`                                                                                       | `src/db/schema.ts`                           | `typeof users.$inferInsert`                                |
-| `Session`                                                                                       | `src/db/schema.ts`                           | `typeof sessions.$inferSelect`                             |
-| `FaceLivenessAttempt`                                                                           | `src/db/schema.ts`                           | `typeof faceLivenessAttempts.$inferSelect`                 |
-| `UserFaceProfile`                                                                               | `src/db/schema.ts`                           | `typeof userFaceProfiles.$inferSelect`                     |
-| `AuthMethod`                                                                                    | `src/db/schema.ts`                           | `(typeof authMethodEnum.enumValues)[number]`               |
-| `FaceEnrollmentStatus`, `LivenessAttemptStatus`, `FaceLivenessIntent`, `FaceRecognitionOutcome` | `src/db/schema.ts`                           | enum unions                                                |
-| `ShelfWithProducts`                                                                             | `src/types/index.ts`                         | `Shelf & { products: Product[] }`                          |
-| `CartItem`                                                                                      | `src/types/index.ts`                         | `{ productId, sku, name, priceCents, imageUrl, quantity }` |
+- `Inventory`
+- `NewInventory`
+- `QrCode`
+- `Unit`
+- `NewUnit`
+- `Order`
+- `OrderItem`
+- `StoreSettings`
+- `Receipt`
+- `ReceiptItem`
+- `IotSessionRecord`
+- `NewIotSessionRecord`
+- `IotSessionEventRecord`
+- `NewIotSessionEventRecord`
+- `IotMqttMessageLogRecord`
+- `NewIotMqttMessageLogRecord`
+- `Wallet`
+- `NewWallet`
+- `WalletLedgerEntry`
+- `NewWalletLedgerEntry`
+- `StripeCustomer`
+- `NewStripeCustomer`
+- `WalletFundingChannel`
+- `WalletTopupIntent`
+- `NewWalletTopupIntent`
+- `StripeWebhookEvent`
+- `OrderPayment`
+- `Notification`
+- `User`
+- `NewUser`
+- `Session`
+- `Role`
+- `UserRole`
+- `RoleGrant`
+- `AdminAuditLog`
+- `FaceLivenessAttempt`
+- `NewFaceLivenessAttempt`
+- `UserFaceProfile`
+- `NewUserFaceProfile`
+- `ClientAttendanceEvent`
+- `NewClientAttendanceEvent`
+- `ClientVisit`
+- `NewClientVisit`
+- `AuthMethod`
+- `UserAccountStatus`
+- `RoleGrantStatus`
+- `FaceEnrollmentStatus`
+- `LivenessAttemptStatus`
+- `FaceLivenessIntent`
+- `FaceRecognitionOutcome`
+- `AttendanceDirection`
+- `AttendanceRecognitionDecision`
+- `ClientVisitStatus`
+- `WalletStatus`
+- `WalletLedgerDirection`
+- `WalletLedgerType`
+- `WalletFundingChannelCode`
+- `WalletTopupStatus`
+- `ReceiptStatus`

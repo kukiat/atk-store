@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
 import {
+  createMockIotPickSession,
   isMockIotServerEnabled,
   MockIotServerError,
-  setMockIotTopic,
 } from "@/services/mock-iot-server.service";
 
 export async function POST(request: Request) {
@@ -31,7 +31,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(
-      await setMockIotTopic({
+      await createMockIotPickSession({
         uuid: body.uuid,
         email: body.email,
         sku: body.sku,

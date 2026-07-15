@@ -1,145 +1,88 @@
 # 01 — Overview
 
-## Project
+Generated: 2026-07-15 Asia/Bangkok
 
-**ATK Store** is a mobile-first "smart shelf scan-to-shop" starter web app. A customer
-scans a QR code on a physical shelf, lands on that shelf's product page, adds items to a
-client-side cart, and reviews the cart. Payment and orders are intentionally left as
-`TODO` markers for extension.
+## Project Summary
 
-- **Name / version:** `atk-store` 0.1.0 (private)
-- **Primary language:** TypeScript
-- **UI language / locale:** Thai (`th`), currency THB (satang minor units)
+**ATK Store** เป็น mobile-first smart-store prototype ที่ผูก identity, face verification, wallet, inventory QR และ IoT shelf/session เข้าด้วยกัน ลูกค้า sign in, ลงทะเบียนหน้า, เข้า store ผ่าน camera/attendance, เติม wallet, scan QR ของ inventory, เปิด session กับตู้/อุปกรณ์ IoT, ให้ loadcell event อัปเดต cart แล้ว checkout ด้วย wallet ตอนออกจากร้าน
 
-## Tech stack
+## Tech Stack
 
-| Area       | Choice                                               | Notes                                     |
-| ---------- | ---------------------------------------------------- | ----------------------------------------- |
-| Framework  | Next.js 16 (App Router)                              | Server Components by default              |
-| UI runtime | React 19                                             |                                           |
-| Styling    | Tailwind CSS v4 + `tw-animate-css`                   | via `@tailwindcss/postcss`                |
-| Components | shadcn/ui (`components.json`) + `@base-ui/react`     | New York / base style                     |
-| Icons      | `lucide-react`                                       |                                           |
-| State      | Zustand 5 (+ `persist`)                              | client cart → `localStorage` (`atk-cart`) |
-| ORM        | Drizzle ORM 0.45 + `drizzle-kit`                     | dialect `postgresql`                      |
-| Driver     | `postgres` (postgres-js)                             |                                           |
-| Database   | PostgreSQL 16 (Docker, local)                        | `docker-compose.yml`                      |
-| Utilities  | `clsx`, `tailwind-merge`, `class-variance-authority` | `cn()` helper                             |
+| Area | Choice | Notes |
+| --- | --- | --- |
+| Framework | Next.js 16.2.9 App Router | ใช้ Server Components, Route Handlers, Server Actions และ src/proxy.ts |
+| UI | React 19.2.4, Tailwind CSS v4, shadcn/ui, Base UI | mobile-first, Thai UI |
+| DB | PostgreSQL + Drizzle ORM | schema อยู่ที่ src/db/schema.ts |
+| Auth | Google OAuth + jose | manual state/PKCE/nonce flow และ DB session cookie |
+| Face | Amazon Rekognition Face Liveness/Face Collection + Cognito Identity Pool | browser ได้ temporary detector credentials เท่านั้น |
+| Payment | Stripe Checkout/Webhook | wallet top-up และ ledger |
+| IoT | HTTP route + MQTT worker + SSE | loadcell events, session updates, mock server |
+| Redis | redis package, optional | active cart persistence และ IoT pub/sub fan-out เมื่อ REDIS_HOST พร้อม |
 
-## Architecture
+## Current Domain Map
 
-Both Server Components and API routes call the **same service singletons** so business
-logic and data access live in exactly one place (`src/services/`). Services and the
-Drizzle client are marked `"server-only"` to prevent leaking into client bundles.
+| Domain | What It Does |
+| --- | --- |
+| Authentication | Google OAuth manual flow, DB-backed opaque session cookie, role/permission helpers. |
+| Face | Amazon Rekognition Face Liveness + Face Collection สำหรับ enrollment และ verification. |
+| Store Visit | Camera attendance API จัดการ entry/exit และ active visit ก่อนให้ scan ได้. |
+| Wallet/Payment | Wallet ledger, Stripe Checkout top-up, webhook และ wallet debit ตอน checkout. |
+| Inventory/QR | Admin inventory, unit, QR เดี่ยว/grouped QR และ scan eligibility. |
+| IoT | IoT session, loadcell events, MQTT worker, SSE updates และ mock IoT backdoor. |
+| Order/Receipt | active cart → order → receipt โดยผูกกับ visit และ wallet checkout. |
+| Admin | หลังบ้าน users, wallets, attendance, inventory, receipt settings, orders และ PoC tools. |
 
+## Runtime Architecture
+
+```mermaid
+flowchart LR
+  User["Mobile user"] --> Next["Next.js App Router"]
+  Next --> Auth["Google OAuth + DB session"]
+  Next --> Face["Face Liveness / Face Collection"]
+  Next --> Store["Visit + Scan Eligibility"]
+  Store --> Wallet["Wallet / Stripe / Ledger"]
+  Store --> Inventory["Inventory + QR"]
+  Inventory --> IoT["IoT Session + Loadcell Events"]
+  IoT --> Cart["Active Cart Sync"]
+  Cart --> Order["Order + Receipt"]
+  Admin["Admin Back Office"] --> Store
+  Admin --> Inventory
+  Admin --> Wallet
+  Admin --> IoT
 ```
-app/shelf/[id]/page.tsx (Server Component) ─┐
-app/api/shelf/[id]/route.ts (Route Handler) ─┴─► shelfService ─► db (Drizzle) ─► Postgres
-```
 
-The cart is purely client-side state (Zustand + `persist`); it never touches the server
-yet (that's the `TODO(order)` extension point).
+## Important Conditions
 
-## Conventions
+- ทุก private page ต้อง resolve user ผ่าน `getCurrentUser()` หรือ redirect ไป `/signin`
+- API/Server Action ที่แก้ข้อมูลต้องใช้ `requireCurrentUser()`, same-origin/API key checks, role checks หรือ resource ownership ตาม context
+- Scan ได้เมื่อมี active visit, wallet พร้อม, balance เพียงพอกับราคาสินค้าขั้นต่ำ และมี inventory ที่ขายได้
+- Face enrollment/verification ไม่ควรสร้าง AWS session อัตโนมัติ ต้องให้ผู้ใช้กดเริ่มก่อน
+- IoT session/cart updates ต้อง idempotent เพราะ events อาจมาจาก HTTP mock, MQTT worker หรือ retry
+- Redis เป็น optional infrastructure: ถ้ามี `REDIS_HOST` จะใช้ cross-process; ถ้าไม่มี/ล่มบางจุดจะ fallback local แต่จะไม่ fan-out ข้าม process
 
-- **Path alias:** `@/*` → `src/*` (see `tsconfig.json`).
-- **Money:** stored & passed as integer satang (`priceCents`); formatted with `formatPrice`.
-- **Server-only modules:** `src/db/index.ts`, `src/services/*` import `"server-only"`.
-- **Client modules:** start with `"use client"` (components, cart store, hooks that read DOM).
-- **Hydration safety:** `useHydrated()` gates rendering of persisted cart state to avoid
-  SSR/client mismatch.
-- **Singletons:** `db`, `productService`, `shelfService`, `useCartStore`.
+## Scripts
 
-## Tooling / scripts
+| Script | Command | Purpose |
+| --- | --- | --- |
+| dev | next dev | app tooling |
+| iot:mqtt | tsx script/iot-mqtt-worker.ts | MQTT worker |
+| build | next build | app tooling |
+| start | next start | app tooling |
+| lint | eslint | app tooling |
+| test | vitest run | test |
+| test:watch | vitest | test |
+| format | prettier --write . | app tooling |
+| db:generate | drizzle-kit generate | database tooling |
+| db:migrate | drizzle-kit migrate | database tooling |
+| db:push | drizzle-kit push | database tooling |
+| db:seed | tsx src/db/seed.ts | database tooling |
+| db:studio | drizzle-kit studio | database tooling |
 
-| Script            | Command                     | Purpose                        |
-| ----------------- | --------------------------- | ------------------------------ |
-| `dev`             | `next dev`                  | Dev server                     |
-| `build` / `start` | `next build` / `next start` | Production build & serve       |
-| `lint`            | `eslint`                    | Lint                           |
-| `test`            | `vitest run`                | Run focused Node tests         |
-| `test:watch`      | `vitest`                    | Watch focused Node tests       |
-| `format`          | `prettier --write .`        | Format                         |
-| `db:generate`     | `drizzle-kit generate`      | SQL migration from schema      |
-| `db:migrate`      | `drizzle-kit migrate`       | Apply migrations               |
-| `db:push`         | `drizzle-kit push`          | Push schema directly (dev)     |
-| `db:seed`         | `tsx src/db/seed.ts`        | Seed sample shelves & products |
-| `db:studio`       | `drizzle-kit studio`        | Drizzle Studio                 |
+## Glossary
 
-## Environment
-
-- `DATABASE_URL` — Postgres connection string (`.env`, copied from `.env.example`).
-  Local default targets the Docker Compose Postgres (`atk_store`, user/pass `postgres`).
-- Face Liveness (server): `AWS_PROFILE` (backend Rekognition Create/Get creds),
-  `AWS_LIVENESS_REGION`, `AWS_LIVENESS_OUTPUT_BUCKET`, `AWS_LIVENESS_OUTPUT_PREFIX`,
-  `AWS_LIVENESS_SCORE_THRESHOLD`, `AWS_LIVENESS_AUDIT_IMAGES_LIMIT`.
-- Face Liveness (browser): `NEXT_PUBLIC_AWS_LIVENESS_REGION`,
-  `NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID` (Identity Pool federates Google for
-  `StartFaceLivenessSession`-scoped temporary credentials).
-- Face Recognition (server): `AWS_FACE_COLLECTION_ID`, `AWS_FACE_MATCH_THRESHOLD`.
-  The Rekognition Face Collection stores AWS-managed face features; the app DB
-  stores only returned IDs and ownership metadata.
-- Face Recognition debug proof: `ENABLE_FACE_RECOGNITION_DEBUG=YES` reveals the
-  `/verify-face` CTA only for users with a `user_face_profiles` row.
-  `FACE_RECOGNITION_DEBUG_TIMEOUT_MS` defaults to 5000ms.
-
-## Face Liveness + Face Recognition enrollment
-
-- **Goal:** prove a signed-in customer is a real person via Amazon Rekognition
-  Face Liveness, then index the accepted reference image into the Rekognition
-  Face Collection and mark them `registered`.
-- **Minimal calls:** a normal attempt makes exactly 3 Rekognition calls
-  (backend `CreateFaceLivenessSession`, browser `StartFaceLivenessSession`,
-  backend `GetFaceLivenessSessionResults`). Recognition calls are gated behind
-  accepted liveness only: enrollment performs `SearchFacesByImage` to avoid
-  duplicates, then `IndexFaces` only when no existing match is found. The app
-  never polls; a transient not-ready result allows at most one delayed retry.
-  One active attempt per user (partial unique index + idempotent reuse).
-- **Credential bridge:** the OAuth callback stashes the verified Google ID token
-  in a path-scoped (`/api/face`) httpOnly cookie; `GET /api/face/credentials`
-  exchanges it through the Cognito Identity Pool for short-lived, detector-scoped
-  credentials. `GET /api/face/auth-status` is a cheap no-AWS preflight that lets
-  Home/camera UI detect an expired face token before creating a liveness session.
-  The browser never receives an IAM key or the backend AWS profile.
-- **UX:** `FaceEnrollmentPrompt` shows a quiet nudge for `not_registered`/`pending`
-  users; `/register-face` requires an explicit start and never auto-launches the
-  camera or creates an AWS session. `FaceVerificationDebugPrompt` is hidden unless
-  explicitly enabled and the signed-in user already has a face profile.
-  `FaceAuthStatusNotice` shows a Home-page reauth prompt when the app session is
-  still valid but the Google ID token used for the face credential bridge expired.
-- **Data:** `users.face_enrollment_status` is the server-authoritative flag the UI
-  reads; `face_liveness_attempts` holds per-attempt liveness + recognition
-  decisions; `user_face_profiles` maps app users to Rekognition `FaceId`s. The DB
-  does not store face vectors.
-- **Verification-ready:** `POST /api/face/session` accepts optional
-  `{ intent: "verification" }`; `POST /api/face/result` searches the collection
-  and returns accepted only when the matched `FaceId` maps back to the signed-in
-  user at the configured threshold. `/verify-face` is the debug proof page for
-  this path; it shows the current user's avatar/email/name after a verified match.
-  The debug timeout is now a slow-scan notice only: the UI does not hard-unmount
-  Amplify mid-stream because that can leave camera tracks/ReadableStreams in a
-  bad cleanup race. Real mismatch/detector/result failures still fail closed to
-  an admin-contact state.
-
-## Authentication
-
-- **Provider:** Google OAuth 2.0 (manual flow, no auth library).
-- **Flow:** `/signin` → `/api/auth/signin/google` creates short-lived `state`, PKCE
-  verifier and nonce cookies → Google consent → `/api/auth/callback/google` validates
-  those cookies, validates the Google ID token signature and claims, upserts the verified
-  provider identity, opens a DB session, and sets `atk_session` → `/`.
-- **Session security:** the browser receives a random opaque token in an httpOnly cookie;
-  the database stores only its SHA-256 hash. `getCurrentUser()` resolves it from DB and
-  `requireCurrentUser()` is the mandatory guard for private Route Handlers/Actions.
-- **Guarding:** `src/proxy.ts` only performs optimistic page redirect. It does not replace
-  route-level authentication or resource-ownership authorization.
-- **Identity mapping:** `users.auth_method` plus immutable provider account ID (Google OIDC
-  `sub`) is unique. An existing email with another provider identity is rejected instead
-  of being linked silently.
-- **Env keys:** `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_URL`, `AUTH_SECRET`.
-
-## Extension points (`TODO`)
-
-- `TODO(payment)` — real checkout / payment (PromptPay, card) — `src/app/cart/page.tsx`
-- `TODO(order)` — persist client cart → order table — `src/app/cart/page.tsx`
-- Also unimplemented: per-shelf QR generation, admin panel, deploy/CI.
+- **Active visit**: visit ที่ camera/attendance ระบุว่าลูกค้ายังอยู่ในร้าน
+- **Cart sync**: server-side active cart ผูกกับ visit/session ใช้ Redis หรือ memory fallback
+- **Face Collection**: Rekognition collection ที่เก็บ AWS-managed face features ไม่ใช่ raw selfie ใน DB
+- **Grouped QR**: QR เดียวที่เปิดรายการ inventory หลายตัวให้เลือกก่อนหยิบ
+- **IoT session**: session ต่อการ scan/open inventory ใช้รับ loadcell/door/error events
+- **Backdoor/mock**: หน้า/API สำหรับจำลอง status หรือ event ระหว่าง demo/dev ไม่ใช่ public production flow

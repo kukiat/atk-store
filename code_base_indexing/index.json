@@ -1,28 +1,30 @@
 {
+  "generatedAt": "2026-07-15 Asia/Bangkok",
   "project": {
     "name": "atk-store",
     "version": "0.1.0",
-    "description": "Mobile-first smart-shelf scan-to-shop app with Google auth, Face Liveness, and AWS Face Collection recognition",
-    "language": "TypeScript",
     "sourceRoot": "src",
-    "pathAlias": {
-      "@/*": "src/*"
-    },
-    "stack": [
-      "Next.js 16 (App Router)",
-      "React 19",
-      "Tailwind CSS v4",
-      "shadcn/ui",
-      "Drizzle ORM",
-      "PostgreSQL",
-      "Zustand",
-      "Amazon Rekognition Face Liveness",
-      "Amazon Rekognition Face Collection",
-      "Cognito Identity Pool"
-    ]
+    "stack": {
+      "next": "16.2.9",
+      "react": "19.2.4",
+      "drizzle": "^0.45.2",
+      "redis": "^6.1.0",
+      "stripe": "^22.3.0"
+    }
+  },
+  "counts": {
+    "sourceFiles": 163,
+    "pages": 29,
+    "routeHandlers": 28,
+    "serverActionFiles": 4,
+    "services": 30,
+    "dbTables": 29,
+    "dbEnums": 27,
+    "tests": 8
   },
   "scripts": {
     "dev": "next dev",
+    "iot:mqtt": "tsx script/iot-mqtt-worker.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -35,330 +37,2365 @@
     "db:seed": "tsx src/db/seed.ts",
     "db:studio": "drizzle-kit studio"
   },
+  "domains": [
+    {
+      "name": "Authentication",
+      "description": "Google OAuth manual flow, DB-backed opaque session cookie, role/permission helpers."
+    },
+    {
+      "name": "Face",
+      "description": "Amazon Rekognition Face Liveness + Face Collection สำหรับ enrollment และ verification."
+    },
+    {
+      "name": "Store Visit",
+      "description": "Camera attendance API จัดการ entry/exit และ active visit ก่อนให้ scan ได้."
+    },
+    {
+      "name": "Wallet/Payment",
+      "description": "Wallet ledger, Stripe Checkout top-up, webhook และ wallet debit ตอน checkout."
+    },
+    {
+      "name": "Inventory/QR",
+      "description": "Admin inventory, unit, QR เดี่ยว/grouped QR และ scan eligibility."
+    },
+    {
+      "name": "IoT",
+      "description": "IoT session, loadcell events, MQTT worker, SSE updates และ mock IoT backdoor."
+    },
+    {
+      "name": "Order/Receipt",
+      "description": "active cart → order → receipt โดยผูกกับ visit และ wallet checkout."
+    },
+    {
+      "name": "Admin",
+      "description": "หลังบ้าน users, wallets, attendance, inventory, receipt settings, orders และ PoC tools."
+    }
+  ],
+  "pages": [
+    {
+      "route": "/",
+      "file": "src/app/page.tsx",
+      "kind": "Server",
+      "description": "Home หลัง sign-in แสดงสถานะ face, checkout notice, scan eligibility และทางเข้า scan/cart"
+    },
+    {
+      "route": "/admin",
+      "file": "src/app/admin/page.tsx",
+      "kind": "Server",
+      "description": "Dashboard หลังบ้านสำหรับ admin/super admin"
+    },
+    {
+      "route": "/admin/attendance",
+      "file": "src/app/admin/attendance/page.tsx",
+      "kind": "Server",
+      "description": "backdoor/mock หน้า attendance สำหรับทดสอบ entry/exit/status"
+    },
+    {
+      "route": "/admin/inventory",
+      "file": "src/app/admin/inventory/page.tsx",
+      "kind": "Server",
+      "description": "หลังบ้าน inventory overview"
+    },
+    {
+      "route": "/admin/inventory/groups",
+      "file": "src/app/admin/inventory/groups/page.tsx",
+      "kind": "Server",
+      "description": "redirect compatibility ไปหน้า QR/groups ใหม่"
+    },
+    {
+      "route": "/admin/inventory/iot-poc",
+      "file": "src/app/admin/inventory/iot-poc/page.tsx",
+      "kind": "Server",
+      "description": "backdoor/mock ส่ง IoT/MQTT event และจำลองสถานะ loadcell"
+    },
+    {
+      "route": "/admin/inventory/items",
+      "file": "src/app/admin/inventory/items/page.tsx",
+      "kind": "Server",
+      "description": "จัดการ inventory items"
+    },
+    {
+      "route": "/admin/inventory/orders",
+      "file": "src/app/admin/inventory/orders/page.tsx",
+      "kind": "Server",
+      "description": "ดู orders และสถานะคำสั่งซื้อ"
+    },
+    {
+      "route": "/admin/inventory/qr",
+      "file": "src/app/admin/inventory/qr/page.tsx",
+      "kind": "Server",
+      "description": "สร้าง/จัดการ QR สำหรับ inventory เดี่ยวหรือ grouped QR"
+    },
+    {
+      "route": "/admin/inventory/receipt-settings",
+      "file": "src/app/admin/inventory/receipt-settings/page.tsx",
+      "kind": "Server",
+      "description": "ตั้งค่า store/receipt"
+    },
+    {
+      "route": "/admin/inventory/shelfs",
+      "file": "src/app/admin/inventory/shelfs/page.tsx",
+      "kind": "Server",
+      "description": "redirect compatibility ของคำว่า shelfs"
+    },
+    {
+      "route": "/admin/inventory/units",
+      "file": "src/app/admin/inventory/units/page.tsx",
+      "kind": "Server",
+      "description": "จัดการหน่วยสินค้า"
+    },
+    {
+      "route": "/admin/users",
+      "file": "src/app/admin/users/page.tsx",
+      "kind": "Server",
+      "description": "จัดการ user, account status และ roles"
+    },
+    {
+      "route": "/admin/users/[id]",
+      "file": "src/app/admin/users/[id]/page.tsx",
+      "kind": "Server",
+      "description": "รายละเอียด user, roles, wallet และ audit context"
+    },
+    {
+      "route": "/admin/wallets",
+      "file": "src/app/admin/wallets/page.tsx",
+      "kind": "Server",
+      "description": "ตรวจ wallet และ ledger ในระบบหลังบ้าน"
+    },
+    {
+      "route": "/cart",
+      "file": "src/app/cart/page.tsx",
+      "kind": "Client",
+      "description": "ตะกร้าของ active visit อ่านจาก server-side cart sync และรอ checkout จาก exit camera"
+    },
+    {
+      "route": "/inventory/[id]",
+      "file": "src/app/inventory/[id]/page.tsx",
+      "kind": "Server",
+      "description": "หน้ารายละเอียด inventory และเปิด IoT session เพื่อหยิบสินค้า"
+    },
+    {
+      "route": "/receipts",
+      "file": "src/app/receipts/page.tsx",
+      "kind": "Server",
+      "description": "รายการ receipts ของผู้ใช้"
+    },
+    {
+      "route": "/receipts/[receiptNo]",
+      "file": "src/app/receipts/[receiptNo]/page.tsx",
+      "kind": "Server",
+      "description": "รายละเอียด receipt และเอกสารใบเสร็จ"
+    },
+    {
+      "route": "/register-face",
+      "file": "src/app/register-face/page.tsx",
+      "kind": "Server",
+      "description": "หน้าลงทะเบียน Face Liveness สำหรับผู้ใช้ที่ยังไม่ registered"
+    },
+    {
+      "route": "/scan",
+      "file": "src/app/scan/page.tsx",
+      "kind": "Server",
+      "description": "หน้าเปิดกล้อง scan inventory/grouped QR โดยตรวจ store eligibility ก่อน"
+    },
+    {
+      "route": "/scan/inventories",
+      "file": "src/app/scan/inventories/page.tsx",
+      "kind": "Server",
+      "description": "หน้ารายการ inventory สำหรับ fallback/manual scan flow"
+    },
+    {
+      "route": "/scan/shelves",
+      "file": "src/app/scan/shelves/page.tsx",
+      "kind": "Server",
+      "description": "หน้า legacy/backdoor ของ shelves catalog"
+    },
+    {
+      "route": "/shelf/[id]",
+      "file": "src/app/shelf/[id]/page.tsx",
+      "kind": "Server",
+      "description": "หน้า shelf legacy compatibility"
+    },
+    {
+      "route": "/signin",
+      "file": "src/app/signin/page.tsx",
+      "kind": "Server",
+      "description": "หน้า Google sign-in และ error message จาก OAuth callback"
+    },
+    {
+      "route": "/unsupported-device",
+      "file": "src/app/unsupported-device/page.tsx",
+      "kind": "Server",
+      "description": "หน้าแจ้งว่าฟีเจอร์ scan/inventory/cart ใช้ได้เฉพาะ mobile/tablet"
+    },
+    {
+      "route": "/verify-face",
+      "file": "src/app/verify-face/page.tsx",
+      "kind": "Server",
+      "description": "หน้า debug สำหรับ verify face เมื่อเปิด ENABLE_FACE_RECOGNITION_DEBUG"
+    },
+    {
+      "route": "/wallet",
+      "file": "src/app/wallet/page.tsx",
+      "kind": "Server",
+      "description": "หน้า wallet, balance, ledger และสร้าง Stripe top-up"
+    },
+    {
+      "route": "/wallet/topup/success",
+      "file": "src/app/wallet/topup/success/page.tsx",
+      "kind": "Server",
+      "description": "หน้า redirect หลัง Stripe Checkout submit"
+    }
+  ],
+  "routes": [
+    {
+      "route": "/api/animation-api/users",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/animation-api/users/route.ts",
+      "description": "API สำหรับ animation/demo user feed"
+    },
+    {
+      "route": "/api/auth/callback/google",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/auth/callback/google/route.ts",
+      "description": "รับ OAuth callback, validate ID token, upsert user และเปิด DB session"
+    },
+    {
+      "route": "/api/auth/signin/google",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/auth/signin/google/route.ts",
+      "description": "เริ่ม Google OAuth ด้วย state, PKCE และ nonce cookies"
+    },
+    {
+      "route": "/api/auth/signout",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/auth/signout/route.ts",
+      "description": "ปิด session และ clear cookies"
+    },
+    {
+      "route": "/api/cart/active",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/cart/active/route.ts",
+      "description": "อ่าน active cart จาก cart sync"
+    },
+    {
+      "route": "/api/client-attendance/exit-order",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/client-attendance/exit-order/route.ts",
+      "description": "Camera API สำหรับ exit แล้ว trigger wallet checkout"
+    },
+    {
+      "route": "/api/client-attendance/recognize",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/client-attendance/recognize/route.ts",
+      "description": "Camera API สำหรับ entry/sighting recognition"
+    },
+    {
+      "route": "/api/face/auth-status",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/face/auth-status/route.ts",
+      "description": "ตรวจ token bridge สำหรับ Face Liveness แบบไม่เรียก AWS"
+    },
+    {
+      "route": "/api/face/credentials",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/face/credentials/route.ts",
+      "description": "แลก Google ID token cookie เป็น Cognito temporary credentials"
+    },
+    {
+      "route": "/api/face/result",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/face/result/route.ts",
+      "description": "อ่านผล liveness และ register/verify กับ Face Collection"
+    },
+    {
+      "route": "/api/face/session",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/face/session/route.ts",
+      "description": "สร้าง/reuse Rekognition Face Liveness session สำหรับ enrollment/verification"
+    },
+    {
+      "route": "/api/health-check",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/health-check/route.ts",
+      "description": "health check endpoint"
+    },
+    {
+      "route": "/api/iot/catalog/inventories",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/iot/catalog/inventories/route.ts",
+      "description": "catalog inventory สำหรับ scan/admin"
+    },
+    {
+      "route": "/api/iot/catalog/shelves",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/iot/catalog/shelves/route.ts",
+      "description": "legacy shelf catalog endpoint ที่ตอบ gone/removed"
+    },
+    {
+      "route": "/api/iot/events",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/iot/events/route.ts",
+      "description": "รับ IoT/loadcell event จากอุปกรณ์หรือ worker"
+    },
+    {
+      "route": "/api/iot/mock-events",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/iot/mock-events/route.ts",
+      "description": "backdoor/mock ส่ง IoT event จาก browser/admin"
+    },
+    {
+      "route": "/api/iot/sessions/[sessionId]",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/iot/sessions/[sessionId]/route.ts",
+      "description": "อ่านสถานะ IoT session"
+    },
+    {
+      "route": "/api/iot/sessions/[sessionId]/events",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/iot/sessions/[sessionId]/events/route.ts",
+      "description": "SSE แจ้ง IoT session updates"
+    },
+    {
+      "route": "/api/iot/watch",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/iot/watch/route.ts",
+      "description": "เปิด IoT watch/session หลัง scan inventory QR"
+    },
+    {
+      "route": "/api/mock-iot-server/pick-sessions",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/mock-iot-server/pick-sessions/route.ts",
+      "description": "mock IoT server ดึง pick sessions"
+    },
+    {
+      "route": "/api/mock-iot-server/product/[productId]",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/mock-iot-server/product/[productId]/route.ts",
+      "description": "mock IoT server อ่าน product config สำหรับอุปกรณ์จำลอง"
+    },
+    {
+      "route": "/api/mock-iot-server/shelves/open",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/mock-iot-server/shelves/open/route.ts",
+      "description": "legacy mock shelf open endpoint ที่ถูกถอดออก"
+    },
+    {
+      "route": "/api/orders/active-visit-events",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/orders/active-visit-events/route.ts",
+      "description": "SSE แจ้ง active visit/cart/checkout changes"
+    },
+    {
+      "route": "/api/orders/active-visit-status",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/orders/active-visit-status/route.ts",
+      "description": "อ่าน active visit/cart/checkout status ของผู้ใช้"
+    },
+    {
+      "route": "/api/qr/decode",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/qr/decode/route.ts",
+      "description": "decode QR payload/image สำหรับ scan flow"
+    },
+    {
+      "route": "/api/shelf/[id]",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/api/shelf/[id]/route.ts",
+      "description": "legacy shelf endpoint ที่ตอบ gone/removed"
+    },
+    {
+      "route": "/api/stripe/webhook",
+      "methods": [
+        "POST"
+      ],
+      "file": "src/app/api/stripe/webhook/route.ts",
+      "description": "รับ Stripe webhook สำหรับ wallet top-up"
+    },
+    {
+      "route": "/inventories",
+      "methods": [
+        "GET"
+      ],
+      "file": "src/app/inventories/route.ts",
+      "description": "alias compatibility ของ inventory catalog"
+    }
+  ],
+  "serverActions": [
+    {
+      "file": "src/app/admin/actions.ts",
+      "exports": [
+        "blockUserAction",
+        "createQrCodeAction",
+        "deleteInventoryAction",
+        "deleteQrCodeAction",
+        "deleteUnitAction",
+        "disableUserAction",
+        "grantAdminRoleAction",
+        "importInventoriesAction",
+        "resetFaceEnrollmentAction",
+        "revokeAdminRoleAction",
+        "saveInventoryAction",
+        "saveUnitAction",
+        "setManualAttendanceStatusAction",
+        "unblockUserAction"
+      ],
+      "description": "Server Actions สำหรับ admin user, roles, face reset, attendance override, inventory/unit/QR"
+    },
+    {
+      "file": "src/app/admin/inventory/iot-poc/actions.ts",
+      "exports": [
+        "sendMockDoorClosedAction",
+        "sendMockFinalCountAction",
+        "sendMockPickedCountAction"
+      ],
+      "description": "Server Actions สำหรับส่ง mock IoT/MQTT events"
+    },
+    {
+      "file": "src/app/admin/inventory/receipt-settings/actions.ts",
+      "exports": [
+        "updateReceiptSettingsAction"
+      ],
+      "description": "Server Action สำหรับบันทึก receipt/store settings"
+    },
+    {
+      "file": "src/app/wallet/actions.ts",
+      "exports": [
+        "createWalletTopupAction"
+      ],
+      "description": "Server Action สำหรับสร้าง Stripe wallet top-up"
+    }
+  ],
   "files": [
     {
-      "path": "src/db/schema.ts",
-      "kind": "db-schema",
+      "path": "src/app/admin/actions.ts",
+      "kind": "server-actions",
       "exports": [
-        "users",
-        "sessions",
-        "faceLivenessAttempts",
-        "userFaceProfiles",
-        "shelves",
-        "products",
-        "shelfProducts",
-        "authMethodEnum",
-        "faceEnrollmentStatusEnum",
-        "livenessAttemptStatusEnum",
-        "faceLivenessIntentEnum",
-        "faceRecognitionOutcomeEnum"
+        "blockUserAction",
+        "createQrCodeAction",
+        "deleteInventoryAction",
+        "deleteQrCodeAction",
+        "deleteUnitAction",
+        "disableUserAction",
+        "grantAdminRoleAction",
+        "importInventoriesAction",
+        "resetFaceEnrollmentAction",
+        "revokeAdminRoleAction",
+        "saveInventoryAction",
+        "saveUnitAction",
+        "setManualAttendanceStatusAction",
+        "unblockUserAction"
       ],
-      "purpose": "Drizzle tables, enums, relations, and inferred types"
+      "purpose": "Server Actions สำหรับ admin user, roles, face reset, attendance override, inventory/unit/QR"
     },
     {
-      "path": "src/lib/aws-liveness.ts",
-      "kind": "server-only",
+      "path": "src/app/admin/admin-nav.tsx",
+      "kind": "source",
       "exports": [
-        "getLivenessConfig",
-        "getRekognitionClient",
-        "getCognitoIdentityClient",
-        "GOOGLE_LOGINS_KEY",
-        "LivenessConfigError"
+        "AdminNav"
       ],
-      "purpose": "Validated Face Liveness/Cognito config and AWS clients"
+      "purpose": "source file"
     },
     {
-      "path": "src/lib/aws-face-recognition.ts",
-      "kind": "server-only",
+      "path": "src/app/admin/attendance/page.tsx",
+      "kind": "page",
       "exports": [
-        "getFaceRecognitionConfig",
-        "getRekognitionClient",
-        "FaceRecognitionConfigError"
+        "AdminAttendancePage"
       ],
-      "purpose": "Validated Face Collection config and match threshold"
+      "purpose": "backdoor/mock หน้า attendance สำหรับทดสอบ entry/exit/status"
     },
     {
-      "path": "src/lib/face-token.ts",
-      "kind": "server-only",
-      "exports": ["getFaceTokenStatus"],
-      "purpose": "Cheap Google ID token expiry preflight for face credential bridge UX"
-    },
-    {
-      "path": "src/lib/liveness-state.ts",
-      "kind": "pure-util",
+      "path": "src/app/admin/confirm-submit-button.tsx",
+      "kind": "source",
       "exports": [
-        "decideLivenessOutcome",
-        "isAttemptReusable",
-        "attemptStatusForOutcome"
+        "ConfirmSubmitButton",
+        "FormPendingOverlay"
       ],
-      "purpose": "Testable liveness state machine"
+      "purpose": "source file"
     },
     {
-      "path": "src/lib/face-recognition-state.ts",
-      "kind": "pure-util",
-      "exports": ["createExternalImageId", "decideFaceVerification"],
-      "purpose": "Testable recognition helpers for ExternalImageId and expected-user matching"
-    },
-    {
-      "path": "src/services/face-enrollment.service.ts",
-      "kind": "server-only",
+      "path": "src/app/admin/inventory/_components.tsx",
+      "kind": "source",
       "exports": [
-        "faceEnrollmentService",
-        "FaceAlreadyRegisteredError",
-        "FaceNotRegisteredError",
-        "LivenessAttemptInProgressError",
-        "LivenessAttemptNotFoundError",
-        "CredentialBridgeError"
+        "AlertsOrdersPanel",
+        "InventoriesPanel",
+        "InventorySummaryCards",
+        "QrCodesPanel",
+        "UnitsPanel"
       ],
-      "purpose": "Credential bridge, liveness session orchestration, result read, and recognition decision persistence"
+      "purpose": "source file"
     },
     {
-      "path": "src/services/face-recognition.service.ts",
-      "kind": "server-only",
+      "path": "src/app/admin/inventory/_data.ts",
+      "kind": "source",
       "exports": [
-        "faceRecognitionService",
-        "FaceReferenceImageMissingError",
-        "FaceAlreadyBelongsToAnotherUserError",
-        "FaceCouldNotBeIndexedError"
+        "getInventoryAdminData"
       ],
-      "purpose": "Face Collection duplicate search, IndexFaces registration, SearchFacesByImage verification, DB mapping"
+      "purpose": "source file"
     },
     {
-      "path": "src/app/api/face/credentials/route.ts",
+      "path": "src/app/admin/inventory/_editable-panels.tsx",
+      "kind": "source",
+      "exports": [
+        "EditableInventory",
+        "EditableUnit",
+        "InventoriesEditor"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/admin/inventory/_qr-code-builder.tsx",
+      "kind": "source",
+      "exports": [
+        "QrCodeBuilder"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/admin/inventory/_subnav.tsx",
+      "kind": "source",
+      "exports": [
+        "InventorySubnav"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/admin/inventory/groups/page.tsx",
+      "kind": "page",
+      "exports": [
+        "InventoryGroupsPage"
+      ],
+      "purpose": "redirect compatibility ไปหน้า QR/groups ใหม่"
+    },
+    {
+      "path": "src/app/admin/inventory/iot-poc/actions.ts",
+      "kind": "server-actions",
+      "exports": [
+        "sendMockDoorClosedAction",
+        "sendMockFinalCountAction",
+        "sendMockPickedCountAction"
+      ],
+      "purpose": "Server Actions สำหรับส่ง mock IoT/MQTT events"
+    },
+    {
+      "path": "src/app/admin/inventory/iot-poc/page.tsx",
+      "kind": "page",
+      "exports": [
+        "IotPocPage"
+      ],
+      "purpose": "backdoor/mock ส่ง IoT/MQTT event และจำลองสถานะ loadcell"
+    },
+    {
+      "path": "src/app/admin/inventory/items/page.tsx",
+      "kind": "page",
+      "exports": [
+        "InventoryItemsPage"
+      ],
+      "purpose": "จัดการ inventory items"
+    },
+    {
+      "path": "src/app/admin/inventory/layout.tsx",
+      "kind": "source",
+      "exports": [
+        "InventoryLayout"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/admin/inventory/orders/page.tsx",
+      "kind": "page",
+      "exports": [
+        "InventoryOrdersPage"
+      ],
+      "purpose": "ดู orders และสถานะคำสั่งซื้อ"
+    },
+    {
+      "path": "src/app/admin/inventory/page.tsx",
+      "kind": "page",
+      "exports": [
+        "AdminInventoryPage"
+      ],
+      "purpose": "หลังบ้าน inventory overview"
+    },
+    {
+      "path": "src/app/admin/inventory/qr/page.tsx",
+      "kind": "page",
+      "exports": [
+        "InventoryQrPage"
+      ],
+      "purpose": "สร้าง/จัดการ QR สำหรับ inventory เดี่ยวหรือ grouped QR"
+    },
+    {
+      "path": "src/app/admin/inventory/receipt-settings/actions.ts",
+      "kind": "server-actions",
+      "exports": [
+        "updateReceiptSettingsAction"
+      ],
+      "purpose": "Server Action สำหรับบันทึก receipt/store settings"
+    },
+    {
+      "path": "src/app/admin/inventory/receipt-settings/page.tsx",
+      "kind": "page",
+      "exports": [
+        "ReceiptSettingsPage"
+      ],
+      "purpose": "ตั้งค่า store/receipt"
+    },
+    {
+      "path": "src/app/admin/inventory/shelfs/page.tsx",
+      "kind": "page",
+      "exports": [
+        "InventoryShelfsPage"
+      ],
+      "purpose": "redirect compatibility ของคำว่า shelfs"
+    },
+    {
+      "path": "src/app/admin/inventory/units/page.tsx",
+      "kind": "page",
+      "exports": [
+        "InventoryUnitsPage"
+      ],
+      "purpose": "จัดการหน่วยสินค้า"
+    },
+    {
+      "path": "src/app/admin/layout.tsx",
+      "kind": "source",
+      "exports": [
+        "AdminLayout"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/admin/page.tsx",
+      "kind": "page",
+      "exports": [
+        "AdminPage"
+      ],
+      "purpose": "Dashboard หลังบ้านสำหรับ admin/super admin"
+    },
+    {
+      "path": "src/app/admin/users/[id]/page.tsx",
+      "kind": "page",
+      "exports": [
+        "AdminUserDetailPage"
+      ],
+      "purpose": "รายละเอียด user, roles, wallet และ audit context"
+    },
+    {
+      "path": "src/app/admin/users/page.tsx",
+      "kind": "page",
+      "exports": [
+        "AdminUsersPage"
+      ],
+      "purpose": "จัดการ user, account status และ roles"
+    },
+    {
+      "path": "src/app/admin/wallets/page.tsx",
+      "kind": "page",
+      "exports": [
+        "AdminWalletsPage"
+      ],
+      "purpose": "ตรวจ wallet และ ledger ในระบบหลังบ้าน"
+    },
+    {
+      "path": "src/app/api/animation-api/users/route.ts",
       "kind": "route-handler",
-      "exports": ["GET"],
-      "purpose": "Google ID token cookie to Cognito detector credentials"
+      "exports": [
+        "GET",
+        "runtime"
+      ],
+      "purpose": "API สำหรับ animation/demo user feed"
+    },
+    {
+      "path": "src/app/api/auth/callback/google/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET"
+      ],
+      "purpose": "รับ OAuth callback, validate ID token, upsert user และเปิด DB session"
+    },
+    {
+      "path": "src/app/api/auth/signin/google/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET"
+      ],
+      "purpose": "เริ่ม Google OAuth ด้วย state, PKCE และ nonce cookies"
+    },
+    {
+      "path": "src/app/api/auth/signout/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST"
+      ],
+      "purpose": "ปิด session และ clear cookies"
+    },
+    {
+      "path": "src/app/api/cart/active/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET",
+        "dynamic"
+      ],
+      "purpose": "อ่าน active cart จาก cart sync"
+    },
+    {
+      "path": "src/app/api/client-attendance/exit-order/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST",
+        "runtime"
+      ],
+      "purpose": "Camera API สำหรับ exit แล้ว trigger wallet checkout"
+    },
+    {
+      "path": "src/app/api/client-attendance/recognize/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST",
+        "runtime"
+      ],
+      "purpose": "Camera API สำหรับ entry/sighting recognition"
     },
     {
       "path": "src/app/api/face/auth-status/route.ts",
       "kind": "route-handler",
-      "exports": ["GET"],
-      "purpose": "No-AWS face auth preflight for app session plus path-scoped Google ID token freshness"
+      "exports": [
+        "GET"
+      ],
+      "purpose": "ตรวจ token bridge สำหรับ Face Liveness แบบไม่เรียก AWS"
     },
     {
-      "path": "src/app/api/face/session/route.ts",
+      "path": "src/app/api/face/credentials/route.ts",
       "kind": "route-handler",
-      "exports": ["POST"],
-      "purpose": "Create/reuse Face Liveness session for enrollment or verification intent"
+      "exports": [
+        "GET"
+      ],
+      "purpose": "แลก Google ID token cookie เป็น Cognito temporary credentials"
     },
     {
       "path": "src/app/api/face/result/route.ts",
       "kind": "route-handler",
-      "exports": ["POST"],
-      "purpose": "Read owned liveness result once, then register or verify against Face Collection"
+      "exports": [
+        "POST"
+      ],
+      "purpose": "อ่านผล liveness และ register/verify กับ Face Collection"
     },
     {
-      "path": "src/components/face-liveness-registration.tsx",
-      "kind": "client-component",
-      "exports": ["FaceLivenessRegistration"],
-      "purpose": "Explicit-start camera UI for enrollment; shows liveness and recognition outcomes"
+      "path": "src/app/api/face/session/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST"
+      ],
+      "purpose": "สร้าง/reuse Rekognition Face Liveness session สำหรับ enrollment/verification"
+    },
+    {
+      "path": "src/app/api/health-check/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET"
+      ],
+      "purpose": "health check endpoint"
+    },
+    {
+      "path": "src/app/api/iot/catalog/inventories/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET",
+        "runtime"
+      ],
+      "purpose": "catalog inventory สำหรับ scan/admin"
+    },
+    {
+      "path": "src/app/api/iot/catalog/shelves/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET"
+      ],
+      "purpose": "legacy shelf catalog endpoint ที่ตอบ gone/removed"
+    },
+    {
+      "path": "src/app/api/iot/events/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST",
+        "runtime"
+      ],
+      "purpose": "รับ IoT/loadcell event จากอุปกรณ์หรือ worker"
+    },
+    {
+      "path": "src/app/api/iot/mock-events/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST",
+        "runtime"
+      ],
+      "purpose": "backdoor/mock ส่ง IoT event จาก browser/admin"
+    },
+    {
+      "path": "src/app/api/iot/sessions/[sessionId]/events/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET",
+        "dynamic",
+        "runtime"
+      ],
+      "purpose": "SSE แจ้ง IoT session updates"
+    },
+    {
+      "path": "src/app/api/iot/sessions/[sessionId]/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET",
+        "dynamic"
+      ],
+      "purpose": "อ่านสถานะ IoT session"
+    },
+    {
+      "path": "src/app/api/iot/watch/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST"
+      ],
+      "purpose": "เปิด IoT watch/session หลัง scan inventory QR"
+    },
+    {
+      "path": "src/app/api/mock-iot-server/pick-sessions/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST"
+      ],
+      "purpose": "mock IoT server ดึง pick sessions"
+    },
+    {
+      "path": "src/app/api/mock-iot-server/product/[productId]/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET"
+      ],
+      "purpose": "mock IoT server อ่าน product config สำหรับอุปกรณ์จำลอง"
+    },
+    {
+      "path": "src/app/api/mock-iot-server/shelves/open/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST"
+      ],
+      "purpose": "legacy mock shelf open endpoint ที่ถูกถอดออก"
+    },
+    {
+      "path": "src/app/api/orders/active-visit-events/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET",
+        "dynamic",
+        "runtime"
+      ],
+      "purpose": "SSE แจ้ง active visit/cart/checkout changes"
+    },
+    {
+      "path": "src/app/api/orders/active-visit-status/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET",
+        "runtime"
+      ],
+      "purpose": "อ่าน active visit/cart/checkout status ของผู้ใช้"
+    },
+    {
+      "path": "src/app/api/qr/decode/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST"
+      ],
+      "purpose": "decode QR payload/image สำหรับ scan flow"
+    },
+    {
+      "path": "src/app/api/shelf/[id]/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET"
+      ],
+      "purpose": "legacy shelf endpoint ที่ตอบ gone/removed"
+    },
+    {
+      "path": "src/app/api/stripe/webhook/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "POST",
+        "runtime"
+      ],
+      "purpose": "รับ Stripe webhook สำหรับ wallet top-up"
+    },
+    {
+      "path": "src/app/cart/page.tsx",
+      "kind": "page",
+      "exports": [
+        "CartPage"
+      ],
+      "purpose": "ตะกร้าของ active visit อ่านจาก server-side cart sync และรอ checkout จาก exit camera"
+    },
+    {
+      "path": "src/app/inventories/route.ts",
+      "kind": "route-handler",
+      "exports": [
+        "GET",
+        "runtime"
+      ],
+      "purpose": "alias compatibility ของ inventory catalog"
+    },
+    {
+      "path": "src/app/inventory/[id]/inventory-open-session.tsx",
+      "kind": "source",
+      "exports": [
+        "InventoryOpenSession"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/inventory/[id]/page.tsx",
+      "kind": "page",
+      "exports": [
+        "InventoryPage"
+      ],
+      "purpose": "หน้ารายละเอียด inventory และเปิด IoT session เพื่อหยิบสินค้า"
+    },
+    {
+      "path": "src/app/layout.tsx",
+      "kind": "source",
+      "exports": [
+        "RootLayout",
+        "metadata",
+        "viewport"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/page.tsx",
+      "kind": "page",
+      "exports": [
+        "HomePage"
+      ],
+      "purpose": "Home หลัง sign-in แสดงสถานะ face, checkout notice, scan eligibility และทางเข้า scan/cart"
+    },
+    {
+      "path": "src/app/receipts/[receiptNo]/page.tsx",
+      "kind": "page",
+      "exports": [
+        "ReceiptDetailPage"
+      ],
+      "purpose": "รายละเอียด receipt และเอกสารใบเสร็จ"
+    },
+    {
+      "path": "src/app/receipts/[receiptNo]/receipt-actions.tsx",
+      "kind": "source",
+      "exports": [
+        "ReceiptActions"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/receipts/page.tsx",
+      "kind": "page",
+      "exports": [
+        "ReceiptsPage"
+      ],
+      "purpose": "รายการ receipts ของผู้ใช้"
+    },
+    {
+      "path": "src/app/register-face/page.tsx",
+      "kind": "page",
+      "exports": [
+        "RegisterFacePage"
+      ],
+      "purpose": "หน้าลงทะเบียน Face Liveness สำหรับผู้ใช้ที่ยังไม่ registered"
+    },
+    {
+      "path": "src/app/scan/inventories/page.tsx",
+      "kind": "page",
+      "exports": [
+        "ScanInventoriesPage"
+      ],
+      "purpose": "หน้ารายการ inventory สำหรับ fallback/manual scan flow"
+    },
+    {
+      "path": "src/app/scan/page.tsx",
+      "kind": "page",
+      "exports": [
+        "ScanPage"
+      ],
+      "purpose": "หน้าเปิดกล้อง scan inventory/grouped QR โดยตรวจ store eligibility ก่อน"
+    },
+    {
+      "path": "src/app/scan/qr-scanner.tsx",
+      "kind": "source",
+      "exports": [
+        "QrScanner"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/app/scan/shelves/page.tsx",
+      "kind": "page",
+      "exports": [
+        "ScanShelvesPage"
+      ],
+      "purpose": "หน้า legacy/backdoor ของ shelves catalog"
+    },
+    {
+      "path": "src/app/shelf/[id]/page.tsx",
+      "kind": "page",
+      "exports": [
+        "ShelfPage"
+      ],
+      "purpose": "หน้า shelf legacy compatibility"
+    },
+    {
+      "path": "src/app/signin/page.tsx",
+      "kind": "page",
+      "exports": [
+        "SignInPage"
+      ],
+      "purpose": "หน้า Google sign-in และ error message จาก OAuth callback"
+    },
+    {
+      "path": "src/app/unsupported-device/page.tsx",
+      "kind": "page",
+      "exports": [
+        "UnsupportedDevicePage"
+      ],
+      "purpose": "หน้าแจ้งว่าฟีเจอร์ scan/inventory/cart ใช้ได้เฉพาะ mobile/tablet"
+    },
+    {
+      "path": "src/app/verify-face/page.tsx",
+      "kind": "page",
+      "exports": [
+        "VerifyFacePage"
+      ],
+      "purpose": "หน้า debug สำหรับ verify face เมื่อเปิด ENABLE_FACE_RECOGNITION_DEBUG"
+    },
+    {
+      "path": "src/app/wallet/actions.ts",
+      "kind": "server-actions",
+      "exports": [
+        "createWalletTopupAction"
+      ],
+      "purpose": "Server Action สำหรับสร้าง Stripe wallet top-up"
+    },
+    {
+      "path": "src/app/wallet/page.tsx",
+      "kind": "page",
+      "exports": [
+        "WalletPage"
+      ],
+      "purpose": "หน้า wallet, balance, ledger และสร้าง Stripe top-up"
+    },
+    {
+      "path": "src/app/wallet/topup/success/page.tsx",
+      "kind": "page",
+      "exports": [
+        "WalletTopupSuccessPage"
+      ],
+      "purpose": "หน้า redirect หลัง Stripe Checkout submit"
+    },
+    {
+      "path": "src/components/account-nav.tsx",
+      "kind": "component",
+      "exports": [
+        "AccountNav"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/authenticated-nav.tsx",
+      "kind": "component",
+      "exports": [
+        "AuthenticatedNav"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/cart-bar.tsx",
+      "kind": "component",
+      "exports": [
+        "CartBar"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/checkout-paid-notice.tsx",
+      "kind": "component",
+      "exports": [
+        "CheckoutPaidNotice"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
     },
     {
       "path": "src/components/face-auth-status-notice.tsx",
-      "kind": "client-component",
-      "exports": ["FaceAuthStatusNotice"],
-      "purpose": "Home-page no-AWS preflight notice for expired face credential bridge token"
+      "kind": "component",
+      "exports": [
+        "FaceAuthStatusNotice"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
     },
     {
       "path": "src/components/face-enrollment-prompt.tsx",
-      "kind": "server-component",
-      "exports": ["FaceEnrollmentPrompt"],
-      "purpose": "Quiet post-login prompt driven by users.faceEnrollmentStatus"
+      "kind": "component",
+      "exports": [
+        "FaceEnrollmentPrompt"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/face-liveness-registration.tsx",
+      "kind": "component",
+      "exports": [
+        "FaceLivenessRegistration"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
     },
     {
       "path": "src/components/face-verification-debug-prompt.tsx",
-      "kind": "server-component",
-      "exports": ["FaceVerificationDebugPrompt"],
-      "purpose": "Debug-only verify CTA gated by ENABLE_FACE_RECOGNITION_DEBUG and user_face_profiles"
+      "kind": "component",
+      "exports": [
+        "FaceVerificationDebugPrompt"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
     },
     {
       "path": "src/components/face-verification-debug.tsx",
-      "kind": "client-component",
-      "exports": ["FaceVerificationDebug"],
-      "purpose": "Explicit-start face verification proof UI with env-configured slow-scan notice and success profile display"
+      "kind": "component",
+      "exports": [
+        "FaceVerificationDebug"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/image-preview-dialog.tsx",
+      "kind": "component",
+      "exports": [
+        "ImageGalleryButton",
+        "ImagePreviewThumbnail"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/image-upload-field.tsx",
+      "kind": "component",
+      "exports": [
+        "ImageUploadField"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/product-card.tsx",
+      "kind": "component",
+      "exports": [
+        "ProductCard"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/quantity-stepper.tsx",
+      "kind": "component",
+      "exports": [
+        "QuantityStepper"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/receipt-document.tsx",
+      "kind": "component",
+      "exports": [
+        "ReceiptDocument"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/theme-toggle.tsx",
+      "kind": "component",
+      "exports": [
+        "ThemeToggle"
+      ],
+      "purpose": "UI component สำหรับ flow หน้าเว็บ"
+    },
+    {
+      "path": "src/components/ui/badge.tsx",
+      "kind": "ui-component",
+      "exports": [],
+      "purpose": "primitive UI component"
+    },
+    {
+      "path": "src/components/ui/button.tsx",
+      "kind": "ui-component",
+      "exports": [],
+      "purpose": "primitive UI component"
+    },
+    {
+      "path": "src/components/ui/card.tsx",
+      "kind": "ui-component",
+      "exports": [],
+      "purpose": "primitive UI component"
+    },
+    {
+      "path": "src/components/ui/separator.tsx",
+      "kind": "ui-component",
+      "exports": [],
+      "purpose": "primitive UI component"
+    },
+    {
+      "path": "src/components/ui/sheet.tsx",
+      "kind": "ui-component",
+      "exports": [],
+      "purpose": "primitive UI component"
+    },
+    {
+      "path": "src/db/db_schema.ts",
+      "kind": "database",
+      "exports": [],
+      "purpose": "database schema/client/seed"
+    },
+    {
+      "path": "src/db/index.ts",
+      "kind": "database",
+      "exports": [
+        "db"
+      ],
+      "purpose": "database schema/client/seed"
+    },
+    {
+      "path": "src/db/schema.ts",
+      "kind": "database",
+      "exports": [
+        "AdminAuditLog",
+        "AttendanceDirection",
+        "AttendanceRecognitionDecision",
+        "AuthMethod",
+        "ClientAttendanceEvent",
+        "ClientVisit",
+        "ClientVisitStatus",
+        "FaceEnrollmentStatus",
+        "FaceLivenessAttempt",
+        "FaceLivenessIntent",
+        "FaceRecognitionOutcome",
+        "Inventory",
+        "IotMqttMessageLogRecord",
+        "IotSessionEventRecord",
+        "IotSessionRecord",
+        "LivenessAttemptStatus",
+        "NewClientAttendanceEvent",
+        "NewClientVisit",
+        "NewFaceLivenessAttempt",
+        "NewInventory",
+        "NewIotMqttMessageLogRecord",
+        "NewIotSessionEventRecord",
+        "NewIotSessionRecord",
+        "NewStripeCustomer",
+        "NewUnit",
+        "NewUser",
+        "NewUserFaceProfile",
+        "NewWallet",
+        "NewWalletLedgerEntry",
+        "NewWalletTopupIntent",
+        "Notification",
+        "Order",
+        "OrderItem",
+        "OrderPayment",
+        "QrCode",
+        "Receipt",
+        "ReceiptItem",
+        "ReceiptStatus",
+        "Role",
+        "RoleGrant",
+        "RoleGrantStatus",
+        "Session",
+        "StoreSettings",
+        "StripeCustomer",
+        "StripeWebhookEvent",
+        "Unit",
+        "User",
+        "UserAccountStatus",
+        "UserFaceProfile",
+        "UserRole",
+        "Wallet",
+        "WalletFundingChannel",
+        "WalletFundingChannelCode",
+        "WalletLedgerDirection",
+        "WalletLedgerEntry",
+        "WalletLedgerType",
+        "WalletStatus",
+        "WalletTopupIntent",
+        "WalletTopupStatus",
+        "adminAuditLogs",
+        "adminAuditLogsRelations",
+        "attendanceDirectionEnum",
+        "attendanceRecognitionDecisionEnum",
+        "authMethodEnum",
+        "clientAttendanceEvents",
+        "clientAttendanceEventsRelations",
+        "clientVisitStatusEnum",
+        "clientVisits",
+        "clientVisitsRelations",
+        "faceEnrollmentStatusEnum",
+        "faceLivenessAttempts",
+        "faceLivenessAttemptsRelations",
+        "faceLivenessIntentEnum",
+        "faceRecognitionOutcomeEnum",
+        "inventories",
+        "inventoriesRelations",
+        "iotMqttMessageLogs",
+        "iotMqttMessageProcessingStatusEnum",
+        "iotSessionEventMessageKindEnum",
+        "iotSessionEventTypeEnum",
+        "iotSessionEvents",
+        "iotSessionEventsRelations",
+        "iotSessionStatusEnum",
+        "iotSessions",
+        "iotSessionsRelations",
+        "livenessAttemptStatusEnum",
+        "notificationRecipientTypeEnum",
+        "notificationSeverityEnum",
+        "notifications",
+        "notificationsRelations",
+        "orderItems",
+        "orderItemsRelations",
+        "orderPaymentMethodEnum",
+        "orderPayments",
+        "orderPaymentsRelations",
+        "orderStatusEnum",
+        "orders",
+        "ordersRelations",
+        "paymentStatusEnum",
+        "qrCodes",
+        "receiptItems",
+        "receiptItemsRelations",
+        "receiptStatusEnum",
+        "receipts",
+        "receiptsRelations",
+        "roleGrantStatusEnum",
+        "roleGrants",
+        "roleGrantsRelations",
+        "roles",
+        "rolesRelations",
+        "sessions",
+        "sessionsRelations",
+        "storeSettings",
+        "stripeCustomers",
+        "stripeCustomersRelations",
+        "stripeWebhookEvents",
+        "stripeWebhookProcessingStatusEnum",
+        "units",
+        "unitsRelations",
+        "userAccountStatusEnum",
+        "userFaceProfiles",
+        "userFaceProfilesRelations",
+        "userRoles",
+        "userRolesRelations",
+        "users",
+        "usersRelations",
+        "walletFundingChannelEnum",
+        "walletFundingChannels",
+        "walletFundingProviderEnum",
+        "walletLedgerDirectionEnum",
+        "walletLedgerEntries",
+        "walletLedgerEntriesRelations",
+        "walletLedgerTypeEnum",
+        "walletStatusEnum",
+        "walletTopupIntents",
+        "walletTopupIntentsRelations",
+        "walletTopupStatusEnum",
+        "wallets",
+        "walletsRelations"
+      ],
+      "purpose": "database schema/client/seed"
+    },
+    {
+      "path": "src/db/seed.ts",
+      "kind": "database",
+      "exports": [],
+      "purpose": "database schema/client/seed"
+    },
+    {
+      "path": "src/lib/auth-shared.ts",
+      "kind": "library",
+      "exports": [
+        "GOOGLE_ID_TOKEN_COOKIE",
+        "GOOGLE_ID_TOKEN_COOKIE_PATH",
+        "GOOGLE_OAUTH_NONCE_COOKIE",
+        "GOOGLE_OAUTH_PKCE_COOKIE",
+        "GOOGLE_OAUTH_STATE_COOKIE",
+        "PUBLIC_PATHS",
+        "SESSION_COOKIE",
+        "SIGN_IN_PATH",
+        "googleIdTokenCookieOptions",
+        "oauthCookieOptions",
+        "sessionCookieOptions"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/auth-tokens.test.ts",
+      "kind": "test",
+      "exports": [],
+      "purpose": "ชุดทดสอบ behavior/contract ของ module"
+    },
+    {
+      "path": "src/lib/auth-tokens.ts",
+      "kind": "library",
+      "exports": [
+        "createOpaqueToken",
+        "createPkceChallenge",
+        "hashSessionToken",
+        "tokensMatch"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/auth.ts",
+      "kind": "library",
+      "exports": [
+        "AuthenticationRequiredError",
+        "getCurrentUser",
+        "hasSameOrigin",
+        "requireCurrentUser"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/aws-face-recognition.ts",
+      "kind": "library",
+      "exports": [
+        "FaceRecognitionConfig",
+        "FaceRecognitionConfigError",
+        "getFaceRecognitionConfig"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/aws-liveness.ts",
+      "kind": "library",
+      "exports": [
+        "GOOGLE_LOGINS_KEY",
+        "LivenessConfig",
+        "LivenessConfigError",
+        "getCognitoIdentityClient",
+        "getLivenessConfig",
+        "getRekognitionClient"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/client-attendance-auth.ts",
+      "kind": "library",
+      "exports": [
+        "ClientAttendanceAuthConfigError",
+        "ClientAttendanceAuthError",
+        "getClientAttendanceMaxImageBytes",
+        "requireClientAttendanceApiKey"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/device.ts",
+      "kind": "library",
+      "exports": [
+        "isMobileOrTabletRequest"
+      ],
+      "purpose": "helper/config/state utility"
     },
     {
       "path": "src/lib/face-camera-cleanup.ts",
-      "kind": "client-hook",
-      "exports": ["stopFaceCameraStreams", "useFaceCameraCleanup"],
-      "purpose": "Best-effort cleanup for Amplify-owned camera streams on completion, unmount, and pagehide"
+      "kind": "library",
+      "exports": [
+        "stopFaceCameraStreams",
+        "useFaceCameraCleanup"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/face-recognition-state.test.ts",
+      "kind": "test",
+      "exports": [],
+      "purpose": "ชุดทดสอบ behavior/contract ของ module"
+    },
+    {
+      "path": "src/lib/face-recognition-state.ts",
+      "kind": "library",
+      "exports": [
+        "FaceMatchDecision",
+        "createExternalImageId",
+        "decideFaceVerification"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/face-token.ts",
+      "kind": "library",
+      "exports": [
+        "FaceTokenStatus",
+        "getFaceTokenStatus"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/format.ts",
+      "kind": "library",
+      "exports": [
+        "formatBaht",
+        "formatPrice"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/google-id-token-claims.ts",
+      "kind": "library",
+      "exports": [
+        "GoogleIdTokenValidationError",
+        "GoogleIdentity",
+        "getGoogleIdentityFromClaims"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/google-id-token.test.ts",
+      "kind": "test",
+      "exports": [],
+      "purpose": "ชุดทดสอบ behavior/contract ของ module"
+    },
+    {
+      "path": "src/lib/google-id-token.ts",
+      "kind": "library",
+      "exports": [
+        "verifyGoogleIdToken"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/iot-api-auth.ts",
+      "kind": "library",
+      "exports": [
+        "IotApiAuthorizationError",
+        "requireIotApiKey"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/liveness-state.test.ts",
+      "kind": "test",
+      "exports": [],
+      "purpose": "ชุดทดสอบ behavior/contract ของ module"
+    },
+    {
+      "path": "src/lib/liveness-state.ts",
+      "kind": "library",
+      "exports": [
+        "LivenessDecision",
+        "LivenessOutcome",
+        "RekognitionLivenessStatus",
+        "attemptStatusForOutcome",
+        "decideLivenessOutcome",
+        "isAttemptReusable"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/money.test.ts",
+      "kind": "test",
+      "exports": [],
+      "purpose": "ชุดทดสอบ behavior/contract ของ module"
+    },
+    {
+      "path": "src/lib/money.ts",
+      "kind": "library",
+      "exports": [
+        "WALLET_CURRENCY",
+        "assertPositiveMinorUnit",
+        "bahtToMinorUnit",
+        "formatMinorBaht"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/permissions.test.ts",
+      "kind": "test",
+      "exports": [],
+      "purpose": "ชุดทดสอบ behavior/contract ของ module"
+    },
+    {
+      "path": "src/lib/permissions.ts",
+      "kind": "library",
+      "exports": [
+        "PermissionSet",
+        "ROLE_CODES",
+        "RoleCode",
+        "canManageTarget",
+        "getHighestRole",
+        "getPermissions",
+        "normalizeRoleCodes"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/qr-image.ts",
+      "kind": "library",
+      "exports": [
+        "generateQrDataUrl"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/qr-payload.ts",
+      "kind": "library",
+      "exports": [
+        "InventoryQrPayload",
+        "decodeInventoryQrPayload",
+        "encodeInventoryQrPayload"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/stripe.ts",
+      "kind": "library",
+      "exports": [
+        "StripeConfigError",
+        "getAppOrigin",
+        "getStripeClient",
+        "getStripeConfig"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/use-hydrated.ts",
+      "kind": "library",
+      "exports": [
+        "useHydrated"
+      ],
+      "purpose": "helper/config/state utility"
     },
     {
       "path": "src/lib/use-suppress-readable-stream-cancel-error.ts",
-      "kind": "client-hook",
+      "kind": "library",
       "exports": [
-        "useSuppressReadableStreamCancelError",
-        "ReadableStreamCancelErrorSilencer"
+        "ReadableStreamCancelErrorSilencer",
+        "useSuppressReadableStreamCancelError"
       ],
-      "purpose": "Suppress known Amplify ReadableStream cancel cleanup noise globally and while camera sessions are active"
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/lib/utils.ts",
+      "kind": "library",
+      "exports": [
+        "cn"
+      ],
+      "purpose": "helper/config/state utility"
+    },
+    {
+      "path": "src/proxy.ts",
+      "kind": "proxy",
+      "exports": [
+        "config",
+        "proxy"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/admin-attendance.service.ts",
+      "kind": "service",
+      "exports": [
+        "AdminAttendanceSummary",
+        "adminAttendanceService"
+      ],
+      "purpose": "admin attendance views และ mock/status operations"
+    },
+    {
+      "path": "src/services/admin-inventory.service.ts",
+      "kind": "service",
+      "exports": [
+        "InventoryAdminData",
+        "adminInventoryService"
+      ],
+      "purpose": "CRUD inventory, units, QR, settings และ admin inventory queries"
+    },
+    {
+      "path": "src/services/admin-user.service.ts",
+      "kind": "service",
+      "exports": [
+        "AdminActor",
+        "AdminAuthorizationError",
+        "AdminRoleGrantSummary",
+        "AdminUserDetail",
+        "AdminUserSummary",
+        "adminUserService"
+      ],
+      "purpose": "admin user management, roles และ account status"
+    },
+    {
+      "path": "src/services/animation.service.ts",
+      "kind": "service",
+      "exports": [
+        "AnimationUser",
+        "animationService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/cart-events.service.ts",
+      "kind": "service",
+      "exports": [
+        "publishCartUpdated",
+        "subscribeCartUpdated"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/cart-sync.service.ts",
+      "kind": "service",
+      "exports": [
+        "cartSyncService"
+      ],
+      "purpose": "เก็บ active cart ต่อ visit ใน Redis ถ้ามี หรือ fallback memory สำหรับ local/dev"
+    },
+    {
+      "path": "src/services/client-attendance.service.ts",
+      "kind": "service",
+      "exports": [
+        "ClientAttendanceRecognitionResult",
+        "clientAttendanceService"
+      ],
+      "purpose": "ประมวลผล camera entry/exit และ visit state"
+    },
+    {
+      "path": "src/services/client-visit.service.ts",
+      "kind": "service",
+      "exports": [
+        "ActiveClientVisitRequiredError",
+        "clientVisitService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/face-enrollment.service.ts",
+      "kind": "service",
+      "exports": [
+        "CredentialBridgeError",
+        "DetectorCredentials",
+        "FaceAlreadyRegisteredError",
+        "FaceAttemptResult",
+        "FaceNotRegisteredError",
+        "LivenessAttemptInProgressError",
+        "LivenessAttemptNotFoundError",
+        "faceEnrollmentService"
+      ],
+      "purpose": "orchestrate Face Liveness sessions/results และ persist recognition outcome"
+    },
+    {
+      "path": "src/services/face-recognition.service.ts",
+      "kind": "service",
+      "exports": [
+        "FaceAlreadyBelongsToAnotherUserError",
+        "FaceCouldNotBeIndexedError",
+        "FaceReferenceImageMissingError",
+        "FaceRegistrationResult",
+        "FaceVerificationResult",
+        "faceRecognitionService"
+      ],
+      "purpose": "Search/Index Rekognition Face Collection และ map FaceId กับ user"
+    },
+    {
+      "path": "src/services/inventory.service.ts",
+      "kind": "service",
+      "exports": [
+        "inventoryService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/iot-event-processor.service.ts",
+      "kind": "service",
+      "exports": [
+        "ProcessIotEventResult",
+        "iotEventProcessorService"
+      ],
+      "purpose": "ประมวลผล IoT/loadcell event ให้เป็น session event"
+    },
+    {
+      "path": "src/services/iot-inventory-catalog.service.ts",
+      "kind": "service",
+      "exports": [
+        "IotInventoryCatalogItem",
+        "ListIotInventoriesInput",
+        "iotInventoryCatalogService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/iot-loadcell-contract.test.ts",
+      "kind": "test",
+      "exports": [],
+      "purpose": "ชุดทดสอบ behavior/contract ของ module"
+    },
+    {
+      "path": "src/services/iot-loadcell-contract.ts",
+      "kind": "service",
+      "exports": [
+        "IotLoadcellMessageKind",
+        "IotLoadcellTopic",
+        "IotNormalizedLoadcellEvent",
+        "loadcellSubscribeTopics",
+        "normalizeLoadcellMessage",
+        "parseLoadcellPayload",
+        "parseLoadcellTopic"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/iot-mqtt-message-handler.test.ts",
+      "kind": "test",
+      "exports": [],
+      "purpose": "ชุดทดสอบ behavior/contract ของ module"
+    },
+    {
+      "path": "src/services/iot-mqtt-message-handler.ts",
+      "kind": "service",
+      "exports": [
+        "IotMqttHandlerLog",
+        "handleIotMqttMessage"
+      ],
+      "purpose": "รับ MQTT payload, validate contract และบันทึก processing log"
+    },
+    {
+      "path": "src/services/iot-mqtt-message-log.contract.ts",
+      "kind": "service",
+      "exports": [
+        "IOT_MQTT_MAX_PAYLOAD_BYTES",
+        "IotMqttMessageLogStatus"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/iot-mqtt-message-log.service.ts",
+      "kind": "service",
+      "exports": [
+        "IOT_MQTT_LOG_RETENTION_DAYS",
+        "iotMqttMessageLogService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/iot-session-events.service.ts",
+      "kind": "service",
+      "exports": [
+        "publishIotSessionUpdated",
+        "subscribeIotSessionUpdated"
+      ],
+      "purpose": "pub/sub IoT session updates ด้วย Redis เมื่อ config พร้อม และ fallback local listeners"
+    },
+    {
+      "path": "src/services/iot-session.service.ts",
+      "kind": "service",
+      "exports": [
+        "IotSession",
+        "IotSessionEventType",
+        "IotSessionStatus",
+        "iotSessionService"
+      ],
+      "purpose": "จัดการ IoT session lifecycle, picked count, door close/error และ cart updates"
+    },
+    {
+      "path": "src/services/iot.service.ts",
+      "kind": "service",
+      "exports": [
+        "IotOpenInventoryResult",
+        "iotService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/mock-iot-server.service.ts",
+      "kind": "service",
+      "exports": [
+        "MockIotServerError",
+        "createMockIotPickSession",
+        "getMockIotProduct",
+        "isMockIotServerEnabled"
+      ],
+      "purpose": "service ฝั่ง mock IoT server"
+    },
+    {
+      "path": "src/services/order-events.service.ts",
+      "kind": "service",
+      "exports": [
+        "publishCheckoutStatus",
+        "subscribeCheckoutStatus"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/order.service.ts",
+      "kind": "service",
+      "exports": [
+        "orderService"
+      ],
+      "purpose": "สร้าง/อ่าน order จาก active visit/cart"
+    },
+    {
+      "path": "src/services/product.service.ts",
+      "kind": "service",
+      "exports": [
+        "productService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/receipt.service.ts",
+      "kind": "service",
+      "exports": [
+        "StoreSettingsInput",
+        "receiptService"
+      ],
+      "purpose": "สร้างและอ่าน receipts หลัง payment/checkout"
+    },
+    {
+      "path": "src/services/role.service.ts",
+      "kind": "service",
+      "exports": [
+        "roleService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/s3-storage.service.ts",
+      "kind": "service",
+      "exports": [
+        "s3StorageService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/store-access.service.ts",
+      "kind": "service",
+      "exports": [
+        "StoreScanEligibility",
+        "StoreScanNotAllowedError",
+        "storeAccessService"
+      ],
+      "purpose": "ตัดสินสิทธิ์ scan จาก active visit, wallet balance และ inventory availability"
+    },
+    {
+      "path": "src/services/user.service.ts",
+      "kind": "service",
+      "exports": [
+        "AccountNotActiveError",
+        "OAuthIdentityConflictError",
+        "userService"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/services/wallet.service.ts",
+      "kind": "service",
+      "exports": [
+        "WalletInsufficientBalanceError",
+        "walletService"
+      ],
+      "purpose": "wallet, ledger, Stripe top-up และ checkout debit"
+    },
+    {
+      "path": "src/store/cart.ts",
+      "kind": "client-store",
+      "exports": [
+        "selectTotalCount",
+        "selectTotalPrice",
+        "useCartStore"
+      ],
+      "purpose": "client state store"
+    },
+    {
+      "path": "src/types/index.ts",
+      "kind": "source",
+      "exports": [
+        "CartItem",
+        "IotTransaction"
+      ],
+      "purpose": "source file"
+    },
+    {
+      "path": "src/types/qrcode.d.ts",
+      "kind": "source",
+      "exports": [
+        "toDataURL"
+      ],
+      "purpose": "source file"
     }
   ],
-  "routes": {
-    "pages": [
-      { "path": "/", "file": "src/app/page.tsx", "rendering": "server" },
-      {
-        "path": "/shelf/[id]",
-        "file": "src/app/shelf/[id]/page.tsx",
-        "rendering": "server"
-      },
-      {
-        "path": "/cart",
-        "file": "src/app/cart/page.tsx",
-        "rendering": "client"
-      },
-      {
-        "path": "/signin",
-        "file": "src/app/signin/page.tsx",
-        "rendering": "server"
-      },
-      {
-        "path": "/register-face",
-        "file": "src/app/register-face/page.tsx",
-        "rendering": "server"
-      },
-      {
-        "path": "/verify-face",
-        "file": "src/app/verify-face/page.tsx",
-        "rendering": "server"
-      }
-    ],
-    "api": [
-      {
-        "method": "GET",
-        "path": "/api/shelf/[id]",
-        "file": "src/app/api/shelf/[id]/route.ts"
-      },
-      {
-        "method": "GET",
-        "path": "/api/auth/signin/google",
-        "file": "src/app/api/auth/signin/google/route.ts"
-      },
-      {
-        "method": "GET",
-        "path": "/api/auth/callback/google",
-        "file": "src/app/api/auth/callback/google/route.ts"
-      },
-      {
-        "method": "POST",
-        "path": "/api/auth/signout",
-        "file": "src/app/api/auth/signout/route.ts"
-      },
-      {
-        "method": "GET",
-        "path": "/api/face/auth-status",
-        "file": "src/app/api/face/auth-status/route.ts"
-      },
-      {
-        "method": "GET",
-        "path": "/api/face/credentials",
-        "file": "src/app/api/face/credentials/route.ts"
-      },
-      {
-        "method": "POST",
-        "path": "/api/face/session",
-        "file": "src/app/api/face/session/route.ts",
-        "body": { "intent": "optional: enrollment | verification" }
-      },
-      {
-        "method": "POST",
-        "path": "/api/face/result",
-        "file": "src/app/api/face/result/route.ts",
-        "body": { "sessionId": "string" }
-      }
-    ],
-    "proxy": {
-      "file": "src/proxy.ts",
-      "purpose": "Optimistic page auth redirect; API routes must call requireCurrentUser themselves"
-    }
-  },
-  "dataModel": {
+  "schema": {
     "tables": [
-      "users",
-      "sessions",
-      "face_liveness_attempts",
-      "user_face_profiles",
-      "shelves",
-      "products",
-      "shelf_products"
+      {
+        "symbol": "users",
+        "table": "users"
+      },
+      {
+        "symbol": "roles",
+        "table": "roles"
+      },
+      {
+        "symbol": "userRoles",
+        "table": "user_roles"
+      },
+      {
+        "symbol": "roleGrants",
+        "table": "role_grants"
+      },
+      {
+        "symbol": "adminAuditLogs",
+        "table": "admin_audit_logs"
+      },
+      {
+        "symbol": "sessions",
+        "table": "sessions"
+      },
+      {
+        "symbol": "faceLivenessAttempts",
+        "table": "face_liveness_attempts"
+      },
+      {
+        "symbol": "userFaceProfiles",
+        "table": "user_face_profiles"
+      },
+      {
+        "symbol": "clientAttendanceEvents",
+        "table": "client_attendance_events"
+      },
+      {
+        "symbol": "clientVisits",
+        "table": "client_visits"
+      },
+      {
+        "symbol": "units",
+        "table": "units"
+      },
+      {
+        "symbol": "inventories",
+        "table": "inventories"
+      },
+      {
+        "symbol": "qrCodes",
+        "table": "qr_codes"
+      },
+      {
+        "symbol": "orders",
+        "table": "orders"
+      },
+      {
+        "symbol": "orderItems",
+        "table": "order_items"
+      },
+      {
+        "symbol": "storeSettings",
+        "table": "store_settings"
+      },
+      {
+        "symbol": "receipts",
+        "table": "receipts"
+      },
+      {
+        "symbol": "receiptItems",
+        "table": "receipt_items"
+      },
+      {
+        "symbol": "iotSessions",
+        "table": "iot_sessions"
+      },
+      {
+        "symbol": "iotSessionEvents",
+        "table": "iot_session_events"
+      },
+      {
+        "symbol": "iotMqttMessageLogs",
+        "table": "iot_mqtt_message_logs"
+      },
+      {
+        "symbol": "wallets",
+        "table": "wallets"
+      },
+      {
+        "symbol": "walletLedgerEntries",
+        "table": "wallet_ledger_entries"
+      },
+      {
+        "symbol": "stripeCustomers",
+        "table": "stripe_customers"
+      },
+      {
+        "symbol": "walletFundingChannels",
+        "table": "wallet_funding_channels"
+      },
+      {
+        "symbol": "walletTopupIntents",
+        "table": "wallet_topup_intents"
+      },
+      {
+        "symbol": "stripeWebhookEvents",
+        "table": "stripe_webhook_events"
+      },
+      {
+        "symbol": "orderPayments",
+        "table": "order_payments"
+      },
+      {
+        "symbol": "notifications",
+        "table": "notifications"
+      }
     ],
-    "enums": {
-      "auth_method": ["google", "facebook", "line", "apple", "credentials"],
-      "face_enrollment_status": ["not_registered", "pending", "registered"],
-      "liveness_attempt_status": [
-        "pending",
-        "succeeded",
-        "failed",
-        "expired",
-        "cancelled"
-      ],
-      "face_liveness_intent": ["enrollment", "verification"],
-      "face_recognition_outcome": [
-        "registered",
-        "verified",
-        "mismatch",
-        "duplicate",
-        "not_indexed"
-      ]
-    },
-    "recognitionMapping": {
-      "table": "user_face_profiles",
-      "ownerKey": "user_id",
-      "awsCollectionKey": "collection_id",
-      "awsFaceKey": "face_id",
-      "note": "Application DB stores Rekognition IDs and ownership metadata, not face vectors."
-    }
-  },
-  "faceRecognitionFlow": {
-    "enrollment": [
-      "CreateFaceLivenessSession",
-      "StartFaceLivenessSession",
-      "GetFaceLivenessSessionResults",
-      "SearchFacesByImage duplicate check",
-      "IndexFaces when no existing match",
-      "Insert user_face_profiles and mark user registered"
+    "enums": [
+      {
+        "symbol": "authMethodEnum",
+        "enum": "auth_method"
+      },
+      {
+        "symbol": "userAccountStatusEnum",
+        "enum": "user_account_status"
+      },
+      {
+        "symbol": "roleGrantStatusEnum",
+        "enum": "role_grant_status"
+      },
+      {
+        "symbol": "faceEnrollmentStatusEnum",
+        "enum": "face_enrollment_status"
+      },
+      {
+        "symbol": "livenessAttemptStatusEnum",
+        "enum": "liveness_attempt_status"
+      },
+      {
+        "symbol": "faceLivenessIntentEnum",
+        "enum": "face_liveness_intent"
+      },
+      {
+        "symbol": "faceRecognitionOutcomeEnum",
+        "enum": "face_recognition_outcome"
+      },
+      {
+        "symbol": "attendanceDirectionEnum",
+        "enum": "attendance_direction"
+      },
+      {
+        "symbol": "attendanceRecognitionDecisionEnum",
+        "enum": "attendance_recognition_decision"
+      },
+      {
+        "symbol": "clientVisitStatusEnum",
+        "enum": "client_visit_status"
+      },
+      {
+        "symbol": "orderStatusEnum",
+        "enum": "order_status"
+      },
+      {
+        "symbol": "paymentStatusEnum",
+        "enum": "payment_status"
+      },
+      {
+        "symbol": "walletStatusEnum",
+        "enum": "wallet_status"
+      },
+      {
+        "symbol": "walletLedgerDirectionEnum",
+        "enum": "wallet_ledger_direction"
+      },
+      {
+        "symbol": "walletLedgerTypeEnum",
+        "enum": "wallet_ledger_type"
+      },
+      {
+        "symbol": "walletFundingProviderEnum",
+        "enum": "wallet_funding_provider"
+      },
+      {
+        "symbol": "walletFundingChannelEnum",
+        "enum": "wallet_funding_channel"
+      },
+      {
+        "symbol": "walletTopupStatusEnum",
+        "enum": "wallet_topup_status"
+      },
+      {
+        "symbol": "stripeWebhookProcessingStatusEnum",
+        "enum": "stripe_webhook_processing_status"
+      },
+      {
+        "symbol": "orderPaymentMethodEnum",
+        "enum": "order_payment_method"
+      },
+      {
+        "symbol": "receiptStatusEnum",
+        "enum": "receipt_status"
+      },
+      {
+        "symbol": "notificationRecipientTypeEnum",
+        "enum": "notification_recipient_type"
+      },
+      {
+        "symbol": "notificationSeverityEnum",
+        "enum": "notification_severity"
+      },
+      {
+        "symbol": "iotSessionStatusEnum",
+        "enum": "iot_session_status"
+      },
+      {
+        "symbol": "iotSessionEventMessageKindEnum",
+        "enum": "iot_session_event_message_kind"
+      },
+      {
+        "symbol": "iotSessionEventTypeEnum",
+        "enum": "iot_session_event_type"
+      },
+      {
+        "symbol": "iotMqttMessageProcessingStatusEnum",
+        "enum": "iot_mqtt_message_processing_status"
+      }
     ],
-    "verification": [
-      "Create/reuse liveness session with intent=verification",
-      "GetFaceLivenessSessionResults",
-      "SearchFacesByImage",
-      "Map FaceId through user_face_profiles",
-      "Accept only when matched userId equals current user and similarity >= AWS_FACE_MATCH_THRESHOLD"
+    "types": [
+      "Inventory",
+      "NewInventory",
+      "QrCode",
+      "Unit",
+      "NewUnit",
+      "Order",
+      "OrderItem",
+      "StoreSettings",
+      "Receipt",
+      "ReceiptItem",
+      "IotSessionRecord",
+      "NewIotSessionRecord",
+      "IotSessionEventRecord",
+      "NewIotSessionEventRecord",
+      "IotMqttMessageLogRecord",
+      "NewIotMqttMessageLogRecord",
+      "Wallet",
+      "NewWallet",
+      "WalletLedgerEntry",
+      "NewWalletLedgerEntry",
+      "StripeCustomer",
+      "NewStripeCustomer",
+      "WalletFundingChannel",
+      "WalletTopupIntent",
+      "NewWalletTopupIntent",
+      "StripeWebhookEvent",
+      "OrderPayment",
+      "Notification",
+      "User",
+      "NewUser",
+      "Session",
+      "Role",
+      "UserRole",
+      "RoleGrant",
+      "AdminAuditLog",
+      "FaceLivenessAttempt",
+      "NewFaceLivenessAttempt",
+      "UserFaceProfile",
+      "NewUserFaceProfile",
+      "ClientAttendanceEvent",
+      "NewClientAttendanceEvent",
+      "ClientVisit",
+      "NewClientVisit",
+      "AuthMethod",
+      "UserAccountStatus",
+      "RoleGrantStatus",
+      "FaceEnrollmentStatus",
+      "LivenessAttemptStatus",
+      "FaceLivenessIntent",
+      "FaceRecognitionOutcome",
+      "AttendanceDirection",
+      "AttendanceRecognitionDecision",
+      "ClientVisitStatus",
+      "WalletStatus",
+      "WalletLedgerDirection",
+      "WalletLedgerType",
+      "WalletFundingChannelCode",
+      "WalletTopupStatus",
+      "ReceiptStatus"
     ]
   },
-  "auth": {
-    "provider": "google",
-    "sessionCookie": "atk_session",
-    "sessionStrategy": "database opaque token in httpOnly cookie; SHA-256 hash at rest",
-    "faceCredentialBridge": "path-scoped Google ID token cookie -> Cognito Identity Pool -> StartFaceLivenessSession-scoped temporary credentials"
-  },
-  "envKeys": [
-    "DATABASE_URL",
-    "AUTH_URL",
-    "GOOGLE_CLIENT_ID",
-    "GOOGLE_CLIENT_SECRET",
-    "AWS_PROFILE",
-    "AWS_LIVENESS_REGION",
-    "AWS_LIVENESS_OUTPUT_BUCKET",
-    "AWS_LIVENESS_OUTPUT_PREFIX",
-    "AWS_LIVENESS_SCORE_THRESHOLD",
-    "AWS_LIVENESS_AUDIT_IMAGES_LIMIT",
-    "NEXT_PUBLIC_AWS_LIVENESS_REGION",
-    "NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID",
-    "AWS_FACE_COLLECTION_ID",
-    "AWS_FACE_MATCH_THRESHOLD",
-    "ENABLE_FACE_RECOGNITION_DEBUG",
-    "FACE_RECOGNITION_DEBUG_TIMEOUT_MS"
-  ],
-  "todos": [
-    {
-      "tag": "payment",
-      "where": "src/app/cart/page.tsx",
-      "desc": "Real checkout / payment"
-    },
-    {
-      "tag": "order",
-      "where": "src/app/cart/page.tsx",
-      "desc": "Persist client cart to order table"
-    }
-  ]
+  "redis": {
+    "optional": true,
+    "env": [
+      "REDIS_HOST",
+      "REDIS_PORT",
+      "REDIS_USERNAME",
+      "REDIS_PASSWORD",
+      "REDIS_DB",
+      "REDIS_TLS"
+    ],
+    "uses": [
+      {
+        "file": "src/services/cart-sync.service.ts",
+        "purpose": "active cart/session persistence; fallback memory when Redis is not configured or command fails"
+      },
+      {
+        "file": "src/services/iot-session-events.service.ts",
+        "purpose": "IoT session pub/sub fan-out for SSE; fallback local listeners when Redis is not configured/unavailable"
+      }
+    ],
+    "unavailableImpact": [
+      "single-process local flow can continue via memory/local listeners",
+      "cart/session state is not shared across app instances",
+      "SSE updates from IoT events may not fan out across processes",
+      "memory fallback is volatile and disappears on restart"
+    ]
+  }
 }

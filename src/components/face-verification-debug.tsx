@@ -238,12 +238,12 @@ export function FaceVerificationDebug({
         title="เซสชันหมดอายุ"
         description="กรุณาเข้าสู่ระบบอีกครั้งก่อนทดสอบยืนยันใบหน้า"
       >
-        <Link
+        <a
           href="/api/auth/signin/google"
           className={buttonVariants({ size: "lg", className: "w-full" })}
         >
           เข้าสู่ระบบอีกครั้ง
-        </Link>
+        </a>
       </ResultShell>
     );
   }

@@ -211,12 +211,12 @@ export function FaceLivenessRegistration({
         title="เซสชันหมดอายุ"
         description="กรุณาเข้าสู่ระบบอีกครั้งเพื่อลงทะเบียนใบหน้า"
         action={
-          <Link
+          <a
             href="/api/auth/signin/google"
             className={buttonVariants({ size: "lg", className: "w-full" })}
           >
             เข้าสู่ระบบอีกครั้ง
-          </Link>
+          </a>
         }
       />
     );

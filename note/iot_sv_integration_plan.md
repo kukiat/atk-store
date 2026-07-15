@@ -64,11 +64,13 @@
         - method
             - POST
         - Endpoint
-            - /set-topic
+            - /pick-sessions
         - payload
         ```jsonc
         {
-            "uuid":"xxxx"
+            "uuid":"xxxx",
+            "email":"customer@example.com",
+            "sku":"inventory-id"
         }
         ```
     4. app start to subscripe 2 MQTT topic according format

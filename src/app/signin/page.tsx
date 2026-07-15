@@ -1,5 +1,4 @@
 import { AlertCircle, ScanLine, ShieldCheck } from "lucide-react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
@@ -90,7 +89,7 @@ export default async function SignInPage({
           </div>
         )}
 
-        <Link
+        <a
           href={GOOGLE_SIGN_IN_URL}
           className={buttonVariants({
             variant: "outline",
@@ -100,7 +99,7 @@ export default async function SignInPage({
         >
           <GoogleIcon className="size-5" />
           เข้าสู่ระบบด้วย Google
-        </Link>
+        </a>
 
         <div className="text-muted-foreground mt-6 flex items-center justify-center gap-1.5 text-xs">
           <ShieldCheck className="size-3.5" />

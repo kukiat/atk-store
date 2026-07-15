@@ -9,9 +9,9 @@ import { inventories, notifications, type User } from "@/db/schema";
 import { clientVisitService } from "@/services/client-visit.service";
 import { iotSessionService } from "@/services/iot-session.service";
 import {
+  createMockIotPickSession,
   getMockIotProduct,
   isMockIotServerEnabled,
-  setMockIotTopic,
 } from "@/services/mock-iot-server.service";
 import type { CartItem } from "@/types";
 
@@ -78,7 +78,7 @@ class IotService {
     const sessionId = randomUUID();
     const branchCode = getBranchCode();
     const productConfig = await this.getIotProductConfig(inventoryMaster.id);
-    await this.setIotTopic({
+    await this.createIotPickSession({
       uuid: sessionId,
       email: user.email,
       sku: inventoryMaster.id,
@@ -181,23 +181,29 @@ class IotService {
     };
   }
 
-  private async setIotTopic(input: { uuid: string; email: string; sku: string }) {
+  private async createIotPickSession(input: {
+    uuid: string;
+    email: string;
+    sku: string;
+  }) {
     if (isMockIotServerEnabled()) {
-      await setMockIotTopic(input);
+      await createMockIotPickSession(input);
       return;
     }
 
     const iotServerUrl = getIotServerUrl();
     if (!iotServerUrl) return;
 
-    const response = await fetch(`${iotServerUrl}/set-topic`, {
+    const response = await fetch(`${iotServerUrl}/pick-sessions`, {
       method: "POST",
       headers: getIotHeaders(),
       body: JSON.stringify(input),
     });
 
     if (!response.ok) {
-      throw new Error(`IOT set-topic failed with status ${response.status}`);
+      throw new Error(
+        `IOT pick-sessions failed with status ${response.status}`,
+      );
     }
   }
 

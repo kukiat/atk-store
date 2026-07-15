@@ -39,7 +39,7 @@ flowchart LR
   Web --> Stripe["Stripe\nWallet top-up"]
   Web --> AWS["AWS\nRekognition + S3 + Cognito"]
   Camera["📷 กล้องเข้า/ออก"] -->|"API key + image"| Web
-  Web --> IotServer["IoT server\nproduct + set-topic"]
+  Web --> IotServer["IoT server\nproduct + pick-sessions"]
   IotServer -->|"MQTT loadcell event/status"| Broker["MQTT broker"]
   Broker --> Worker["MQTT worker\nmock/reference"]
   Worker --> DB
@@ -210,7 +210,7 @@ sequenceDiagram
   Camera->>App: ยืนยันตัวตนขาเข้า
   App->>App: สร้าง active visit
   Customer->>App: สแกน QR และเลือกสินค้า
-  App->>Iot: GET product + POST set-topic(UUID)
+  App->>Iot: GET product + POST pick-sessions(uuid, email, sku)
   App->>App: สร้าง IoT session
   Iot->>MQTT: pickedQty / shelf_closed
   MQTT->>App: MQTT worker รับ event
@@ -411,4 +411,3 @@ npm run db:migrate
 | MQTT worker ต่อ broker ไม่ได้ | ตรวจ `MQTT_ENABLED=true`, URL/port/credentials และ `docker compose ps` สำหรับ Mosquitto local |
 | Redis local ไม่ทำงาน | local dev จะ fallback เป็น memory; สำหรับหลาย instance ต้องตั้ง Redis ที่เข้าถึงได้จริง |
 | Face / wallet ทำงานไม่ครบ | เป็น integration ภายนอก ต้องตั้ง AWS/Cognito/S3 หรือ Stripe variables ให้ครบตาม feature |
-

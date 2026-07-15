@@ -14,7 +14,10 @@ async function signOut(request: NextRequest) {
     await userService.deleteSession(token);
   }
 
-  const response = NextResponse.redirect(new URL(SIGN_IN_PATH, request.url));
+  // The server may be bound to 0.0.0.0 (for example inside Docker), which
+  // makes request.url unsuitable as the public redirect origin.
+  const appUrl = process.env.AUTH_URL ?? request.url;
+  const response = NextResponse.redirect(new URL(SIGN_IN_PATH, appUrl));
   response.cookies.delete(SESSION_COOKIE);
   return response;
 }

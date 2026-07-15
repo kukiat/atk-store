@@ -1,142 +1,116 @@
 # 05 — Routes & Request Flow
 
-App Router routes under `src/app`.
+Generated: 2026-07-15 Asia/Bangkok
 
 ## Pages
 
-| Route            | File                             | Rendering      | Description                                                                            |
-| ---------------- | -------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
-| `/`              | `src/app/page.tsx`               | Server (async) | Landing; greets signed-in user + sign-out; links to demo shelves                       |
-| `/shelf/[id]`    | `src/app/shelf/[id]/page.tsx`    | Server (async) | Products on a shelf; `notFound()` if shelf missing                                     |
-| `/cart`          | `src/app/cart/page.tsx`          | Client         | Cart review; qty edit, total, disabled checkout                                        |
-| `/signin`        | `src/app/signin/page.tsx`        | Server (async) | Google sign-in page; shows `?error=` messages                                          |
-| `/register-face` | `src/app/register-face/page.tsx` | Server (async) | Gated face-enrollment page; shows already-registered state or the client liveness flow |
-| `/verify-face`   | `src/app/verify-face/page.tsx`   | Server (async) | Debug-only face verification page; requires env flag + signed-in user + face profile   |
+| Route | Rendering | File | Description |
+| --- | --- | --- | --- |
+| / | Server | src/app/page.tsx | Home หลัง sign-in แสดงสถานะ face, checkout notice, scan eligibility และทางเข้า scan/cart |
+| /admin | Server | src/app/admin/page.tsx | Dashboard หลังบ้านสำหรับ admin/super admin |
+| /admin/attendance | Server | src/app/admin/attendance/page.tsx | backdoor/mock หน้า attendance สำหรับทดสอบ entry/exit/status |
+| /admin/inventory | Server | src/app/admin/inventory/page.tsx | หลังบ้าน inventory overview |
+| /admin/inventory/groups | Server | src/app/admin/inventory/groups/page.tsx | redirect compatibility ไปหน้า QR/groups ใหม่ |
+| /admin/inventory/iot-poc | Server | src/app/admin/inventory/iot-poc/page.tsx | backdoor/mock ส่ง IoT/MQTT event และจำลองสถานะ loadcell |
+| /admin/inventory/items | Server | src/app/admin/inventory/items/page.tsx | จัดการ inventory items |
+| /admin/inventory/orders | Server | src/app/admin/inventory/orders/page.tsx | ดู orders และสถานะคำสั่งซื้อ |
+| /admin/inventory/qr | Server | src/app/admin/inventory/qr/page.tsx | สร้าง/จัดการ QR สำหรับ inventory เดี่ยวหรือ grouped QR |
+| /admin/inventory/receipt-settings | Server | src/app/admin/inventory/receipt-settings/page.tsx | ตั้งค่า store/receipt |
+| /admin/inventory/shelfs | Server | src/app/admin/inventory/shelfs/page.tsx | redirect compatibility ของคำว่า shelfs |
+| /admin/inventory/units | Server | src/app/admin/inventory/units/page.tsx | จัดการหน่วยสินค้า |
+| /admin/users | Server | src/app/admin/users/page.tsx | จัดการ user, account status และ roles |
+| /admin/users/[id] | Server | src/app/admin/users/[id]/page.tsx | รายละเอียด user, roles, wallet และ audit context |
+| /admin/wallets | Server | src/app/admin/wallets/page.tsx | ตรวจ wallet และ ledger ในระบบหลังบ้าน |
+| /cart | Client | src/app/cart/page.tsx | ตะกร้าของ active visit อ่านจาก server-side cart sync และรอ checkout จาก exit camera |
+| /inventory/[id] | Server | src/app/inventory/[id]/page.tsx | หน้ารายละเอียด inventory และเปิด IoT session เพื่อหยิบสินค้า |
+| /receipts | Server | src/app/receipts/page.tsx | รายการ receipts ของผู้ใช้ |
+| /receipts/[receiptNo] | Server | src/app/receipts/[receiptNo]/page.tsx | รายละเอียด receipt และเอกสารใบเสร็จ |
+| /register-face | Server | src/app/register-face/page.tsx | หน้าลงทะเบียน Face Liveness สำหรับผู้ใช้ที่ยังไม่ registered |
+| /scan | Server | src/app/scan/page.tsx | หน้าเปิดกล้อง scan inventory/grouped QR โดยตรวจ store eligibility ก่อน |
+| /scan/inventories | Server | src/app/scan/inventories/page.tsx | หน้ารายการ inventory สำหรับ fallback/manual scan flow |
+| /scan/shelves | Server | src/app/scan/shelves/page.tsx | หน้า legacy/backdoor ของ shelves catalog |
+| /shelf/[id] | Server | src/app/shelf/[id]/page.tsx | หน้า shelf legacy compatibility |
+| /signin | Server | src/app/signin/page.tsx | หน้า Google sign-in และ error message จาก OAuth callback |
+| /unsupported-device | Server | src/app/unsupported-device/page.tsx | หน้าแจ้งว่าฟีเจอร์ scan/inventory/cart ใช้ได้เฉพาะ mobile/tablet |
+| /verify-face | Server | src/app/verify-face/page.tsx | หน้า debug สำหรับ verify face เมื่อเปิด ENABLE_FACE_RECOGNITION_DEBUG |
+| /wallet | Server | src/app/wallet/page.tsx | หน้า wallet, balance, ledger และสร้าง Stripe top-up |
+| /wallet/topup/success | Server | src/app/wallet/topup/success/page.tsx | หน้า redirect หลัง Stripe Checkout submit |
 
-## API
+## Route Handlers
 
-| Method & Route                  | File                                        | Returns                                                                                                                                                                                                          |
-| ------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /api/shelf/[id]`           | `src/app/api/shelf/[id]/route.ts`           | `200` shelf+products JSON, or `404 { error }`                                                                                                                                                                    |
-| `GET /api/auth/signin/google`   | `src/app/api/auth/signin/google/route.ts`   | Creates state/PKCE/nonce cookies then `302` redirects to Google OAuth                                                                                                                                            |
-| `GET /api/auth/callback/google` | `src/app/api/auth/callback/google/route.ts` | Validates state/PKCE/nonce and Google ID token → upserts verified provider identity, sets session cookie, `302` to `/` (or `/signin?error=`)                                                                     |
-| `POST /api/auth/signout`        | `src/app/api/auth/signout/route.ts`         | Same-origin only; deletes session, clears cookie, `302` to `/signin`                                                                                                                                             |
-| `GET /api/face/auth-status`     | `src/app/api/face/auth-status/route.ts`     | Auth only; cheap preflight for the path-scoped Google ID token used by Cognito bridge. No AWS calls. `200 ready`, `409 reauth`, `401 unauthorized`                                                               |
-| `GET /api/face/credentials`     | `src/app/api/face/credentials/route.ts`     | Auth only; exchanges the path-scoped Google ID token cookie for short-lived `StartFaceLivenessSession`-scoped creds. `401`/`409` (reauth)/`500`                                                                  |
-| `POST /api/face/session`        | `src/app/api/face/session/route.ts`         | Auth + same-origin; creates/reuses one liveness session for optional `{ intent: "enrollment" \| "verification" }` → `{ sessionId, intent }`. `409` already registered / not registered / another attempt pending |
-| `POST /api/face/result`         | `src/app/api/face/result/route.ts`          | Auth + same-origin; reads one owned result (Rekognition `Get` at most once, never polls), then registers/verifies in Face Collection → `{ outcome, confidence?, reason?, recognition? }`. `404` wrong owner      |
+| Methods | Route | File | Description |
+| --- | --- | --- | --- |
+| GET | /api/animation-api/users | src/app/api/animation-api/users/route.ts | API สำหรับ animation/demo user feed |
+| GET | /api/auth/callback/google | src/app/api/auth/callback/google/route.ts | รับ OAuth callback, validate ID token, upsert user และเปิด DB session |
+| GET | /api/auth/signin/google | src/app/api/auth/signin/google/route.ts | เริ่ม Google OAuth ด้วย state, PKCE และ nonce cookies |
+| POST | /api/auth/signout | src/app/api/auth/signout/route.ts | ปิด session และ clear cookies |
+| GET | /api/cart/active | src/app/api/cart/active/route.ts | อ่าน active cart จาก cart sync |
+| POST | /api/client-attendance/exit-order | src/app/api/client-attendance/exit-order/route.ts | Camera API สำหรับ exit แล้ว trigger wallet checkout |
+| POST | /api/client-attendance/recognize | src/app/api/client-attendance/recognize/route.ts | Camera API สำหรับ entry/sighting recognition |
+| GET | /api/face/auth-status | src/app/api/face/auth-status/route.ts | ตรวจ token bridge สำหรับ Face Liveness แบบไม่เรียก AWS |
+| GET | /api/face/credentials | src/app/api/face/credentials/route.ts | แลก Google ID token cookie เป็น Cognito temporary credentials |
+| POST | /api/face/result | src/app/api/face/result/route.ts | อ่านผล liveness และ register/verify กับ Face Collection |
+| POST | /api/face/session | src/app/api/face/session/route.ts | สร้าง/reuse Rekognition Face Liveness session สำหรับ enrollment/verification |
+| GET | /api/health-check | src/app/api/health-check/route.ts | health check endpoint |
+| GET | /api/iot/catalog/inventories | src/app/api/iot/catalog/inventories/route.ts | catalog inventory สำหรับ scan/admin |
+| GET | /api/iot/catalog/shelves | src/app/api/iot/catalog/shelves/route.ts | legacy shelf catalog endpoint ที่ตอบ gone/removed |
+| POST | /api/iot/events | src/app/api/iot/events/route.ts | รับ IoT/loadcell event จากอุปกรณ์หรือ worker |
+| POST | /api/iot/mock-events | src/app/api/iot/mock-events/route.ts | backdoor/mock ส่ง IoT event จาก browser/admin |
+| GET | /api/iot/sessions/[sessionId] | src/app/api/iot/sessions/[sessionId]/route.ts | อ่านสถานะ IoT session |
+| GET | /api/iot/sessions/[sessionId]/events | src/app/api/iot/sessions/[sessionId]/events/route.ts | SSE แจ้ง IoT session updates |
+| POST | /api/iot/watch | src/app/api/iot/watch/route.ts | เปิด IoT watch/session หลัง scan inventory QR |
+| POST | /api/mock-iot-server/pick-sessions | src/app/api/mock-iot-server/pick-sessions/route.ts | mock IoT server ดึง pick sessions |
+| GET | /api/mock-iot-server/product/[productId] | src/app/api/mock-iot-server/product/[productId]/route.ts | mock IoT server อ่าน product config สำหรับอุปกรณ์จำลอง |
+| POST | /api/mock-iot-server/shelves/open | src/app/api/mock-iot-server/shelves/open/route.ts | legacy mock shelf open endpoint ที่ถูกถอดออก |
+| GET | /api/orders/active-visit-events | src/app/api/orders/active-visit-events/route.ts | SSE แจ้ง active visit/cart/checkout changes |
+| GET | /api/orders/active-visit-status | src/app/api/orders/active-visit-status/route.ts | อ่าน active visit/cart/checkout status ของผู้ใช้ |
+| POST | /api/qr/decode | src/app/api/qr/decode/route.ts | decode QR payload/image สำหรับ scan flow |
+| GET | /api/shelf/[id] | src/app/api/shelf/[id]/route.ts | legacy shelf endpoint ที่ตอบ gone/removed |
+| POST | /api/stripe/webhook | src/app/api/stripe/webhook/route.ts | รับ Stripe webhook สำหรับ wallet top-up |
+| GET | /inventories | src/app/inventories/route.ts | alias compatibility ของ inventory catalog |
 
-## Route protection (`src/proxy.ts`)
+## Server Actions
 
-Next.js 16 renamed `middleware` → **proxy**. The `proxy.ts` runs an optimistic
-cookie-presence check on every matched route:
+| File | Exports | Purpose |
+| --- | --- | --- |
+| src/app/admin/actions.ts | blockUserAction, createQrCodeAction, deleteInventoryAction, deleteQrCodeAction, deleteUnitAction, disableUserAction, grantAdminRoleAction, importInventoriesAction, resetFaceEnrollmentAction, revokeAdminRoleAction, saveInventoryAction, saveUnitAction, setManualAttendanceStatusAction, unblockUserAction | Server Actions สำหรับ admin user, roles, face reset, attendance override, inventory/unit/QR |
+| src/app/admin/inventory/iot-poc/actions.ts | sendMockDoorClosedAction, sendMockFinalCountAction, sendMockPickedCountAction | Server Actions สำหรับส่ง mock IoT/MQTT events |
+| src/app/admin/inventory/receipt-settings/actions.ts | updateReceiptSettingsAction | Server Action สำหรับบันทึก receipt/store settings |
+| src/app/wallet/actions.ts | createWalletTopupAction | Server Action สำหรับสร้าง Stripe wallet top-up |
 
-- no `atk_session` cookie + protected route → redirect to `/signin`
-- has cookie + `/signin` → redirect to `/`
+## Primary Customer Flow
 
-Matcher excludes `api`, `_next/static`, `_next/image`, `favicon.ico`, and `*.svg`.
-The real database-backed check is `getCurrentUser()` (`src/lib/auth.ts`). Private
-Route Handlers and Server Actions must use `requireCurrentUser()` themselves;
-the proxy does not protect API routes.
-
-## Dynamic segments
-
-- `[id]` in `/shelf/[id]` and `/api/shelf/[id]` → shelf code (normalized: trimmed + uppercased in `shelfService`).
-- `params` is a `Promise` (Next.js 16) — `await params` before use.
-
-## Primary user flow
-
-```
-QR on shelf  →  /shelf/A12 (Server Component)
-                   │  shelfService.getShelfWithProducts("A12")
-                   │     → db (Drizzle join shelf_products → products, order by position)
-                   ▼
-              ProductCard list  →  "ใส่ตะกร้า" → useCartStore.addItem()
-                   │                                  (persist → localStorage "atk-cart")
-                   ▼
-              CartBar (count/total, hydration-gated)  →  /cart
-                   ▼
-              CartPage: edit qty / remove / total  →  checkout (disabled, TODO)
-```
-
-## Data-access layering
-
-```
-Server Component  ┐
-                  ├─►  shelfService / productService  ─►  db (Drizzle)  ─►  Postgres
-API Route Handler ┘            (server-only)
-```
-
-Both entry points share the same service singletons, so query + validation logic is not duplicated.
-
-## Face Liveness enrollment flow
-
-```
-/register-face (Server, gated)
-   └─ FaceLivenessRegistration (Client)
-        │ press "เริ่มลงทะเบียนใบหน้า"
-        ▼
-   POST /api/face/session ──► faceEnrollmentService.createOrReuseAttempt
-        │   (Rekognition CreateFaceLivenessSession ×1, user → pending)
-        ▼ sessionId
-   <FaceLivenessDetectorCore> ── config.credentialProvider
-        │   GET /api/face/credentials ──► Cognito GetId + GetCredentialsForIdentity
-        │   (Google ID token cookie → temp StartFaceLivenessSession creds)
-        │   detector runs StartFaceLivenessSession ×1 in the browser
-        ▼ onAnalysisComplete
-   POST /api/face/result ──► faceEnrollmentService.getAttemptResult
-        (Rekognition GetFaceLivenessSessionResults ×1, never polls;
-         accepted ≥ threshold → SearchFacesByImage duplicate check
-         → IndexFaces → user_face_profiles + user registered)
-```
-
-Normal attempt = 3 Rekognition calls (Create + Start + Get). A transient
-not-ready result permits at most one delayed retry (4 calls); the app never
-polls. Recognition calls happen only after accepted liveness: enrollment uses
-`SearchFacesByImage` to avoid duplicate collection entries, then `IndexFaces`
-only if no existing match is found. One active attempt per user is enforced by
-a partial unique index plus idempotent reuse in the service.
-
-## Face Recognition verification flow
-
-The same session/result endpoints power the debug proof page:
-
-```
-/ (Home)
-   └─ FaceVerificationDebugPrompt
-      └─ renders only when ENABLE_FACE_RECOGNITION_DEBUG=YES
-         and current user has a row in user_face_profiles
-   └─ FaceAuthStatusNotice
-      └─ checks /api/face/auth-status once; if the path-scoped Google ID token
-         is missing/expired, prompt user to sign in with Google again before
-         any camera/AWS session starts
-
-/verify-face (Server, gated by the same env + profile checks)
-   └─ FaceVerificationDebug (Client)
-      └─ press "Start verify face"
-
-POST /api/face/session { intent: "verification" }
-   └─ create/reuse liveness attempt with intent `verification`
-
-FaceLivenessDetectorCore runs as usual
-
-POST /api/face/result { sessionId }
-   └─ liveness accepted
-      → SearchFacesByImage against AWS_FACE_COLLECTION_ID
-      → map returned FaceId through user_face_profiles
-      → accepted only when matched userId === current userId
-         and similarity ≥ AWS_FACE_MATCH_THRESHOLD
+```mermaid
+flowchart TD
+  SignIn["/signin Google OAuth"] --> Home["/ home"]
+  Home --> Face["/register-face optional enrollment"]
+  Home --> Wallet["/wallet top-up"]
+  CameraEntry["camera entry API"] --> Visit["active visit"]
+  Visit --> Scan["/scan QR"]
+  Scan --> Inventory["/inventory/[id]"]
+  Inventory --> Watch["POST /api/iot/watch"]
+  Watch --> Events["IoT HTTP/MQTT events"]
+  Events --> Cart["server active cart"]
+  Cart --> Exit["camera exit-order API"]
+  Exit --> Checkout["wallet debit + order + receipt"]
+  Checkout --> Receipt["/receipts/[receiptNo]"]
 ```
 
-`FACE_RECOGNITION_DEBUG_TIMEOUT_MS` defaults to 5000ms and is used as a slow-scan
-notice threshold only. The UI does not hard-unmount Amplify mid-stream because
-that can leave camera tracks/ReadableStreams in a cleanup race. Real detector,
-result, or mismatch failures still fail closed to an admin-contact state. No AWS
-call is made until the user explicitly presses the start CTA.
+## Admin / Backdoor Flow
 
-## Notes / gaps
+- `/admin/attendance` ใช้ดูและ mock attendance/visit status
+- `/admin/inventory/iot-poc` ใช้ mock IoT/loadcell/MQTT events
+- `/api/iot/mock-events` และ `/api/mock-iot-server/*` เป็น endpoints สำหรับ dev/demo/mock server
+- `/verify-face` เป็น debug page ที่ต้องเปิด env flag และ user ต้องมี face profile แล้ว
 
-- Read API for shelves is `GET`-only; the first write/mutation endpoints are the
-  face routes above (all `requireCurrentUser()`-gated; mutations also same-origin).
-- Checkout button is disabled — `TODO(payment)` & `TODO(order)` in `cart/page.tsx`.
-- Google OAuth and the application session are implemented; future API write routes must use `requireCurrentUser()` before acting on user data.
+## Route Protection
+
+- `src/proxy.ts` ทำ redirect แบบ optimistic สำหรับ page routes โดยดู cookie presence
+- API/private actions ต้อง guard จริงด้วย `requireCurrentUser()`, role checks, same-origin หรือ API key ตาม use case
+- Camera attendance endpoint ใช้ `x-client-attendance-api-key`
+- IoT API ใช้ helper ใน `src/lib/iot-api-auth.ts` สำหรับ device/mock integration
+
+## Redis Behavior
+
+- `src/services/cart-sync.service.ts` ใช้ Redis เมื่อมี `REDIS_HOST` เพื่อเก็บ active cart และ active session key; ถ้า Redis ล่มจะ fallback memory เพื่อให้ local/mobile demo ยังใช้งานได้ใน process เดียว
+- `src/services/iot-session-events.service.ts` ใช้ Redis pub/sub เพื่อ fan-out SSE update ข้าม process; ถ้า Redis ไม่พร้อม local listener ยังทำงานใน process เดียว แต่หลาย instance จะไม่เห็น event กัน

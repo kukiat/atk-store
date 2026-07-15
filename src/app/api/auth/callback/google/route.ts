@@ -27,10 +27,18 @@ function clearOAuthCookies(response: NextResponse) {
   return response;
 }
 
-function redirectToSignIn(request: NextRequest, error: string) {
+function getAuthUrl() {
+  return (process.env.AUTH_URL ?? "http://localhost:3000").replace(/\/+$/, "");
+}
+
+function getAppUrl(path: string) {
+  return new URL(path, getAuthUrl());
+}
+
+function redirectToSignIn(error: string) {
   return clearOAuthCookies(
     NextResponse.redirect(
-      new URL(`/signin?error=${encodeURIComponent(error)}`, request.url),
+      getAppUrl(`/signin?error=${encodeURIComponent(error)}`),
     ),
   );
 }
@@ -47,25 +55,24 @@ export async function GET(request: NextRequest) {
   const nonce = request.cookies.get(GOOGLE_OAUTH_NONCE_COOKIE)?.value;
 
   if (!tokensMatch(expectedState, state) || !codeVerifier || !nonce) {
-    return redirectToSignIn(request, "invalid_state");
+    return redirectToSignIn("invalid_state");
   }
 
   if (error) {
-    return redirectToSignIn(request, error);
+    return redirectToSignIn(error);
   }
 
   if (!code) {
-    return redirectToSignIn(request, "no_code");
+    return redirectToSignIn("no_code");
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const authUrl = process.env.AUTH_URL ?? "http://localhost:3000";
-  const redirectUri = `${authUrl}/api/auth/callback/google`;
+  const redirectUri = `${getAuthUrl()}/api/auth/callback/google`;
 
   if (!clientId || !clientSecret) {
     console.error("[auth/callback/google] Google OAuth is not configured");
-    return redirectToSignIn(request, "token_exchange_failed");
+    return redirectToSignIn("token_exchange_failed");
   }
 
   const tokenResponse = await fetch("https://oauth2.googleapis.com/token", {
@@ -86,12 +93,14 @@ export async function GET(request: NextRequest) {
   if (!tokenResponse.ok) {
     console.error("[auth/callback/google] Token exchange failed", {
       status: tokenResponse.status,
+      error: tokenData.error,
+      errorDescription: tokenData.error_description,
     });
-    return redirectToSignIn(request, "token_exchange_failed");
+    return redirectToSignIn("token_exchange_failed");
   }
 
   if (typeof tokenData.id_token !== "string") {
-    return redirectToSignIn(request, "invalid_identity");
+    return redirectToSignIn("invalid_identity");
   }
 
   try {
@@ -105,7 +114,7 @@ export async function GET(request: NextRequest) {
     });
 
     const { token, expiresAt } = await userService.createSession(user.id);
-    const response = NextResponse.redirect(new URL("/", request.url));
+    const response = NextResponse.redirect(getAppUrl("/"));
     response.cookies.set(
       SESSION_COOKIE,
       token,
@@ -121,19 +130,22 @@ export async function GET(request: NextRequest) {
     return clearOAuthCookies(response);
   } catch (cause) {
     if (cause instanceof OAuthIdentityConflictError) {
-      return redirectToSignIn(request, "account_conflict");
+      return redirectToSignIn("account_conflict");
     }
 
     if (cause instanceof AccountNotActiveError) {
-      return redirectToSignIn(request, "account_blocked");
+      return redirectToSignIn("account_blocked");
     }
 
     if (cause instanceof GoogleIdTokenValidationError) {
       console.warn("[auth/callback/google] Google ID token validation failed");
-      return redirectToSignIn(request, "invalid_identity");
+      return redirectToSignIn("invalid_identity");
     }
 
-    console.error("[auth/callback/google] OAuth callback failed");
-    return redirectToSignIn(request, "token_exchange_failed");
+    console.error("[auth/callback/google] OAuth callback failed", {
+      name: cause instanceof Error ? cause.name : undefined,
+      message: cause instanceof Error ? cause.message : String(cause),
+    });
+    return redirectToSignIn("token_exchange_failed");
   }
 }

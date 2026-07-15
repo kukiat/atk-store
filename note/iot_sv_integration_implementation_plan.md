@@ -22,7 +22,7 @@ Implemented in this workspace on 2026-07-09.
 - app เป็นเจ้าของ inventory catalog, cart, order, wallet และ customer session
 - iot เป็นเจ้าของ in-store mapping, device/loadcell state, shelf door status และ branch-specific MQTT publisher
 - QR payload ของ app เปลี่ยนจาก `shelfIds` เป็น `inventoryIds`
-- session runtime ใช้ UUID ที่ app generate แล้วส่งให้ iot ผ่าน `/set-topic`
+- session runtime ใช้ UUID ที่ app generate แล้วส่งให้ iot ผ่าน `/pick-sessions`
 - MQTT topic ใช้ branch จาก `BRANCH_CODE`
 
 ## Updated Environment Contract
@@ -47,7 +47,7 @@ Notes:
 - `IOT_API_KEY` ใช้ป้องกัน endpoint ที่ app provide ให้ iot เช่น `GET /inventories`.
 - `BRANCH_CODE` ใช้เป็น topic segment: `{uuid}/loadcell/{BRANCH_CODE}/{productId}/event|status`; `productId` ใน topic คือ app `inventoryId`.
 - `BRANCH_CODE` เป็น branch/store identifier หลักของ IOT flow ใหม่; deprecate `IOT_STORE_ID` usage ในส่วน IOT ใหม่.
-- `IOT_SERVER_URL` เป็น server-only base URL สำหรับเรียก iot server เช่น `GET /product/:productId` และ `POST /set-topic`.
+- `IOT_SERVER_URL` เป็น server-only base URL สำหรับเรียก iot server เช่น `GET /product/:productId` และ `POST /pick-sessions`.
 - local/mock default ตอนนี้ชี้มาที่ `http://localhost:3000/api/iot`; production ต้องเปลี่ยนเป็น URL ของ iot server จริง.
 
 ## Review Findings
@@ -163,7 +163,7 @@ Decision: implement DB-backed IOT session store ตั้งแต่รอบ i
 Minimum tables:
 
 - `iot_sessions`
-  - `id` uuid primary key; ใช้เป็น session UUID ที่ส่งให้ iot `/set-topic`
+  - `id` uuid primary key; ใช้เป็น session UUID ที่ส่งให้ iot `/pick-sessions`
   - `client_visit_id`
   - `user_id`
   - `inventory_id`
@@ -224,7 +224,7 @@ Decision:
 4. ถ้ามีหลาย item แสดง inventory cards ให้ user เลือก
 5. เมื่อเลือก inventory แล้ว app สร้าง session UUID
 6. app call iot `GET /product/:productId` เพื่อดึง `inStoreQty`
-7. app call iot `POST /set-topic` ด้วย `{ uuid }`
+7. app call iot `POST /pick-sessions` ด้วย `{ uuid, email, sku }`
 8. app เปิด session view และรอ event ผ่าน SSE เดิม
 9. MQTT worker รับ event/status จาก broker แล้ว update session/cart
 10. เมื่อ status `shelf_closed` ให้ close session และหยุดรับ event ของ session นั้น
@@ -300,7 +300,7 @@ App normalized event:
 ### Phase 0: Lock contract with IOT
 
 - App provides both `GET /inventories` and `GET /api/iot/catalog/inventories` through the same IOT-facing catalog module.
-- Use `IOT_SERVER_URL` as the iot base URL env for `GET /product/:productId` and `POST /set-topic`.
+- Use `IOT_SERVER_URL` as the iot base URL env for `GET /product/:productId` and `POST /pick-sessions`.
 - Protect app-provided IOT endpoints with `IOT_API_KEY`.
 - Confirm whether `sku` always equals app `inventory.id`.
 - `pickedQty` is cumulative selected quantity for current session, not delta.
@@ -404,7 +404,7 @@ Tasks:
 - Load inventory from app DB.
 - Generate `sessionId` UUID before calling IOT.
 - Call iot `GET /product/:productId` and store/display `inStoreQty`.
-- Call iot `POST /set-topic` with `{ uuid: sessionId }`.
+- Call iot `POST /pick-sessions` with `{ uuid: sessionId, email: user.email, sku: inventoryId }`.
 - Create session with `inventoryId`, `inventoryName`, `pickedCount`, `currentQty`, `branchCode`, and no required shelf fields.
 - Continue publishing SSE through `/api/iot/sessions/:sessionId/events` so frontend cart update model stays stable.
 - Remove or replace legacy shelf scan route as part of the clean QR migration.
@@ -448,7 +448,7 @@ Files:
 Tasks:
 
 - Add mock `GET /product/:productId`.
-- Add mock `POST /set-topic`.
+- Add mock `POST /pick-sessions`.
 - Update mock event publisher to use new topic:
 
 ```txt
@@ -495,7 +495,7 @@ Status: completed in `drizzle/0007_iot_inventory_sessions.sql`; legacy shelf pag
 
 - Scan QR with one inventory id opens inventory session.
 - Scan QR with many inventory ids shows inventory selection.
-- Inventory session calls set-topic with generated UUID.
+- Inventory session calls pick-sessions with generated UUID, customer email, and scanned inventory id as sku.
 - MQTT event updates cart quantity.
 - MQTT status closes session and stops frontend waiting state.
 - Mock mode works without external IOT server.

@@ -1,20 +1,25 @@
 import "server-only";
 
-import net from "node:net";
-import tls from "node:tls";
+import { createClient, type RedisClientType } from "redis";
 
 import type { CartItem } from "@/types";
 
 type StoredCart = {
   clientVisitId: number;
+  /** Stable cart identifier, retained for checkout idempotency. */
   sessionId: string;
+  /** Aggregated items across every open IOT pick session in this visit. */
   items: CartItem[];
+  /** Per-session contributions, so one session cannot overwrite another. */
+  sessionItems?: Record<string, CartItem[]>;
   syncedAt: string;
 };
 
 const globalForCart = globalThis as unknown as {
   atkRedisCartMock: Map<string, StoredCart> | undefined;
   atkRedisCartActiveMock: Map<number, string> | undefined;
+  atkCartRedisClient: RedisClientType | undefined;
+  atkCartRedisClientPromise: Promise<RedisClientType> | undefined;
 };
 
 const memoryStore =
@@ -39,6 +44,10 @@ function shouldUseRedis(): boolean {
   return Boolean(process.env.REDIS_HOST?.trim());
 }
 
+function canUseMemoryFallback(): boolean {
+  return process.env.NODE_ENV !== "production";
+}
+
 function isCartSyncDebugEnabled(): boolean {
   return process.env.CART_SYNC_DEBUG === "true";
 }
@@ -48,6 +57,7 @@ function summarizeCart(cart: StoredCart | null) {
     ? {
         found: true,
         sessionId: cart.sessionId,
+        sessionCount: Object.keys(sessionItemsFor(cart)).length,
         itemCount: cart.items.length,
         items: cart.items.map((item) => ({
           inventoryId: item.inventoryId,
@@ -62,135 +72,147 @@ function logCartSync(action: string, data: Record<string, unknown>) {
   console.log(JSON.stringify({ action, ...data }));
 }
 
-function encodeRedisCommand(parts: string[]): string {
-  return [
-    `*${parts.length}`,
-    ...parts.flatMap((part) => [`$${Buffer.byteLength(part)}`, part]),
-    "",
-  ].join("\r\n");
+function sessionItemsFor(cart: StoredCart | null): Record<string, CartItem[]> {
+  if (!cart) return {};
+  if (cart.sessionItems) return { ...cart.sessionItems };
+
+  // Migrate carts written before per-session aggregation was introduced.
+  return { [cart.sessionId]: cart.items };
 }
 
-function parseBulkString(response: string): string | null {
-  if (response.startsWith("$-1")) return null;
-  if (!response.startsWith("$")) {
-    if (response.startsWith("+")) return response.slice(1).trim();
-    if (response.startsWith(":")) return response.slice(1).trim();
-    if (response.startsWith("-")) throw new Error(response.slice(1).trim());
-    return response.trim();
+function aggregateSessionItems(sessionItems: Record<string, CartItem[]>): CartItem[] {
+  const byInventoryId = new Map<string, CartItem>();
+
+  for (const items of Object.values(sessionItems)) {
+    for (const item of items) {
+      const existing = byInventoryId.get(item.inventoryId);
+      byInventoryId.set(
+        item.inventoryId,
+        existing
+          ? { ...existing, quantity: existing.quantity + item.quantity }
+          : { ...item },
+      );
+    }
   }
 
-  const [, body = ""] = response.split("\r\n", 2);
-  return body;
+  return Array.from(byInventoryId.values()).filter((item) => item.quantity > 0);
 }
 
-async function runRedisCommand(parts: string[]): Promise<string | null> {
+function createRedisClient(): RedisClientType {
   const host = process.env.REDIS_HOST?.trim() || "127.0.0.1";
   const port = Number(process.env.REDIS_PORT || "6379");
-  const useTls = process.env.REDIS_TLS === "true";
+  const username = process.env.REDIS_USERNAME?.trim() || undefined;
+  const password = process.env.REDIS_PASSWORD?.trim() || undefined;
+  const database = Number(process.env.REDIS_DB || "0");
+  const tls = process.env.REDIS_TLS === "true";
   const rejectUnauthorized =
     process.env.REDIS_TLS_REJECT_UNAUTHORIZED !== "false";
-  const username = process.env.REDIS_USERNAME?.trim();
-  const password = process.env.REDIS_PASSWORD?.trim();
-  const db = process.env.REDIS_DB?.trim();
-  const commands: string[][] = [];
 
-  if (password) {
-    commands.push(username ? ["AUTH", username, password] : ["AUTH", password]);
-  }
-  if (db && db !== "0") commands.push(["SELECT", db]);
-  commands.push(parts);
-
-  const client = useTls
-    ? tls.connect({ host, port, servername: host, rejectUnauthorized })
-    : net.createConnection({ host, port });
-
-  client.setTimeout(1200);
-
-  return new Promise((resolve, reject) => {
-    let buffer = "";
-    let responses = 0;
-
-    client.on("connect", () => {
-      client.write(commands.map(encodeRedisCommand).join(""));
-    });
-    client.on("data", (chunk) => {
-      buffer += chunk.toString("utf8");
-      responses +=
-        (chunk.toString("utf8").match(/\r\n/g) ?? []).length > 0 ? 1 : 0;
-      if (responses >= commands.length) {
-        client.end();
-      }
-    });
-    client.on("timeout", () => {
-      client.destroy(new Error("Redis command timed out"));
-    });
-    client.on("error", reject);
-    client.on("close", () => {
-      try {
-        const chunks = buffer
-          .split(/\r\n(?=[+$:-])/)
-          .filter((item) => item.length > 0);
-        resolve(parseBulkString(chunks[chunks.length - 1] ?? buffer));
-      } catch (error) {
-        reject(error);
-      }
-    });
+  const client = createClient({
+    username,
+    password,
+    database,
+    socket: {
+      host,
+      port,
+      ...(tls ? { tls: true, servername: host, rejectUnauthorized } : {}),
+      connectTimeout: 10_000,
+      reconnectStrategy(retries) {
+        if (retries >= 3) return false;
+        return Math.min(100 * 2 ** retries, 3_000);
+      },
+    },
   });
+
+  client.on("error", (error) => {
+    console.error("[cart-sync] Redis error", error);
+  });
+  return client;
+}
+
+async function getRedisClient(): Promise<RedisClientType> {
+  if (!shouldUseRedis()) {
+    throw new Error("REDIS_HOST is required for cart sync in production");
+  }
+
+  const existingClient = globalForCart.atkCartRedisClient;
+  if (existingClient?.isReady) return existingClient;
+  if (existingClient?.isOpen) {
+    throw new Error("Cart Redis client is reconnecting");
+  }
+  if (existingClient) {
+    existingClient.destroy();
+    globalForCart.atkCartRedisClient = undefined;
+  }
+
+  globalForCart.atkCartRedisClientPromise ??= (async () => {
+    const client = createRedisClient();
+    try {
+      await client.connect();
+      globalForCart.atkCartRedisClient = client;
+      return client;
+    } catch (error) {
+      client.destroy();
+      throw error;
+    }
+  })().finally(() => {
+    globalForCart.atkCartRedisClientPromise = undefined;
+  });
+
+  return globalForCart.atkCartRedisClientPromise;
+}
+
+function memoryCart(clientVisitId: number): StoredCart | null {
+  const sessionId = activeSessionStore.get(clientVisitId);
+  return sessionId ? (memoryStore.get(cartKey(clientVisitId, sessionId)) ?? null) : null;
 }
 
 class CartSyncService {
-  async setCart(
-    clientVisitId: number,
-    items: CartItem[],
-    sessionId: string,
-  ): Promise<StoredCart> {
-    const stored = {
-      clientVisitId,
-      sessionId,
-      items,
-      syncedAt: new Date().toISOString(),
-    };
-
+  private async writeCart(stored: StoredCart): Promise<StoredCart> {
     if (shouldUseRedis()) {
       try {
-        await runRedisCommand([
-          "SET",
-          cartKey(clientVisitId, sessionId),
-          JSON.stringify(stored),
-        ]);
-        await runRedisCommand(["SET", activeCartKey(clientVisitId), sessionId]);
+        const client = await getRedisClient();
+        await client
+          .multi()
+          .set(
+            cartKey(stored.clientVisitId, stored.sessionId),
+            JSON.stringify(stored),
+          )
+          .set(activeCartKey(stored.clientVisitId), stored.sessionId)
+          .exec();
         logCartSync("cart_sync_written", {
           storage: "redis",
-          clientVisitId,
+          clientVisitId: stored.clientVisitId,
           ...summarizeCart(stored),
         });
         return stored;
       } catch (error) {
         logCartSync("cart_sync_redis_write_failed", {
-          clientVisitId,
-          sessionId,
+          clientVisitId: stored.clientVisitId,
+          sessionId: stored.sessionId,
           error: error instanceof Error ? error.message : "Unknown Redis error",
         });
-        // Redis can be offline in local dev; keep the mobile flow usable.
+        if (!canUseMemoryFallback()) throw error;
       }
+    } else if (!canUseMemoryFallback()) {
+      throw new Error("REDIS_HOST is required for cart sync in production");
     }
 
-    memoryStore.set(cartKey(clientVisitId, sessionId), stored);
-    activeSessionStore.set(clientVisitId, sessionId);
+    memoryStore.set(cartKey(stored.clientVisitId, stored.sessionId), stored);
+    activeSessionStore.set(stored.clientVisitId, stored.sessionId);
     logCartSync("cart_sync_written", {
       storage: "memory",
-      clientVisitId,
+      clientVisitId: stored.clientVisitId,
       ...summarizeCart(stored),
     });
     return stored;
   }
 
   async getCart(clientVisitId: number): Promise<StoredCart | null> {
-    let sessionId: string | null = null;
-
     if (shouldUseRedis()) {
       try {
-        sessionId = await runRedisCommand(["GET", activeCartKey(clientVisitId)]);
+        const client = await getRedisClient();
+        const sessionId = await client.get(activeCartKey(clientVisitId));
         if (!sessionId) {
           logCartSync("cart_sync_read", {
             storage: "redis",
@@ -199,10 +221,8 @@ class CartSyncService {
           });
           return null;
         }
-        const raw = await runRedisCommand([
-          "GET",
-          cartKey(clientVisitId, sessionId),
-        ]);
+
+        const raw = await client.get(cartKey(clientVisitId, sessionId));
         const cart = raw ? (JSON.parse(raw) as StoredCart) : null;
         logCartSync("cart_sync_read", {
           storage: "redis",
@@ -215,12 +235,13 @@ class CartSyncService {
           clientVisitId,
           error: error instanceof Error ? error.message : "Unknown Redis error",
         });
-        // Fall through to memory fallback.
+        if (!canUseMemoryFallback()) throw error;
       }
+    } else if (!canUseMemoryFallback()) {
+      throw new Error("REDIS_HOST is required for cart sync in production");
     }
 
-    sessionId ??= activeSessionStore.get(clientVisitId) ?? null;
-    const cart = sessionId ? (memoryStore.get(cartKey(clientVisitId, sessionId)) ?? null) : null;
+    const cart = memoryCart(clientVisitId);
     logCartSync("cart_sync_read", {
       storage: "memory",
       clientVisitId,
@@ -236,50 +257,60 @@ class CartSyncService {
     sessionId: string,
   ): Promise<StoredCart> {
     const existingCart = await this.getCart(clientVisitId);
-    const existingItems = existingCart?.items ?? [];
-    const nextItems =
+    const sessionItems = sessionItemsFor(existingCart);
+    const previousSessionItems = sessionItems[sessionId] ?? [];
+    const nextSessionItems =
       quantity <= 0
-        ? existingItems.filter(
+        ? previousSessionItems.filter(
             (cartItem) => cartItem.inventoryId !== item.inventoryId,
           )
         : [
-            ...existingItems.filter(
+            ...previousSessionItems.filter(
               (cartItem) => cartItem.inventoryId !== item.inventoryId,
             ),
             { ...item, quantity },
           ];
 
+    if (nextSessionItems.length === 0) {
+      delete sessionItems[sessionId];
+    } else {
+      sessionItems[sessionId] = nextSessionItems;
+    }
+
     logCartSync("cart_sync_quantity_requested", {
       clientVisitId,
       requestedSessionId: sessionId,
-      existingSessionId: existingCart?.sessionId ?? null,
+      cartSessionId: existingCart?.sessionId ?? sessionId,
       inventoryId: item.inventoryId,
       quantity,
     });
 
-    return this.setCart(
+    return this.writeCart({
       clientVisitId,
-      nextItems,
-      existingCart?.sessionId ?? sessionId,
-    );
+      sessionId: existingCart?.sessionId ?? sessionId,
+      items: aggregateSessionItems(sessionItems),
+      sessionItems,
+      syncedAt: new Date().toISOString(),
+    });
   }
 
   async clearCart(clientVisitId: number): Promise<void> {
-    let sessionId: string | null = null;
-
     if (shouldUseRedis()) {
       try {
-        sessionId = await runRedisCommand(["GET", activeCartKey(clientVisitId)]);
-        if (sessionId) {
-          await runRedisCommand(["DEL", cartKey(clientVisitId, sessionId)]);
-        }
-        await runRedisCommand(["DEL", activeCartKey(clientVisitId)]);
-      } catch {
-        // Fall through to memory cleanup.
+        const client = await getRedisClient();
+        const sessionId = await client.get(activeCartKey(clientVisitId));
+        const transaction = client.multi();
+        if (sessionId) transaction.del(cartKey(clientVisitId, sessionId));
+        transaction.del(activeCartKey(clientVisitId));
+        await transaction.exec();
+      } catch (error) {
+        if (!canUseMemoryFallback()) throw error;
       }
+    } else if (!canUseMemoryFallback()) {
+      throw new Error("REDIS_HOST is required for cart sync in production");
     }
 
-    sessionId ??= activeSessionStore.get(clientVisitId) ?? null;
+    const sessionId = activeSessionStore.get(clientVisitId);
     if (sessionId) memoryStore.delete(cartKey(clientVisitId, sessionId));
     activeSessionStore.delete(clientVisitId);
   }

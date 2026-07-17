@@ -61,7 +61,7 @@ async function pingRedis(config: RedisHealthConfig): Promise<void> {
     : net.createConnection({ host: config.host, port: config.port });
   const commands = buildHealthCommands(config);
 
-  client.setTimeout(1_200);
+  client.setTimeout(10_000);
 
   return new Promise((resolve, reject) => {
     let buffer = "";

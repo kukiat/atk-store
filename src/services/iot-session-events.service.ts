@@ -58,7 +58,7 @@ function createRedisClient(): RedisClientType {
       host,
       port,
       ...(tls ? { tls: true, servername: host, rejectUnauthorized } : {}),
-      connectTimeout: 1_200,
+      connectTimeout: 10_000,
       reconnectStrategy(retries) {
         if (retries >= 3) return false;
         return Math.min(100 * 2 ** retries, 3_000);

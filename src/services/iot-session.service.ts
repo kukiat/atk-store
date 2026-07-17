@@ -286,7 +286,7 @@ class IotSessionService {
       input.pickedCount,
       updatedSession.sessionId,
     );
-    publishCartUpdated(updatedSession.userId);
+    await publishCartUpdated(updatedSession.userId);
     await publishIotSessionUpdated(updatedSession.sessionId);
     await this.insertNotifications(updatedSession, "picked_count");
 

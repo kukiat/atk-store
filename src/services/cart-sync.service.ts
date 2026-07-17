@@ -39,6 +39,29 @@ function shouldUseRedis(): boolean {
   return Boolean(process.env.REDIS_HOST?.trim());
 }
 
+function isCartSyncDebugEnabled(): boolean {
+  return process.env.CART_SYNC_DEBUG === "true";
+}
+
+function summarizeCart(cart: StoredCart | null) {
+  return cart
+    ? {
+        found: true,
+        sessionId: cart.sessionId,
+        itemCount: cart.items.length,
+        items: cart.items.map((item) => ({
+          inventoryId: item.inventoryId,
+          quantity: item.quantity,
+        })),
+      }
+    : { found: false };
+}
+
+function logCartSync(action: string, data: Record<string, unknown>) {
+  if (!isCartSyncDebugEnabled()) return;
+  console.log(JSON.stringify({ action, ...data }));
+}
+
 function encodeRedisCommand(parts: string[]): string {
   return [
     `*${parts.length}`,
@@ -64,6 +87,8 @@ async function runRedisCommand(parts: string[]): Promise<string | null> {
   const host = process.env.REDIS_HOST?.trim() || "127.0.0.1";
   const port = Number(process.env.REDIS_PORT || "6379");
   const useTls = process.env.REDIS_TLS === "true";
+  const rejectUnauthorized =
+    process.env.REDIS_TLS_REJECT_UNAUTHORIZED !== "false";
   const username = process.env.REDIS_USERNAME?.trim();
   const password = process.env.REDIS_PASSWORD?.trim();
   const db = process.env.REDIS_DB?.trim();
@@ -76,7 +101,7 @@ async function runRedisCommand(parts: string[]): Promise<string | null> {
   commands.push(parts);
 
   const client = useTls
-    ? tls.connect({ host, port })
+    ? tls.connect({ host, port, servername: host, rejectUnauthorized })
     : net.createConnection({ host, port });
 
   client.setTimeout(1200);
@@ -134,14 +159,29 @@ class CartSyncService {
           JSON.stringify(stored),
         ]);
         await runRedisCommand(["SET", activeCartKey(clientVisitId), sessionId]);
+        logCartSync("cart_sync_written", {
+          storage: "redis",
+          clientVisitId,
+          ...summarizeCart(stored),
+        });
         return stored;
-      } catch {
+      } catch (error) {
+        logCartSync("cart_sync_redis_write_failed", {
+          clientVisitId,
+          sessionId,
+          error: error instanceof Error ? error.message : "Unknown Redis error",
+        });
         // Redis can be offline in local dev; keep the mobile flow usable.
       }
     }
 
     memoryStore.set(cartKey(clientVisitId, sessionId), stored);
     activeSessionStore.set(clientVisitId, sessionId);
+    logCartSync("cart_sync_written", {
+      storage: "memory",
+      clientVisitId,
+      ...summarizeCart(stored),
+    });
     return stored;
   }
 
@@ -151,21 +191,42 @@ class CartSyncService {
     if (shouldUseRedis()) {
       try {
         sessionId = await runRedisCommand(["GET", activeCartKey(clientVisitId)]);
-        if (!sessionId) return null;
+        if (!sessionId) {
+          logCartSync("cart_sync_read", {
+            storage: "redis",
+            clientVisitId,
+            found: false,
+          });
+          return null;
+        }
         const raw = await runRedisCommand([
           "GET",
           cartKey(clientVisitId, sessionId),
         ]);
-        if (raw) return JSON.parse(raw) as StoredCart;
-      } catch {
+        const cart = raw ? (JSON.parse(raw) as StoredCart) : null;
+        logCartSync("cart_sync_read", {
+          storage: "redis",
+          clientVisitId,
+          ...summarizeCart(cart),
+        });
+        return cart;
+      } catch (error) {
+        logCartSync("cart_sync_redis_read_failed", {
+          clientVisitId,
+          error: error instanceof Error ? error.message : "Unknown Redis error",
+        });
         // Fall through to memory fallback.
       }
     }
 
     sessionId ??= activeSessionStore.get(clientVisitId) ?? null;
-    if (!sessionId) return null;
-
-    return memoryStore.get(cartKey(clientVisitId, sessionId)) ?? null;
+    const cart = sessionId ? (memoryStore.get(cartKey(clientVisitId, sessionId)) ?? null) : null;
+    logCartSync("cart_sync_read", {
+      storage: "memory",
+      clientVisitId,
+      ...summarizeCart(cart),
+    });
+    return cart;
   }
 
   async setCartItemQuantity(
@@ -187,6 +248,14 @@ class CartSyncService {
             ),
             { ...item, quantity },
           ];
+
+    logCartSync("cart_sync_quantity_requested", {
+      clientVisitId,
+      requestedSessionId: sessionId,
+      existingSessionId: existingCart?.sessionId ?? null,
+      inventoryId: item.inventoryId,
+      quantity,
+    });
 
     return this.setCart(
       clientVisitId,

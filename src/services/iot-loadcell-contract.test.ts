@@ -21,10 +21,10 @@ describe("IOT loadcell MQTT contract", () => {
     ]);
   });
 
-  it("maps pickedQty as the cumulative cart quantity", () => {
+  it("maps sessionSummary.takenTotal as the cumulative cart quantity", () => {
     const event = normalizeLoadcellMessage(
       `${sessionId}/loadcell/main/${inventoryId}/event`,
-      { pickedQty: 5, currentQty: 95, seq: 1044 },
+      { sessionSummary: { takenTotal: 5 }, currentQty: 95, seq: 1044 },
     );
     expect(event).toMatchObject({
       type: "picked_count",
@@ -34,6 +34,15 @@ describe("IOT loadcell MQTT contract", () => {
       currentQty: 95,
       seq: 1044,
     });
+  });
+
+  it("rejects the legacy pickedQty field", () => {
+    expect(() =>
+      normalizeLoadcellMessage(
+        `${sessionId}/loadcell/main/${inventoryId}/event`,
+        { pickedQty: 5 },
+      ),
+    ).toThrow("sessionSummary.takenTotal must be a non-negative integer");
   });
 
   it("maps only shelf_closed status to door_closed", () => {
@@ -61,7 +70,7 @@ describe("IOT loadcell MQTT contract", () => {
     const before = Date.now();
     const event = normalizeLoadcellMessage(
       `${sessionId}/loadcell/main/${inventoryId}/event`,
-      { pickedQty: 1, timestamp: "not-a-date" },
+      { sessionSummary: { takenTotal: 1 }, timestamp: "not-a-date" },
     );
     expect(Date.parse(event.occurredAt)).toBeGreaterThanOrEqual(before);
   });

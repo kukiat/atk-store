@@ -33,7 +33,7 @@ describe("handleIotMqttMessage", () => {
         event: "item_picked",
         branch: "main",
         sku: "1cf3f14a-d07b-437a-9750-a3b698f9a730",
-        pickedQty: 3,
+        sessionSummary: { takenTotal: 3 },
         currentQty: 97,
         seq: 1044,
       }),
@@ -90,7 +90,10 @@ describe("handleIotMqttMessage", () => {
   it("rejects a mismatched payload sku without processing the session", async () => {
     const dependencies = createDependencies();
     const payload = Buffer.from(
-      JSON.stringify({ sku: "another-product", pickedQty: 1 }),
+      JSON.stringify({
+        sku: "another-product",
+        sessionSummary: { takenTotal: 1 },
+      }),
     );
 
     await expect(
@@ -110,7 +113,9 @@ describe("handleIotMqttMessage", () => {
     dependencies.messageLog.recordReceived.mockRejectedValue(
       new Error("database unavailable"),
     );
-    const payload = Buffer.from(JSON.stringify({ pickedQty: 2 }));
+    const payload = Buffer.from(
+      JSON.stringify({ sessionSummary: { takenTotal: 2 } }),
+    );
 
     await expect(
       handleIotMqttMessage(topic, payload, dependencies),
@@ -131,7 +136,7 @@ describe("handleIotMqttMessage", () => {
     await expect(
       handleIotMqttMessage(
         topic,
-        Buffer.from(JSON.stringify({ pickedQty: 2 })),
+        Buffer.from(JSON.stringify({ sessionSummary: { takenTotal: 2 } })),
         dependencies,
       ),
     ).resolves.toMatchObject({ event: { pickedCount: 2 } });

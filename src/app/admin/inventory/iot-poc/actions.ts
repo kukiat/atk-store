@@ -106,7 +106,7 @@ async function buildPickedEvent(formData: FormData) {
     sku: session.inventoryId,
     itemName: session.inventoryName,
     currentQty,
-    pickedQty,
+    sessionSummary: { takenTotal: pickedQty },
     timestamp: new Date().toISOString(),
   };
 

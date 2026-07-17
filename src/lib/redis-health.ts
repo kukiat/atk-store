@@ -8,6 +8,7 @@ type RedisHealthConfig = {
   password?: string;
   database?: string;
   useTls: boolean;
+  rejectUnauthorized: boolean;
 };
 
 function getRedisHealthConfig(): RedisHealthConfig {
@@ -18,6 +19,8 @@ function getRedisHealthConfig(): RedisHealthConfig {
     password: process.env.REDIS_PASSWORD?.trim() || undefined,
     database: process.env.REDIS_DB?.trim(),
     useTls: process.env.REDIS_TLS === "true",
+    rejectUnauthorized:
+      process.env.REDIS_TLS_REJECT_UNAUTHORIZED !== "false",
   };
 }
 
@@ -49,7 +52,12 @@ function buildHealthCommands(config: RedisHealthConfig): string[][] {
 
 async function pingRedis(config: RedisHealthConfig): Promise<void> {
   const client = config.useTls
-    ? tls.connect({ host: config.host, port: config.port })
+    ? tls.connect({
+        host: config.host,
+        port: config.port,
+        servername: config.host,
+        rejectUnauthorized: config.rejectUnauthorized,
+      })
     : net.createConnection({ host: config.host, port: config.port });
   const commands = buildHealthCommands(config);
 

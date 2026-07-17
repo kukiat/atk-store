@@ -52,7 +52,8 @@ function reasonCode(error: unknown) {
     "Loadcell payload branch does not match BRANCH_CODE":
       "payload_branch_mismatch",
     "Loadcell payload sku does not match topic inventory id": "sku_mismatch",
-    "pickedQty must be a non-negative integer": "invalid_picked_qty",
+    "sessionSummary.takenTotal must be a non-negative integer":
+      "invalid_session_taken_total",
     "Unsupported loadcell status": "unsupported_status",
     "IOT session not found": "unknown_session",
     "Inventory is not part of this IOT session": "inventory_mismatch",

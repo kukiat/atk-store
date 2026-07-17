@@ -47,6 +47,8 @@ function createRedisClient(): RedisClientType {
   const password = process.env.REDIS_PASSWORD?.trim() || undefined;
   const database = Number(process.env.REDIS_DB || "0");
   const tls = process.env.REDIS_TLS === "true";
+  const rejectUnauthorized =
+    process.env.REDIS_TLS_REJECT_UNAUTHORIZED !== "false";
 
   const client = createClient({
     username,
@@ -55,7 +57,7 @@ function createRedisClient(): RedisClientType {
     socket: {
       host,
       port,
-      ...(tls ? { tls: true } : {}),
+      ...(tls ? { tls: true, servername: host, rejectUnauthorized } : {}),
       connectTimeout: 1_200,
       reconnectStrategy(retries) {
         if (retries >= 3) return false;

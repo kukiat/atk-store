@@ -47,15 +47,22 @@ function readInteger(
   return typeof value === "number" && Number.isInteger(value) ? value : null;
 }
 
-function readNonNegativeInteger(
-  payload: Record<string, unknown>,
-  key: string,
-): number {
-  const value = readInteger(payload, key);
-  if (value === null || value < 0) {
-    throw new Error(`${key} must be a non-negative integer`);
+function readSessionTakenTotal(payload: Record<string, unknown>): number {
+  const sessionSummary = payload.sessionSummary;
+  const takenTotal =
+    typeof sessionSummary === "object" &&
+    sessionSummary !== null &&
+    !Array.isArray(sessionSummary)
+      ? readInteger(sessionSummary as Record<string, unknown>, "takenTotal")
+      : null;
+
+  if (takenTotal === null || takenTotal < 0) {
+    throw new Error(
+      "sessionSummary.takenTotal must be a non-negative integer",
+    );
   }
-  return value;
+
+  return takenTotal;
 }
 
 function defaultBranchCode() {
@@ -143,7 +150,7 @@ export function normalizeLoadcellMessage(
       sessionId: parsedTopic.sessionId,
       branchCode: parsedTopic.branchCode,
       inventoryId: parsedTopic.inventoryId,
-      pickedCount: readNonNegativeInteger(payload, "pickedQty"),
+      pickedCount: readSessionTakenTotal(payload),
       currentQty: readInteger(payload, "currentQty"),
       seq,
       occurredAt: occurredAt(payload),

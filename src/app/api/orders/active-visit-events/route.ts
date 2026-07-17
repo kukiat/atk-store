@@ -95,6 +95,18 @@ export async function GET(request: NextRequest) {
               ? await cartSyncService.getCart(activeVisit.id)
               : null;
 
+            if (process.env.CART_SYNC_DEBUG === "true") {
+              console.log(
+                JSON.stringify({
+                  action: "cart_sse_snapshot",
+                  userId: user.id,
+                  activeVisitId: activeVisit?.id ?? null,
+                  cartSessionId: cart?.sessionId ?? null,
+                  cartItemCount: cart?.items.length ?? 0,
+                }),
+              );
+            }
+
             safeEnqueue(
               encodeEvent("cart-updated", {
                 visit: activeVisit

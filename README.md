@@ -154,7 +154,7 @@ curl http://localhost:3000/api/health-check
 | เข้าสู่ระบบ | `AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | จำเป็นสำหรับหน้า customer และ admin |
 | Face / AWS | `AWS_PROFILE`, `AWS_LIVENESS_REGION`, `AWS_LIVENESS_OUTPUT_BUCKET`, `NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID`, `AWS_FACE_COLLECTION_ID` | ทดสอบการลงทะเบียน/ตรวจใบหน้าและกล้อง |
 | Storage | `S3_ACCESS_KEY_ID`, `S3_SECRET_KEY`, `S3_ENDPOINT`, `S3_BUCKET` | อัปโหลดรูปสินค้าและ QR |
-| Cart sync | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS` | ใช้ Redis ระหว่างหลาย process; local dev fallback เป็น memory ได้ |
+| Cart sync | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS`, `REDIS_TLS_REJECT_UNAUTHORIZED`, `CART_SYNC_DEBUG` | ใช้ Redis ระหว่างหลาย process; ใช้ `REDIS_TLS_REJECT_UNAUTHORIZED=false` เฉพาะ Redis ที่เชื่อถือได้และใช้ self-signed certificate |
 | Wallet | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | เติม Wallet ผ่าน Stripe |
 | IoT | `IOT_SERVER_URL`, `IOT_API_KEY`, `BRANCH_CODE` | เชื่อม IoT server จริง |
 | MQTT | `MQTT_ENABLED`, `MQTT_BROKER_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_CLIENT_ID` | รับ event จาก IoT broker |
@@ -204,7 +204,7 @@ sequenceDiagram
   Customer->>App: สแกน QR และเลือกสินค้า
   App->>Iot: GET product + POST pick-sessions(uuid, email, sku)
   App->>App: สร้าง IoT session
-  Iot->>MQTT: pickedQty / shelf_closed
+  Iot->>MQTT: sessionSummary.takenTotal / shelf_closed
   MQTT->>App: MQTT worker รับ event
   App->>App: อัปเดต cart และแจ้งหน้า mobile ผ่าน SSE
   Exit->>App: ยืนยันตัวตนขาออก
@@ -244,7 +244,7 @@ flowchart TD
   F --> H[App ขอ product config จาก IoT]
   H --> I[App ส่ง session UUID ให้ IoT]
   I --> J[รอ MQTT event ผ่าน SSE]
-  J --> K[pickedQty สะสม → อัปเดต cart]
+  J --> K[sessionSummary.takenTotal สะสม → อัปเดต cart]
   K --> L{status = shelf_closed}
   L -- ไม่ใช่ --> J
   L -- ใช่ --> M[ปิด session และคงยอดสุดท้าย]
@@ -316,7 +316,7 @@ ON CONFLICT DO NOTHING;
 | --- | --- |
 | Event topic | `{uuid}/loadcell/{BRANCH_CODE}/{inventoryId}/event` |
 | Status topic | `{uuid}/loadcell/{BRANCH_CODE}/{inventoryId}/status` |
-| จำนวนที่ใช้กับตะกร้า | `pickedQty` เป็น **ยอดสะสมของ session** ไม่ใช่ delta |
+| จำนวนที่ใช้กับตะกร้า | `sessionSummary.takenTotal` เป็น **ยอดสะสมของ session** ไม่ใช่ delta |
 | ปิด session | เฉพาะ `status: "shelf_closed"` |
 | การตรวจสอบ | branch ใน topic/payload ต้องตรง `BRANCH_CODE`; `sku` (ถ้ามี) ต้องตรง `inventoryId` |
 | QoS | 1 สำหรับ broker path |
@@ -399,7 +399,7 @@ npm run db:migrate
 | Login Google แล้วกลับหน้าเดิม | ตรวจ `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `AUTH_URL` และ redirect URI ใน Google Cloud Console |
 | เข้าหน้า `/admin` ไม่ได้ | ยืนยันว่า user มี `admin` หรือ `super_admin` ใน `auth.user_roles`; logout/login ใหม่หลังเปลี่ยน role |
 | ปุ่มสแกน QR ถูกปิด | ลูกค้าต้องมี active visit จากกล้องขาเข้า, Wallet active และยอดอย่างน้อยเท่าราคาสินค้าต่ำสุด |
-| IoT session เปิดได้แต่ตะกร้าไม่เปลี่ยน | ตรวจ `BRANCH_CODE`, topic, `pickedQty` แบบสะสม, `sku`, worker log และ `iot_mqtt_message_logs` |
+| IoT session เปิดได้แต่ตะกร้าไม่เปลี่ยน | ตรวจ `BRANCH_CODE`, topic, `sessionSummary.takenTotal` แบบสะสม, `sku`, worker log และ `iot_mqtt_message_logs` |
 | MQTT worker ต่อ broker ไม่ได้ | ตรวจ `MQTT_ENABLED=true`, URL/port/credentials ของ IoT broker |
 | Redis local ไม่ทำงาน | local dev จะ fallback เป็น memory; สำหรับหลาย instance ต้องตั้ง Redis ที่เข้าถึงได้จริง |
 | Face / wallet ทำงานไม่ครบ | เป็น integration ภายนอก ต้องตั้ง AWS/Cognito/S3 หรือ Stripe variables ให้ครบตาม feature |

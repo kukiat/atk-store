@@ -61,7 +61,7 @@ export async function POST(request: NextRequest) {
           seq: Date.now(),
           sku: session.inventoryId,
           itemName: session.inventoryName,
-          pickedQty: readCount(body.pickedCount),
+          sessionSummary: { takenTotal: readCount(body.pickedCount) },
           currentQty:
             typeof body.currentQty === "number"
               ? body.currentQty

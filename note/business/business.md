@@ -119,9 +119,9 @@ flowchart TD
 
 - App สร้าง session UUID แล้วส่งให้ IoT server
 - Topic MQTT ใช้ pattern `{sessionId}/loadcell/{branchCode}/{inventoryId}/{event|status}`
-- Event ชนิด `event` ต้องมี `pickedQty`
+- Event ชนิด `event` ต้องมี `sessionSummary.takenTotal`
 - Status ชนิด `status` รองรับ `shelf_closed`
-- `pickedQty` ต้องเป็น non-negative integer
+- `sessionSummary.takenTotal` ต้องเป็น non-negative integer
 - branch ใน topic/payload ต้องตรงกับ `BRANCH_CODE`
 - sku ใน payload ถ้ามี ต้องตรงกับ inventory id ใน topic
 - เมื่อ IoT ส่ง picked count ระบบ sync cart และสร้าง notification

@@ -184,7 +184,7 @@ Payload event ตัวอย่าง:
   "event": "item_picked",
   "seq": 1,
   "sku": "inventory-uuid",
-  "pickedQty": 2,
+  "sessionSummary": { "takenTotal": 2 },
   "currentQty": 8,
   "timestamp": "2026-07-15T00:00:00.000Z"
 }

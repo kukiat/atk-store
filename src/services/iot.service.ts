@@ -10,7 +10,6 @@ import { clientVisitService } from "@/services/client-visit.service";
 import { iotSessionService } from "@/services/iot-session.service";
 import {
   createMockIotPickSession,
-  getMockIotProduct,
   isMockIotServerEnabled,
 } from "@/services/mock-iot-server.service";
 import type { CartItem } from "@/types";
@@ -38,11 +37,6 @@ type InventoryMaster = {
   imageUrl: string | null;
 };
 
-type IotProductResponse = {
-  productId?: unknown;
-  inStoreQty?: unknown;
-};
-
 function getIotServerUrl() {
   return process.env.IOT_SERVER_URL?.trim().replace(/\/$/, "") || null;
 }
@@ -59,10 +53,6 @@ function getIotHeaders() {
   };
 }
 
-function readNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
 class IotService {
   async openInventory(
     user: User,
@@ -77,7 +67,10 @@ class IotService {
 
     const sessionId = randomUUID();
     const branchCode = getBranchCode();
-    const productConfig = await this.getIotProductConfig(inventoryMaster.id);
+    const productConfig = {
+      productId: inventoryMaster.id,
+      inStoreQty: null,
+    };
     await this.createIotPickSession({
       uuid: sessionId,
       email: user.email,
@@ -159,28 +152,6 @@ class IotService {
     return inventory ?? null;
   }
 
-  private async getIotProductConfig(inventoryId: string) {
-    if (isMockIotServerEnabled()) {
-      return getMockIotProduct(inventoryId);
-    }
-
-    const iotServerUrl = getIotServerUrl();
-    if (!iotServerUrl) return { productId: inventoryId, inStoreQty: null };
-
-    const response = await fetch(`${iotServerUrl}/product/${inventoryId}`, {
-      headers: getIotHeaders(),
-    });
-    if (!response.ok) {
-      throw new Error(`IOT product config failed with status ${response.status}`);
-    }
-
-    const body = (await response.json()) as IotProductResponse;
-    return {
-      productId: inventoryId,
-      inStoreQty: readNumber(body.inStoreQty),
-    };
-  }
-
   private async createIotPickSession(input: {
     uuid: string;
     email: string;
@@ -199,6 +170,11 @@ class IotService {
       headers: getIotHeaders(),
       body: JSON.stringify(input),
     });
+
+    console.log("response", JSON.stringify(response, null, 2));
+    console.log(`FETCH: ${iotServerUrl}/pick-sessions`);
+    console.log(`HEADERS: ${JSON.stringify(getIotHeaders(), null, 2)}`);
+    console.log(`BODY: ${JSON.stringify(input, null, 2)}`);
 
     if (!response.ok) {
       throw new Error(

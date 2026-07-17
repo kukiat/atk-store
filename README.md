@@ -79,7 +79,7 @@ npm ci
 
 ### 2. เปิด PostgreSQL
 
-ไฟล์ `docker-compose.yml` ของโปรเจกต์เปิด **MQTT เท่านั้น** จึงต้องมี PostgreSQL แยกต่างหาก ตัวอย่างนี้สร้าง database local ใหม่:
+ต้องมี PostgreSQL แยกต่างหาก ตัวอย่างนี้สร้าง database local ใหม่:
 
 ```bash
 docker run --name atk-store-postgres \
@@ -157,7 +157,7 @@ curl http://localhost:3000/api/health-check
 | Cart sync | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS` | ใช้ Redis ระหว่างหลาย process; local dev fallback เป็น memory ได้ |
 | Wallet | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | เติม Wallet ผ่าน Stripe |
 | IoT | `IOT_SERVER_URL`, `IOT_API_KEY`, `BRANCH_CODE` | เชื่อม IoT server จริง |
-| MQTT | `MQTT_ENABLED`, `MQTT_BROKER_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_CLIENT_ID` | ทดสอบ broker path กับ worker |
+| MQTT | `MQTT_ENABLED`, `MQTT_BROKER_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_CLIENT_ID` | รับ event จาก IoT broker |
 | กล้อง | `CLIENT_ATTENDANCE_API_KEY`, `CLIENT_ATTENDANCE_MAX_IMAGE_BYTES` | อนุญาต worker กล้องเรียก attendance API |
 | QR | `ENCODE_KEY` | เข้ารหัส/ถอดรหัส QR payload |
 
@@ -172,27 +172,19 @@ BRANCH_CODE=main
 
 โหมดนี้เหมาะสำหรับเปิด inventory session และส่ง cumulative picked count / `shelf_closed` จากหน้า `/admin/inventory/iot-poc` โดยไม่ต้องมี IoT server หรือ MQTT broker จริง
 
-### ค่าตัวอย่างสำหรับ MQTT local
+### ค่าตัวอย่างสำหรับ MQTT broker ของ IoT
 
-```bash
-docker compose up -d
-```
-
-จากนั้นตั้งค่า:
+ตั้งค่าตาม broker ที่ IoT ดูแล:
 
 ```dotenv
 MQTT_ENABLED=true
-MQTT_BROKER_URL=mqtt://localhost:1883
+MQTT_BROKER_URL=mqtts://your-iot-broker:8883
+MQTT_USERNAME=your-username
+MQTT_PASSWORD=your-password
 BRANCH_CODE=main
 ```
 
-แล้วเปิด worker แยก terminal:
-
-```bash
-npm run iot:mqtt
-```
-
-Worker subscribe ทั้ง event และ status ของ branch ที่กำหนด, ตรวจ topic/payload ก่อนประมวลผล, บันทึก `iot_mqtt_message_logs` และส่ง normalized event เข้าสู่ session/cart service
+Docker runtime จะเปิด MQTT worker พร้อมเว็บแอป; สำหรับ local development ให้เปิด worker แยกด้วย `npm run iot:mqtt`.
 
 ## Flow หลักของร้าน 🧭
 
@@ -351,9 +343,9 @@ src/
 ├── services/               # business logic และ data access (server-only)
 └── store/                  # Zustand client cart
 script/
-└── iot-mqtt-worker.ts      # MQTT mock/reference worker
+└── iot-mqtt-worker.ts      # MQTT worker
 drizzle/                    # SQL migrations
-docker/                     # Mosquitto config
+docker/                     # Docker startup scripts
 ```
 
 แนวทางสำคัญ: หน้าและ API เรียก business logic ผ่าน `src/services/` เพื่อไม่ให้กฎธุรกิจซ้ำกัน ส่วน modules ที่เข้าถึงฐานข้อมูลหรือ secrets เป็น server-only
@@ -373,7 +365,7 @@ docker/                     # Mosquitto config
 | `npm run db:push` | push schema ตรง เหมาะกับ local experiment เท่านั้น |
 | `npm run db:seed` | เติมข้อมูลตัวอย่าง (มีผล reset inventory/units) |
 | `npm run db:studio` | เปิด Drizzle Studio |
-| `npm run iot:mqtt` | เปิด MQTT mock/reference worker |
+| `npm run iot:mqtt` | เปิด MQTT worker |
 
 ## ตรวจสอบก่อนส่งงาน ✨
 
@@ -408,6 +400,6 @@ npm run db:migrate
 | เข้าหน้า `/admin` ไม่ได้ | ยืนยันว่า user มี `admin` หรือ `super_admin` ใน `auth.user_roles`; logout/login ใหม่หลังเปลี่ยน role |
 | ปุ่มสแกน QR ถูกปิด | ลูกค้าต้องมี active visit จากกล้องขาเข้า, Wallet active และยอดอย่างน้อยเท่าราคาสินค้าต่ำสุด |
 | IoT session เปิดได้แต่ตะกร้าไม่เปลี่ยน | ตรวจ `BRANCH_CODE`, topic, `pickedQty` แบบสะสม, `sku`, worker log และ `iot_mqtt_message_logs` |
-| MQTT worker ต่อ broker ไม่ได้ | ตรวจ `MQTT_ENABLED=true`, URL/port/credentials และ `docker compose ps` สำหรับ Mosquitto local |
+| MQTT worker ต่อ broker ไม่ได้ | ตรวจ `MQTT_ENABLED=true`, URL/port/credentials ของ IoT broker |
 | Redis local ไม่ทำงาน | local dev จะ fallback เป็น memory; สำหรับหลาย instance ต้องตั้ง Redis ที่เข้าถึงได้จริง |
 | Face / wallet ทำงานไม่ครบ | เป็น integration ภายนอก ต้องตั้ง AWS/Cognito/S3 หรือ Stripe variables ให้ครบตาม feature |

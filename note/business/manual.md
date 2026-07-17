@@ -100,21 +100,19 @@ BRANCH_CODE=main
 5. กด `Send count`
 6. กด `Door closed` เมื่ออยากปิด session
 
-## วิธีลอง MQTT local
+## รับ MQTT จาก IoT broker
 
-```bash
-docker compose up -d
-```
-
-ตั้งค่า:
+ตั้งค่าตาม broker ที่ IoT ดูแล:
 
 ```dotenv
 MQTT_ENABLED=true
-MQTT_BROKER_URL=mqtt://localhost:1883
+MQTT_BROKER_URL=mqtts://your-iot-broker:8883
+MQTT_USERNAME=your-username
+MQTT_PASSWORD=your-password
 BRANCH_CODE=main
 ```
 
-เปิด worker:
+สำหรับการพัฒนาในเครื่อง ให้เปิด worker:
 
 ```bash
 npm run iot:mqtt

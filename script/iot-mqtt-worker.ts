@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+
 import mqtt from "mqtt";
 
 import { loadcellSubscribeTopics } from "@/services/iot-loadcell-contract";
@@ -8,7 +10,9 @@ import {
   iotMqttMessageLogService,
 } from "@/services/iot-mqtt-message-log.service";
 
-process.loadEnvFile();
+if (existsSync(".env")) {
+  process.loadEnvFile();
+}
 
 const brokerUrl = process.env.MQTT_BROKER_URL?.trim();
 const enabled = process.env.MQTT_ENABLED !== "false";
@@ -30,6 +34,16 @@ function logEvent(
   data: Record<string, unknown>,
 ) {
   console.log(JSON.stringify({ action, ...data }));
+}
+
+function logMqttConnectionStatus(connected: boolean, error?: unknown) {
+  if (connected) {
+    console.log("✅ connected to mqtt");
+    return;
+  }
+
+  const reason = error instanceof Error ? error.message : String(error);
+  console.error(`❌ cannot connected to mqtt: ${reason}`);
 }
 
 if (!enabled) {
@@ -56,6 +70,7 @@ const client = mqtt.connect(brokerUrl, {
 });
 
 client.on("connect", () => {
+  logMqttConnectionStatus(true);
   logEvent("mqtt_connected", { brokerUrl, topics });
   client.subscribe(topics, { qos: 1 }, (error, granted) => {
     if (error) {
@@ -94,6 +109,7 @@ client.on("message", async (receivedTopic, payload) => {
 });
 
 client.on("error", (error) => {
+  logMqttConnectionStatus(false, error);
   console.error("MQTT worker error", error);
 });
 

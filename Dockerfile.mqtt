@@ -1,0 +1,21 @@
+# syntax=docker/dockerfile:1
+
+FROM node:20-bookworm-slim AS dependencies
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci --include=dev
+
+FROM node:20-bookworm-slim AS runner
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+COPY --from=dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --chown=node:node tsconfig.json tsconfig.mqtt-worker.json ./
+COPY --chown=node:node src ./src
+COPY --chown=node:node script ./script
+
+USER node
+
+CMD ["./node_modules/.bin/tsx", "--tsconfig", "tsconfig.mqtt-worker.json", "script/iot-mqtt-worker.ts"]

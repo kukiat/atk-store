@@ -12,6 +12,12 @@ export type AnimationStatusUpdate = {
   imageURL?: string;
 };
 
+export type ScanQrAnimationStatusUpdate = {
+  userId: number;
+  result: AnimationResult;
+  sku: string;
+};
+
 function getAnimationServerUrl(): string {
   const value = process.env.ANIMATION_SERVER_URL?.trim();
   if (!value) {
@@ -26,15 +32,34 @@ export class AnimationClientService {
       result: input.result,
       ...(input.imageURL ? { imageURL: input.imageURL } : {}),
     };
+    await this.postUserStatus(
+      input.userId,
+      input.direction === "entry" ? "verify" : "pay",
+      payload,
+    );
+  }
+
+  async updateScanQrStatus(
+    input: ScanQrAnimationStatusUpdate,
+  ): Promise<void> {
+    await this.postUserStatus(input.userId, "scanQR", {
+      result: input.result,
+      sku: input.sku,
+      userId: input.userId,
+    });
+  }
+
+  private async postUserStatus(
+    userId: number,
+    action: "verify" | "pay" | "scanQR",
+    payload: Record<string, unknown>,
+  ): Promise<void> {
     const response = await fetch(
-      `${getAnimationServerUrl()}/users/${input.userId}/status`,
+      `${getAnimationServerUrl()}/users/${userId}/status`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: input.direction === "entry" ? "verify" : "pay",
-          payload,
-        }),
+        body: JSON.stringify({ action, payload }),
       },
     );
 

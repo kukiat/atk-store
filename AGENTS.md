@@ -25,3 +25,10 @@ If the handoff conflicts with the current code, git state, or newer user instruc
 When preparing a handoff for a future session, keep it compact and action-oriented. Include the current objective, what has been done, important decisions and constraints, relevant files or commands, open questions, suggested skills, and recommended next steps. Store temporary handoff documents outside the workspace unless the user explicitly asks to commit them.
 
 <!-- END:session-continuation-rules -->
+
+# Git Rule
+<!-- BEGIN:github-rules -->
+- Do not run any Git command that changes repository state unless the user explicitly requests that exact action.
+- Read-only Git commands such as `git status`, `git diff`, and `git log` are allowed.
+- Never automatically stage, commit, amend, push, pull, merge, rebase, reset, checkout, switch, stash, tag, or create/delete branches.
+<!-- END:github-rules -->

@@ -12,6 +12,7 @@ import {
   createMockIotPickSession,
   isMockIotServerEnabled,
 } from "@/services/mock-iot-server.service";
+import { scanQrAnimationService } from "@/services/scan-qr-animation.service";
 import type { CartItem } from "@/types";
 
 export type IotOpenInventoryResult = {
@@ -71,12 +72,6 @@ class IotService {
       productId: inventoryMaster.id,
       inStoreQty: null,
     };
-    await this.createIotPickSession({
-      uuid: sessionId,
-      email: user.email,
-      sku: inventoryMaster.id,
-    });
-
     const cartItem = {
       inventoryId: inventoryMaster.id,
       name: inventoryMaster.name,
@@ -86,21 +81,45 @@ class IotService {
       imageUrl: inventoryMaster.imageUrl,
     };
 
-    const session = await iotSessionService.createSession({
-      sessionId,
-      clientVisitId,
-      user,
-      inventory: {
-        inventoryId: inventoryMaster.id,
-        inventoryName: inventoryMaster.name,
-        cartItem,
-      },
-      branchCode,
-      inStoreQty: productConfig.inStoreQty,
-      metadata: {
-        productConfig,
-      },
+    let session: Awaited<ReturnType<typeof iotSessionService.createSession>>;
+    try {
+      await this.createIotPickSession({
+        uuid: sessionId,
+        userId: user.id,
+        email: user.email,
+        sku: inventoryMaster.id,
+      });
+
+      session = await iotSessionService.createSession({
+        sessionId,
+        clientVisitId,
+        user,
+        inventory: {
+          inventoryId: inventoryMaster.id,
+          inventoryName: inventoryMaster.name,
+          cartItem,
+        },
+        branchCode,
+        inStoreQty: productConfig.inStoreQty,
+        metadata: {
+          productConfig,
+        },
+      });
+    } catch (error) {
+      await scanQrAnimationService.publishStatus({
+        result: "fail",
+        userId: user.id,
+        sku: inventoryMaster.id,
+      });
+      throw error;
+    }
+
+    await scanQrAnimationService.publishStatus({
+      result: "pass",
+      userId: user.id,
+      sku: inventoryMaster.id,
     });
+
     const inventory = { ...cartItem, quantity: 0 };
 
     await this.insertOpenNotifications({
@@ -154,6 +173,7 @@ class IotService {
 
   private async createIotPickSession(input: {
     uuid: string;
+    userId: number;
     email: string;
     sku: string;
   }) {

@@ -70,6 +70,30 @@ describe("AnimationClientService", () => {
     });
   });
 
+  it("sends scanQR with sku and userId in the payload", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(new Response(null, { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await animationClientService.updateScanQrStatus({
+      userId: 42,
+      result: "pass",
+      sku: "inventory-uuid",
+    });
+
+    const [url, request] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe("https://animation.example/users/42/status");
+    expect(JSON.parse(String(request?.body))).toEqual({
+      action: "scanQR",
+      payload: {
+        result: "pass",
+        sku: "inventory-uuid",
+        userId: 42,
+      },
+    });
+  });
+
   it("rejects non-success responses so the caller can retry", async () => {
     vi.stubGlobal(
       "fetch",

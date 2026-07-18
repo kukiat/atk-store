@@ -12,8 +12,9 @@ const allowedImageTypes = new Set([
   "image/gif",
   "image/svg+xml",
 ]);
+const allowedAttendanceImageTypes = new Set(["image/jpeg", "image/png"]);
 
-type UploadFolder = "product" | "qr";
+type UploadFolder = "product" | "qr" | "entry" | "exit";
 
 function readRequiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -22,10 +23,12 @@ function readRequiredEnv(name: string): string {
 }
 
 function getFolder(folder: UploadFolder): string {
-  const envName =
-    folder === "product"
-      ? "S3_PRODUCT_IMAGE_FOLDER"
-      : "S3_QR_CODE_IMAGE_FOLDER";
+  const envName = {
+    product: "S3_PRODUCT_IMAGE_FOLDER",
+    qr: "S3_QR_CODE_IMAGE_FOLDER",
+    entry: "S3_ENTRY_IMAGE_FOLDER",
+    exit: "S3_EXIT_IMAGE_FOLDER",
+  }[folder];
   return readRequiredEnv(envName).replace(/^\/+|\/+$/g, "");
 }
 
@@ -58,11 +61,12 @@ function makePublicUrl(input: {
 }
 
 class S3StorageService {
-  private getClient(): S3Client {
+  private getClient(maxAttempts?: number): S3Client {
     return new S3Client({
       endpoint: readRequiredEnv("S3_ENDPOINT"),
       region: readRequiredEnv("S3_REGION"),
       forcePathStyle: true,
+      ...(maxAttempts ? { maxAttempts } : {}),
       credentials: {
         accessKeyId: readRequiredEnv("S3_ACCESS_KEY_ID"),
         secretAccessKey: readRequiredEnv("S3_SECRET_KEY"),
@@ -103,18 +107,47 @@ class S3StorageService {
     });
   }
 
+  async uploadAttendanceImage(input: {
+    eventId: number;
+    imageBytes: Uint8Array;
+    imageContentType: string;
+    direction: Extract<UploadFolder, "entry" | "exit">;
+  }): Promise<string> {
+    if (!allowedAttendanceImageTypes.has(input.imageContentType)) {
+      throw new Error("Attendance image must be JPEG or PNG");
+    }
+    if (input.imageBytes.byteLength === 0) {
+      throw new Error("Attendance image must not be empty");
+    }
+    if (input.imageBytes.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error("Attendance image must be 5 MB or smaller");
+    }
+
+    const extension = input.imageContentType === "image/png" ? "png" : "jpg";
+    return this.uploadBytes({
+      bytes: Buffer.from(input.imageBytes),
+      contentType: input.imageContentType,
+      filename: `camera-frame.${extension}`,
+      folder: input.direction,
+      keyPrefix: `attendance-event-${input.eventId}`,
+      maxAttempts: 1,
+    });
+  }
+
   private async uploadBytes(input: {
     bytes: Buffer;
     contentType: string;
     filename: string;
     folder: UploadFolder;
+    keyPrefix?: string;
+    maxAttempts?: number;
   }): Promise<string> {
     const bucket = readRequiredEnv("S3_BUCKET");
     const endpoint = readRequiredEnv("S3_ENDPOINT");
     const folder = getFolder(input.folder);
-    const key = `${folder}/${randomUUID()}-${input.filename}`;
+    const key = `${folder}/${input.keyPrefix ?? randomUUID()}-${input.filename}`;
 
-    await this.getClient().send(
+    await this.getClient(input.maxAttempts).send(
       new PutObjectCommand({
         Bucket: bucket,
         Key: key,

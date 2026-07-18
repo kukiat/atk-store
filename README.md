@@ -153,12 +153,13 @@ curl http://localhost:3000/api/health-check
 | ฐานข้อมูล | `DATABASE_URL`, `DATABASE_SCHEMA=auth` | จำเป็นเสมอ |
 | เข้าสู่ระบบ | `AUTH_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | จำเป็นสำหรับหน้า customer และ admin |
 | Face / AWS | `AWS_PROFILE`, `AWS_LIVENESS_REGION`, `AWS_LIVENESS_OUTPUT_BUCKET`, `NEXT_PUBLIC_COGNITO_IDENTITY_POOL_ID`, `AWS_FACE_COLLECTION_ID` | ทดสอบการลงทะเบียน/ตรวจใบหน้าและกล้อง |
-| Storage | `S3_ACCESS_KEY_ID`, `S3_SECRET_KEY`, `S3_ENDPOINT`, `S3_BUCKET` | อัปโหลดรูปสินค้าและ QR |
+| Storage | `S3_ACCESS_KEY_ID`, `S3_SECRET_KEY`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_ENTRY_IMAGE_FOLDER`, `S3_EXIT_IMAGE_FOLDER` | อัปโหลดรูปสินค้า, QR และรูปจากกล้องที่เปลี่ยนสถานะสำเร็จ |
 | Cart sync | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_TLS`, `REDIS_TLS_REJECT_UNAUTHORIZED`, `CART_SYNC_DEBUG` | ใช้ Redis ระหว่างหลาย process; ใช้ `REDIS_TLS_REJECT_UNAUTHORIZED=false` เฉพาะ Redis ที่เชื่อถือได้และใช้ self-signed certificate |
 | Wallet | `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` | เติม Wallet ผ่าน Stripe |
 | IoT | `IOT_SERVER_URL`, `IOT_API_KEY`, `BRANCH_CODE` | เชื่อม IoT server จริง |
 | MQTT | `MQTT_ENABLED`, `MQTT_BROKER_URL`, `MQTT_USERNAME`, `MQTT_PASSWORD`, `MQTT_CLIENT_ID` | รับ event จาก IoT broker |
 | กล้อง | `CLIENT_ATTENDANCE_API_KEY`, `CLIENT_ATTENDANCE_MAX_IMAGE_BYTES` | อนุญาต worker กล้องเรียก attendance API |
+| Animation | `ANIMATION_SERVER_URL` | ส่งผล entry/exit และ URL รูปหลังเปลี่ยนสถานะสำเร็จ |
 | QR | `ENCODE_KEY` | เข้ารหัส/ถอดรหัส QR payload |
 
 ### ค่าตัวอย่างสำหรับ IoT mock แบบไม่ใช้ broker

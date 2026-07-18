@@ -65,7 +65,10 @@ function readMetadata(formData: FormData): Record<string, unknown> | undefined {
   return parsed as Record<string, unknown>;
 }
 
-async function readImageBytes(formData: FormData): Promise<Uint8Array> {
+async function readImage(formData: FormData): Promise<{
+  imageBytes: Uint8Array;
+  imageContentType: string;
+}> {
   const image = formData.get("image");
   if (!(image instanceof File)) {
     throw new AttendanceRequestValidationError("Missing image file");
@@ -79,7 +82,10 @@ async function readImageBytes(formData: FormData): Promise<Uint8Array> {
     throw new AttendanceRequestValidationError("image is too large");
   }
 
-  return new Uint8Array(await image.arrayBuffer());
+  return {
+    imageBytes: new Uint8Array(await image.arrayBuffer()),
+    imageContentType: image.type,
+  };
 }
 
 export async function POST(request: NextRequest) {
@@ -91,10 +97,11 @@ export async function POST(request: NextRequest) {
     const direction = readDirection(formData);
     const workerCapturedAt = readCapturedAt(formData);
     const metadata = readMetadata(formData);
-    const imageBytes = await readImageBytes(formData);
+    const { imageBytes, imageContentType } = await readImage(formData);
 
     const result = await clientAttendanceService.recognizeFrame({
       imageBytes,
+      imageContentType,
       cameraId,
       direction,
       workerCapturedAt,

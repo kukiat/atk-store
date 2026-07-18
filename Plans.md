@@ -83,6 +83,15 @@ Purpose: prove the full path once within the $5 alert budget and leave an audita
 | 4.1  | Run one controlled signed-in liveness attempt against Tokyo and inspect the owned result/S3 object metadata. [needs-spike] [feature:security] | One attempt reaches a recorded terminal state; server evidence shows Create=1 and Get=1 (or the single documented retry); no browser leak of secret credentials. | Phase 3 | cc:TODO |
 | 4.2  | Run lint, tests, production build, and mobile visual smoke; update the codebase index to reflect new routes/schema/components.                | `npm run lint`, test command, and build pass; `code_base_indexing/` matches the changed source tree.                                                             | 4.1     | cc:TODO |
 
+## Phase 5: Camera attendance animation handoff
+
+Purpose: publish successful entry and exit transitions, including the accepted
+camera frame, to the external animation server without duplicating side effects.
+
+| Task | Content                                                                                                                                                        | DoD                                                                                                                                                                                                 | Depends | Status |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ |
+| 5.1  | Upload the frame that created an attendance transition and notify the animation server with bounded retries. [integration] [tdd:required]                    | Entry/exit transitions upload to their configured S3 folders and send `verify`/`pay` with `payload.imageURL`; stamp failures send `fail`; unchanged visits send nothing; S3 and HTTP get 3 attempts. | -       | cc:done |
+
 ## Explicitly deferred
 
 - Face Collection and face-vector indexing/search.

@@ -13,12 +13,14 @@ import {
   clientVisits,
   users,
 } from "@/db/schema";
+import { clientAttendanceIntegrationService } from "@/services/client-attendance-integration.service";
 import { faceRecognitionService } from "@/services/face-recognition.service";
 import { publishCheckoutStatus } from "@/services/order-events.service";
 import { orderService } from "@/services/order.service";
 
 type RecognizeFrameInput = {
   imageBytes: Uint8Array;
+  imageContentType: string;
   cameraId: string;
   direction: AttendanceDirection;
   workerCapturedAt: Date | null;
@@ -30,6 +32,11 @@ type RecognizedUser = {
   email: string;
   name: string | null;
   avatarUrl: string | null;
+};
+
+type VisitStateResult = {
+  visit: ClientVisit | null;
+  transitioned: boolean;
 };
 
 type ManualOverrideInput = {
@@ -108,14 +115,16 @@ function isUniqueViolation(error: unknown): boolean {
 async function applyVisitState(
   event: ClientAttendanceEvent,
   user: RecognizedUser | null,
-): Promise<ClientVisit | null> {
-  if (!user) return null;
+): Promise<VisitStateResult> {
+  if (!user) return { visit: null, transitioned: false };
 
   const now = new Date();
 
   if (event.direction === "entry") {
     const existingOpenVisit = await getOpenVisit(user.id);
-    if (existingOpenVisit) return existingOpenVisit;
+    if (existingOpenVisit) {
+      return { visit: existingOpenVisit, transitioned: false };
+    }
 
     try {
       const [visit] = await db
@@ -130,16 +139,18 @@ async function applyVisitState(
         })
         .returning();
 
-      return visit ?? null;
+      return { visit: visit ?? null, transitioned: Boolean(visit) };
     } catch (error) {
-      if (isUniqueViolation(error)) return getOpenVisit(user.id);
+      if (isUniqueViolation(error)) {
+        return { visit: await getOpenVisit(user.id), transitioned: false };
+      }
       throw error;
     }
   }
 
   if (event.direction === "exit") {
     const existingOpenVisit = await getOpenVisit(user.id);
-    if (!existingOpenVisit) return null;
+    if (!existingOpenVisit) return { visit: null, transitioned: false };
 
     const [visit] = await db
       .update(clientVisits)
@@ -149,13 +160,38 @@ async function applyVisitState(
         exitEventId: event.id,
         updatedAt: now,
       })
-      .where(eq(clientVisits.id, existingOpenVisit.id))
+      .where(
+        and(
+          eq(clientVisits.id, existingOpenVisit.id),
+          eq(clientVisits.status, "inside"),
+        ),
+      )
       .returning();
 
-    return visit ?? null;
+    return { visit: visit ?? null, transitioned: Boolean(visit) };
   }
 
-  return getOpenVisit(user.id);
+  return { visit: await getOpenVisit(user.id), transitioned: false };
+}
+
+function isTransitionDirection(
+  direction: AttendanceDirection,
+): direction is Extract<AttendanceDirection, "entry" | "exit"> {
+  return direction === "entry" || direction === "exit";
+}
+
+function logIntegrationError(
+  stage: "pass" | "fail",
+  userId: number,
+  direction: Extract<AttendanceDirection, "entry" | "exit">,
+  error: unknown,
+) {
+  console.error("Client attendance integration failed", {
+    stage,
+    userId,
+    direction,
+    error: error instanceof Error ? error.message : String(error),
+  });
 }
 
 async function createCheckoutForExit(
@@ -221,7 +257,44 @@ class ClientAttendanceService {
       throw new Error("Failed to create client attendance event");
     }
 
-    const visit = await applyVisitState(event, user);
+    let visitState: VisitStateResult;
+    try {
+      visitState = await applyVisitState(event, user);
+    } catch (error) {
+      if (user && isTransitionDirection(event.direction)) {
+        try {
+          await clientAttendanceIntegrationService.publishStampFailure({
+            userId: user.id,
+            direction: event.direction,
+          });
+        } catch (integrationError) {
+          logIntegrationError(
+            "fail",
+            user.id,
+            event.direction,
+            integrationError,
+          );
+        }
+      }
+      throw error;
+    }
+
+    if (user && isTransitionDirection(event.direction)) {
+      try {
+        await clientAttendanceIntegrationService.publishTransition({
+          transitioned: visitState.transitioned,
+          eventId: event.id,
+          userId: user.id,
+          direction: event.direction,
+          imageBytes: input.imageBytes,
+          imageContentType: input.imageContentType,
+        });
+      } catch (error) {
+        logIntegrationError("pass", user.id, event.direction, error);
+      }
+    }
+
+    const visit = visitState.visit;
     const checkout = await createCheckoutForExit(user, event, visit);
 
     return { event, visit, user, checkout };
@@ -269,7 +342,7 @@ class ClientAttendanceService {
       throw new Error("Failed to create client attendance event");
     }
 
-    const visit = await applyVisitState(event, user);
+    const { visit } = await applyVisitState(event, user);
     const checkout = await createCheckoutForExit(user, event, visit);
 
     return { event, visit, user, checkout };

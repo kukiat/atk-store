@@ -628,12 +628,12 @@ class WalletService {
           updatedAt: new Date(),
         },
       ]);
-      publishCheckoutStatus(result.userId);
+      await publishCheckoutStatus(result.userId);
       throw new WalletInsufficientBalanceError();
     }
 
     await cartSyncService.clearCart(clientVisitId);
-    publishCheckoutStatus(result.userId);
+    await publishCheckoutStatus(result.userId);
     console.info("[wallet] order paid from wallet", {
       clientVisitId,
       orderId: result.order.id,

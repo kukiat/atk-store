@@ -175,7 +175,7 @@ async function createCheckoutForExit(
       totalPrice: order.totalPrice,
     };
   } catch (error) {
-    publishCheckoutStatus(user.id);
+    await publishCheckoutStatus(user.id);
     return {
       status: "failed",
       message: error instanceof Error ? error.message : "Checkout failed",

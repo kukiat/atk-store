@@ -2,7 +2,8 @@
 // Script Path (default): Jenkinsfile
 //
 // Deploys as:
-//   atk-store → compose service on the Docker host
+//   atk-store       → web app
+//   atk-store-mqtt  → mqtt worker
 // Compose path: /docker/hexdas/atk
 //
 // Agent is linux/amd64 — uses plain `docker build` / `docker push` (no buildx required).
@@ -22,6 +23,7 @@ pipeline {
   }
 
   parameters {
+    choice(name: 'TARGET', choices: ['all', 'web', 'mqtt'], description: 'What to build & deploy (web=atk-store, mqtt=atk-store-mqtt)')
     string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag')
     booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Recreate compose services after push')
     choice(name: 'DEPLOY_MODE', choices: ['local', 'ssh'], description: 'local = docker compose on this agent (same host); ssh = remote')
@@ -32,8 +34,8 @@ pipeline {
   }
 
   environment {
-    IMAGE = 'bunchax/atk-store'
-    COMPOSE_SERVICE = 'atk-store'
+    WEB_IMAGE = 'bunchax/atk-store'
+    MQTT_IMAGE = 'bunchax/atk-store-mqtt'
   }
 
   stages {
@@ -91,7 +93,10 @@ Then leave DOCKERHUB_CRED_ID = dockerhub-creds'''
       }
     }
 
-    stage('Build & Push') {
+    stage('Build & Push web') {
+      when {
+        expression { return targetIncludes('web') }
+      }
       steps {
         withCredentials([usernamePassword(
           credentialsId: params.DOCKERHUB_CRED_ID,
@@ -104,13 +109,41 @@ Then leave DOCKERHUB_CRED_ID = dockerhub-creds'''
 
             docker build \
               -f Dockerfile \
-              -t "${IMAGE}:${IMAGE_TAG}" \
-              -t "${IMAGE}:latest" \
+              -t "${WEB_IMAGE}:${IMAGE_TAG}" \
+              -t "${WEB_IMAGE}:latest" \
               .
 
-            docker push "${IMAGE}:${IMAGE_TAG}"
-            docker push "${IMAGE}:latest"
-            docker image inspect "${IMAGE}:${IMAGE_TAG}" --format 'Arch={{.Architecture}} Os={{.Os}}'
+            docker push "${WEB_IMAGE}:${IMAGE_TAG}"
+            docker push "${WEB_IMAGE}:latest"
+            docker image inspect "${WEB_IMAGE}:${IMAGE_TAG}" --format 'Arch={{.Architecture}} Os={{.Os}}'
+          '''
+        }
+      }
+    }
+
+    stage('Build & Push mqtt') {
+      when {
+        expression { return targetIncludes('mqtt') }
+      }
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: params.DOCKERHUB_CRED_ID,
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
+          sh '''
+            set -e
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+            docker build \
+              -f Dockerfile.mqtt \
+              -t "${MQTT_IMAGE}:${IMAGE_TAG}" \
+              -t "${MQTT_IMAGE}:latest" \
+              .
+
+            docker push "${MQTT_IMAGE}:${IMAGE_TAG}"
+            docker push "${MQTT_IMAGE}:latest"
+            docker image inspect "${MQTT_IMAGE}:${IMAGE_TAG}" --format 'Arch={{.Architecture}} Os={{.Os}}'
           '''
         }
       }
@@ -122,11 +155,19 @@ Then leave DOCKERHUB_CRED_ID = dockerhub-creds'''
       }
       steps {
         script {
+          def services = []
+          if (targetIncludes('web')) { services << 'atk-store' }
+          if (targetIncludes('mqtt')) { services << 'atk-store-mqtt' }
+          def svc = services.join(' ')
+          if (!svc) {
+            error 'No compose services selected for TARGET'
+          }
+
           def remote = """
             set -e
             cd ${params.DEPLOY_PATH}
-            docker compose pull ${env.COMPOSE_SERVICE}
-            docker compose up -d --force-recreate --no-deps ${env.COMPOSE_SERVICE}
+            docker compose pull ${svc}
+            docker compose up -d --force-recreate --no-deps ${svc}
             docker image prune -f
           """.stripIndent().trim()
 
@@ -141,7 +182,7 @@ Then leave DOCKERHUB_CRED_ID = dockerhub-creds'''
       sh 'docker logout || true'
     }
     success {
-      echo "OK — tag=${env.IMAGE_TAG} deploy=${params.DEPLOY} mode=${params.DEPLOY_MODE}"
+      echo "OK — TARGET=${params.TARGET} tag=${env.IMAGE_TAG} deploy=${params.DEPLOY} mode=${params.DEPLOY_MODE}"
     }
     failure {
       echo '''
@@ -150,7 +191,7 @@ FAILED — common causes:
   2) Credential ID mismatch (DOCKERHUB_CRED_ID)
   3) Agent missing docker / permission to docker.sock
   4) DEPLOY_MODE=local: host must have DEPLOY_PATH and env files used by compose
-  5) Compose service name mismatch — check COMPOSE_SERVICE matches docker-compose.yml
+  5) Compose service name mismatch — check atk-store / atk-store-mqtt in docker-compose.yml
 '''
     }
   }
@@ -161,6 +202,11 @@ boolean paramBool(String name) {
   if (v == null) { return false }
   if (v instanceof Boolean) { return v }
   return v.toString().toBoolean()
+}
+
+boolean targetIncludes(String name) {
+  def t = (params.TARGET ?: 'all').toString()
+  return t == 'all' || t == name
 }
 
 /**

@@ -1,0 +1,209 @@
+// atk-store — Jenkins job
+// Script Path (default): Jenkinsfile
+//
+// Deploys as:
+//   atk-store → compose service on the Docker host
+// Compose path: /docker/hexdas/atk
+//
+// Agent is linux/amd64 — uses plain `docker build` / `docker push` (no buildx required).
+// Jenkins อยู่เครื่องเดียวกับ deploy → default DEPLOY_MODE=local (ไม่ต้อง SSH)
+//
+// Credentials (Jenkins → Manage Credentials):
+//   dockerhub-creds  — Username with password (Docker Hub: bunchax)
+//   hexdas-ssh       — เฉพาะเมื่อ DEPLOY_MODE=ssh
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    buildDiscarder(logRotator(numToKeepStr: '20'))
+  }
+
+  parameters {
+    string(name: 'IMAGE_TAG', defaultValue: 'latest', description: 'Docker image tag')
+    booleanParam(name: 'DEPLOY', defaultValue: true, description: 'Recreate compose services after push')
+    choice(name: 'DEPLOY_MODE', choices: ['local', 'ssh'], description: 'local = docker compose on this agent (same host); ssh = remote')
+    string(name: 'DEPLOY_HOST', defaultValue: '76.13.209.136', description: 'SSH host when DEPLOY_MODE=ssh')
+    string(name: 'DEPLOY_PATH', defaultValue: '/docker/hexdas/atk', description: 'Compose project path on the Docker host')
+    string(name: 'DOCKERHUB_CRED_ID', defaultValue: 'dockerhub-creds', description: 'Jenkins Credentials ID only (e.g. dockerhub-creds) — NOT the dckr_pat_ token')
+    string(name: 'SSH_CRED_ID', defaultValue: 'hexdas-ssh', description: 'Only used when DEPLOY_MODE=ssh')
+  }
+
+  environment {
+    IMAGE = 'bunchax/atk-store'
+    COMPOSE_SERVICE = 'atk-store'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Validate credentials params') {
+      steps {
+        script {
+          def tag = (params.IMAGE_TAG ?: '').toString().trim()
+          env.IMAGE_TAG = tag ?: 'latest'
+          echo "IMAGE_TAG=${env.IMAGE_TAG}"
+
+          def hubId = (params.DOCKERHUB_CRED_ID ?: '').toString().trim()
+          def sshId = (params.SSH_CRED_ID ?: '').toString().trim()
+          if (hubId.startsWith('dckr_pat_') || hubId.contains('/') || hubId.length() > 80) {
+            error '''DOCKERHUB_CRED_ID must be a Jenkins credential ID (e.g. dockerhub-creds), not the Docker Hub PAT.
+
+Create it in Jenkins → Manage Jenkins → Credentials:
+  Kind: Username with password
+  ID: dockerhub-creds
+  Username: your Docker Hub username (e.g. bunchax)
+  Password: the dckr_pat_… token
+
+Then leave DOCKERHUB_CRED_ID = dockerhub-creds'''
+          }
+          if (!hubId) {
+            error 'DOCKERHUB_CRED_ID is empty'
+          }
+          echo "Using Docker Hub credential ID: ${hubId}"
+          if (paramBool('DEPLOY') && params.DEPLOY_MODE == 'ssh') {
+            if (!sshId) {
+              error 'SSH_CRED_ID is empty (needed for DEPLOY_MODE=ssh)'
+            }
+            echo "Using SSH credential ID: ${sshId}"
+          } else if (paramBool('DEPLOY')) {
+            echo "DEPLOY_MODE=local — deploy via docker CLI helper mounting host ${params.DEPLOY_PATH}"
+          }
+        }
+      }
+    }
+
+    stage('Docker check') {
+      steps {
+        sh '''
+          set -e
+          command -v docker >/dev/null || { echo "ERROR: docker not found on agent"; exit 1; }
+          docker version
+          ARCH="$(docker info --format '{{.Architecture}}' 2>/dev/null || true)"
+          echo "Docker architecture: ${ARCH:-unknown}"
+        '''
+      }
+    }
+
+    stage('Build & Push') {
+      steps {
+        withCredentials([usernamePassword(
+          credentialsId: params.DOCKERHUB_CRED_ID,
+          usernameVariable: 'DOCKER_USER',
+          passwordVariable: 'DOCKER_PASS'
+        )]) {
+          sh '''
+            set -e
+            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+
+            docker build \
+              -f Dockerfile \
+              -t "${IMAGE}:${IMAGE_TAG}" \
+              -t "${IMAGE}:latest" \
+              .
+
+            docker push "${IMAGE}:${IMAGE_TAG}"
+            docker push "${IMAGE}:latest"
+            docker image inspect "${IMAGE}:${IMAGE_TAG}" --format 'Arch={{.Architecture}} Os={{.Os}}'
+          '''
+        }
+      }
+    }
+
+    stage('Deploy') {
+      when {
+        expression { return paramBool('DEPLOY') }
+      }
+      steps {
+        script {
+          def remote = """
+            set -e
+            cd ${params.DEPLOY_PATH}
+            docker compose pull ${env.COMPOSE_SERVICE}
+            docker compose up -d --force-recreate --no-deps ${env.COMPOSE_SERVICE}
+            docker image prune -f
+          """.stripIndent().trim()
+
+          runRemote(remote)
+        }
+      }
+    }
+  }
+
+  post {
+    always {
+      sh 'docker logout || true'
+    }
+    success {
+      echo "OK — tag=${env.IMAGE_TAG} deploy=${params.DEPLOY} mode=${params.DEPLOY_MODE}"
+    }
+    failure {
+      echo '''
+FAILED — common causes:
+  1) Empty IMAGE_TAG → invalid docker tag (leave default "latest")
+  2) Credential ID mismatch (DOCKERHUB_CRED_ID)
+  3) Agent missing docker / permission to docker.sock
+  4) DEPLOY_MODE=local: host must have DEPLOY_PATH and env files used by compose
+  5) Compose service name mismatch — check COMPOSE_SERVICE matches docker-compose.yml
+'''
+    }
+  }
+}
+
+boolean paramBool(String name) {
+  def v = params[name]
+  if (v == null) { return false }
+  if (v instanceof Boolean) { return v }
+  return v.toString().toBoolean()
+}
+
+/**
+ * Run compose commands on the Docker host.
+ * Jenkins often runs inside a container (no /docker/... visible), so local mode uses a
+ * short-lived docker:cli container that mounts host paths via the daemon.
+ */
+void runRemote(String remoteScript) {
+  if (params.DEPLOY_MODE != 'ssh') {
+    writeFile file: 'deploy-remote.sh', text: remoteScript + '\n'
+    sh """
+      set -e
+      if [ -d '${params.DEPLOY_PATH}' ]; then
+        bash deploy-remote.sh
+        exit 0
+      fi
+
+      echo "DEPLOY_PATH not in Jenkins filesystem — using docker:cli helper with host mounts"
+      docker run --rm -i \\
+        -v /var/run/docker.sock:/var/run/docker.sock \\
+        -v '${params.DEPLOY_PATH}:${params.DEPLOY_PATH}' \\
+        -v /root:/root \\
+        -w '${params.DEPLOY_PATH}' \\
+        docker:27-cli \\
+        sh -s < deploy-remote.sh
+    """
+    return
+  }
+
+  withCredentials([sshUserPrivateKey(
+    credentialsId: params.SSH_CRED_ID,
+    keyFileVariable: 'SSH_KEY',
+    usernameVariable: 'SSH_USER'
+  )]) {
+    writeFile file: 'deploy-remote.sh', text: remoteScript + '\n'
+    sh """
+      set -e
+      chmod 400 "\$SSH_KEY"
+      scp -i "\$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \\
+        deploy-remote.sh "\${SSH_USER}@${params.DEPLOY_HOST}:/tmp/atk-store-deploy-remote.sh"
+      ssh -i "\$SSH_KEY" -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \\
+        "\${SSH_USER}@${params.DEPLOY_HOST}" \\
+        'bash /tmp/atk-store-deploy-remote.sh; rm -f /tmp/atk-store-deploy-remote.sh'
+    """
+  }
+}

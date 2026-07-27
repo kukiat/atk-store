@@ -27,7 +27,7 @@ export default async function ScanPage() {
           กลับ
         </Link>
         <div>
-          <p className="text-sm text-muted-foreground">QR scan</p>
+          <p className="text-sm text-muted-foreground">QR Scan ...</p>
           <h1 className="text-balance text-xl font-bold">สแกน inventory QR</h1>
         </div>
       </header>

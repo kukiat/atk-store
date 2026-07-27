@@ -10,6 +10,7 @@ export type AnimationStatusUpdate = {
   direction: AnimationDirection;
   result: AnimationResult;
   imageURL?: string;
+  idempotencyKey?: string;
 };
 
 export type ScanQrAnimationStatusUpdate = {
@@ -26,11 +27,22 @@ function getAnimationServerUrl(): string {
   return value.replace(/\/+$/g, "");
 }
 
+function getAnimationRequestSignal(): AbortSignal {
+  const timeoutMs = Number(process.env.ANIMATION_REQUEST_TIMEOUT_MS ?? 5000);
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 100) {
+    throw new Error("ANIMATION_REQUEST_TIMEOUT_MS must be at least 100");
+  }
+  return AbortSignal.timeout(timeoutMs);
+}
+
 export class AnimationClientService {
   async updateUserStatus(input: AnimationStatusUpdate): Promise<void> {
     const payload = {
       result: input.result,
       ...(input.imageURL ? { imageURL: input.imageURL } : {}),
+      ...(input.idempotencyKey
+        ? { idempotencyKey: input.idempotencyKey }
+        : {}),
     };
     await this.postUserStatus(
       input.userId,
@@ -60,6 +72,7 @@ export class AnimationClientService {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, payload }),
+        signal: getAnimationRequestSignal(),
       },
     );
 

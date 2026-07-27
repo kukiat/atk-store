@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "iot:mqtt": "tsx script/iot-mqtt-worker.ts",
+    "inside-worker:outbox": "NODE_OPTIONS=--conditions=react-server tsx script/inside-worker-outbox.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

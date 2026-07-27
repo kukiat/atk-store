@@ -39,6 +39,17 @@ type VisitStateResult = {
   transitioned: boolean;
 };
 
+function sanitizeAttendanceMetadata(
+  metadata: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined {
+  if (!metadata) return undefined;
+  return Object.fromEntries(
+    Object.entries(metadata).filter(
+      ([key]) => !key.startsWith("insideHandoff"),
+    ),
+  );
+}
+
 type ManualOverrideInput = {
   targetUserId: number;
   actorUserId: number;
@@ -249,7 +260,7 @@ class ClientAttendanceService {
         similarity: match?.similarity ?? null,
         imageSha256,
         workerCapturedAt: input.workerCapturedAt,
-        metadata: input.metadata,
+        metadata: sanitizeAttendanceMetadata(input.metadata),
       })
       .returning();
 
@@ -286,6 +297,8 @@ class ClientAttendanceService {
           eventId: event.id,
           userId: user.id,
           direction: event.direction,
+          sourceCameraId: event.cameraId,
+          occurredAt: (event.workerCapturedAt ?? event.createdAt).toISOString(),
           imageBytes: input.imageBytes,
           imageContentType: input.imageContentType,
         });
@@ -333,7 +346,7 @@ class ClientAttendanceService {
         metadata: {
           source: "backoffice_manual_override",
           actorUserId: input.actorUserId,
-          ...input.metadata,
+          ...sanitizeAttendanceMetadata(input.metadata),
         },
       })
       .returning();

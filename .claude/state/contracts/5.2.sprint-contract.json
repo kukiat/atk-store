@@ -1,0 +1,118 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-07-23T15:03:22Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "5.2",
+    "spec_path": "docs/spec/client-attendance-animation.md"
+  },
+  "execution": {
+    "lane": "gate",
+    "stage": "closeout",
+    "research_evidence": [
+      "src/services/client-attendance.service.ts",
+      "src/services/client-attendance-integration.service.ts",
+      "docs/spec/client-attendance-animation.md"
+    ],
+    "tdd_red_log": ".claude/state/tdd-red-log/5.2.jsonl"
+  },
+  "task": {
+    "id": "5.2",
+    "title": "Publish a real inside-camera handoff after a successful entry animation status. [integration] [tdd:required]",
+    "definition_of_done": "A genuine recognized entry reads its configured map start and publishes one idempotent handoff; exit, sighting, and duplicate transitions publish none; external failure does not roll back the visit.",
+    "depends_on": [
+      "5.1"
+    ],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "A genuine recognized entry reads its configured map start and publishes one idempotent handoff; exit, sighting, and duplicate transitions publish none; external failure does not roll back the visit."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Entry handoff happens only after successful verify animation status"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Direct and enveloped map responses are validated before publishing"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Exit, sighting, duplicate transition, and external failure preserve existing behavior"
+      }
+    ],
+    "non_goals": [
+      {
+        "description": "Change client_entry_worker or dashboard APIs"
+      }
+    ],
+    "runtime_validation": [
+      {
+        "id": "",
+        "label": "package-test",
+        "command": "CI=true npm test"
+      },
+      {
+        "id": "",
+        "label": "package-lint",
+        "command": "npm run lint"
+      },
+      {
+        "label": "reviewer-runtime",
+        "command": "npm test -- src/services/inside-worker-client.service.test.ts src/services/client-attendance-integration.service.test.ts src/services/client-attendance.service.test.ts"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": [
+      "ux-regression"
+    ],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "runtime",
+    "max_iterations": 3,
+    "reviewer_notes": [
+      "Use deterministic entry-{eventId} handoff IDs and preserve persisted visits on delivery failure."
+    ],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-07-23T15:03:56Z",
+    "review_artifact": {
+      "verdict": "APPROVE",
+      "findings": [],
+      "evidence": [
+        "17 focused tests passed",
+        "74 full-suite tests passed",
+        "changed-file ESLint passed",
+        "git diff --check passed"
+      ]
+    }
+  }
+}

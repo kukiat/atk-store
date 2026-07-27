@@ -105,8 +105,7 @@ function visit(status: "inside" | "exited") {
     userId: 42,
     status,
     enteredAt: new Date("2026-07-18T07:00:00.000Z"),
-    exitedAt:
-      status === "exited" ? new Date("2026-07-18T08:00:00.000Z") : null,
+    exitedAt: status === "exited" ? new Date("2026-07-18T08:00:00.000Z") : null,
     entryEventId: 101,
     exitEventId: status === "exited" ? 102 : null,
     createdAt: new Date("2026-07-18T07:00:00.000Z"),
@@ -154,6 +153,8 @@ describe("ClientAttendanceService transition publishing", () => {
         eventId: event.id,
         userId: 42,
         direction: "entry",
+        sourceCameraId: "entry-camera",
+        occurredAt: "2026-07-18T07:00:00.000Z",
       }),
     );
   });

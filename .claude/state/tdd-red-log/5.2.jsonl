@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-23T15:03:16Z","task_id":"5.2","test_file":"src/services/inside-worker-client.service.test.ts","exit_code":1,"framework":"vitest","stderr_tail":"missing inside-worker client; handoff and camera timestamp assertions failed","cwd_hash":"1d298365f0a0"}

@@ -177,8 +177,10 @@ Then leave DOCKERHUB_CRED_ID = dockerhub-creds'''
             cd ${params.DEPLOY_PATH}
             docker compose pull ${svc}
             # Drop stale containers that still hold fixed container_name (orphan / project rename)
+            # Do NOT use --remove-orphans here — host may mark unrelated containers
+            # (e.g. atk-store-api) as orphans under this compose project.
             docker rm -f ${containers} 2>/dev/null || true
-            docker compose up -d --force-recreate --no-deps --remove-orphans ${svc}
+            docker compose up -d --force-recreate --no-deps ${svc}
             docker image prune -f
           """.stripIndent().trim()
 

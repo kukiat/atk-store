@@ -156,9 +156,18 @@ Then leave DOCKERHUB_CRED_ID = dockerhub-creds'''
       steps {
         script {
           def services = []
-          if (targetIncludes('web')) { services << 'atk-store' }
-          if (targetIncludes('mqtt')) { services << 'atk-store-mqtt' }
+          // Fixed container_name in compose — orphans from older project labels can block recreate
+          def containerNames = []
+          if (targetIncludes('web')) {
+            services << 'atk-store'
+            containerNames << 'atk-storex'
+          }
+          if (targetIncludes('mqtt')) {
+            services << 'atk-store-mqtt'
+            containerNames << 'atk-store-mqtt'
+          }
           def svc = services.join(' ')
+          def containers = containerNames.join(' ')
           if (!svc) {
             error 'No compose services selected for TARGET'
           }
@@ -167,7 +176,9 @@ Then leave DOCKERHUB_CRED_ID = dockerhub-creds'''
             set -e
             cd ${params.DEPLOY_PATH}
             docker compose pull ${svc}
-            docker compose up -d --force-recreate --no-deps ${svc}
+            # Drop stale containers that still hold fixed container_name (orphan / project rename)
+            docker rm -f ${containers} 2>/dev/null || true
+            docker compose up -d --force-recreate --no-deps --remove-orphans ${svc}
             docker image prune -f
           """.stripIndent().trim()
 
@@ -192,6 +203,7 @@ FAILED — common causes:
   3) Agent missing docker / permission to docker.sock
   4) DEPLOY_MODE=local: host must have DEPLOY_PATH and env files used by compose
   5) Compose service name mismatch — check atk-store / atk-store-mqtt in docker-compose.yml
+  6) Container name conflict (e.g. /atk-storex) — stale orphan; pipeline removes it before up
 '''
     }
   }

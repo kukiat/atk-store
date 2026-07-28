@@ -363,6 +363,31 @@ class LiveMapService {
     });
   }
 
+  async updateAnchor(actor: AdminActor, formData: FormData): Promise<void> {
+    requireNavigationPermission(actor);
+    await db
+      .update(navigationAnchors)
+      .set({
+        code: readText(formData, "code").toUpperCase(),
+        name: readText(formData, "name"),
+        x: readNumber(formData, "x"),
+        z: readNumber(formData, "z"),
+        heightMeters: readPositiveNumber(formData, "heightMeters"),
+        widthMeters: readPositiveNumber(formData, "widthMeters"),
+        signHeightMeters: readPositiveNumber(formData, "signHeightMeters"),
+        yawDegrees: readNumber(formData, "yawDegrees"),
+        startX: readNumber(formData, "startX"),
+        startZ: readNumber(formData, "startZ"),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(navigationAnchors.id, readText(formData, "id")),
+          isNull(navigationAnchors.deletedAt),
+        ),
+      );
+  }
+
   async createPath(actor: AdminActor, formData: FormData): Promise<void> {
     requireNavigationPermission(actor);
     await db.insert(navigationPaths).values({
@@ -371,6 +396,23 @@ class LiveMapService {
       points: readPoints(formData, "points", 2),
       updatedAt: new Date(),
     });
+  }
+
+  async updatePath(actor: AdminActor, formData: FormData): Promise<void> {
+    requireNavigationPermission(actor);
+    await db
+      .update(navigationPaths)
+      .set({
+        name: readText(formData, "name"),
+        points: readPoints(formData, "points", 2),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(navigationPaths.id, readText(formData, "id")),
+          isNull(navigationPaths.deletedAt),
+        ),
+      );
   }
 
   async createRestrictedArea(
@@ -386,6 +428,26 @@ class LiveMapService {
     });
   }
 
+  async updateRestrictedArea(
+    actor: AdminActor,
+    formData: FormData,
+  ): Promise<void> {
+    requireNavigationPermission(actor);
+    await db
+      .update(navigationRestrictedAreas)
+      .set({
+        name: readText(formData, "name"),
+        polygon: readPoints(formData, "polygon", 3),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(navigationRestrictedAreas.id, readText(formData, "id")),
+          isNull(navigationRestrictedAreas.deletedAt),
+        ),
+      );
+  }
+
   async createLocation(actor: AdminActor, formData: FormData): Promise<void> {
     requireNavigationPermission(actor);
     await db.insert(inventoryNavigationLocations).values({
@@ -398,13 +460,41 @@ class LiveMapService {
     });
   }
 
+  async updateLocation(actor: AdminActor, formData: FormData): Promise<void> {
+    requireNavigationPermission(actor);
+    await db
+      .update(inventoryNavigationLocations)
+      .set({
+        inventoryId: readText(formData, "inventoryId"),
+        label: readText(formData, "label"),
+        x: readNumber(formData, "x"),
+        z: readNumber(formData, "z"),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(inventoryNavigationLocations.id, readText(formData, "id")),
+          isNull(inventoryNavigationLocations.deletedAt),
+        ),
+      );
+  }
+
   async deleteFeature(
     actor: AdminActor,
-    type: "anchor" | "path" | "restrictedArea" | "location",
+    type: "boundary" | "anchor" | "path" | "restrictedArea" | "location",
     id: string,
   ): Promise<void> {
     requireNavigationPermission(actor);
     const updatedAt = new Date();
+    if (type === "boundary") {
+      await db
+        .update(navigationFloors)
+        .set({ boundary: [], updatedAt })
+        .where(
+          and(eq(navigationFloors.id, id), isNull(navigationFloors.deletedAt)),
+        );
+      return;
+    }
     if (type === "anchor") {
       await db
         .update(navigationAnchors)

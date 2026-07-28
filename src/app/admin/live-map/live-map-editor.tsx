@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import Image from "next/image";
 
@@ -11,7 +11,11 @@ import {
   createNavigationRestrictedAreaAction,
   deleteNavigationFeatureAction,
   saveNavigationBoundaryAction,
+  updateInventoryNavigationLocationAction,
+  updateNavigationAnchorAction,
   updateNavigationFloorAction,
+  updateNavigationPathAction,
+  updateNavigationRestrictedAreaAction,
 } from "@/app/admin/live-map/actions";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +35,13 @@ type Tool =
   | "anchor"
   | "product";
 
+type SelectedFeature =
+  | { type: "boundary" }
+  | { type: "path"; id: string }
+  | { type: "restrictedArea"; id: string }
+  | { type: "anchor"; id: string }
+  | { type: "location"; id: string };
+
 const inputClass =
   "h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40";
 
@@ -40,15 +51,6 @@ function formatCoordinate(value: number) {
 
 function pointsToSvg(points: MapPoint[]) {
   return points.map((point) => `${point.x},${point.z}`).join(" ");
-}
-
-function rectangle(width: number, length: number): MapPoint[] {
-  return [
-    { x: 0, z: 0 },
-    { x: width, z: 0 },
-    { x: width, z: length },
-    { x: 0, z: length },
-  ];
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -98,19 +100,78 @@ function LiveMapEditorContent({
     x: string;
     z: string;
   } | null>(null);
-  const boundary = useMemo(
-    () =>
-      floor.boundary.length >= 3
-        ? floor.boundary
-        : rectangle(floor.widthMeters, floor.lengthMeters),
-    [floor],
-  );
+  const [selection, setSelection] = useState<SelectedFeature | null>(null);
+  const [editPoints, setEditPoints] = useState<MapPoint[]>([]);
+  const [editPosition, setEditPosition] = useState<MapPoint | null>(null);
+  const [editAnchorStart, setEditAnchorStart] = useState<MapPoint | null>(null);
+  const boundary = floor.boundary;
 
   function chooseTool(nextTool: Tool) {
     setTool(nextTool);
+    setSelection(null);
+    setEditPoints([]);
+    setEditPosition(null);
+    setEditAnchorStart(null);
     setCandidate(null);
     setAnchorStart(null);
     setDraft(nextTool === "boundary" ? floor.boundary : []);
+  }
+
+  function selectBoundary() {
+    setTool("select");
+    setSelection({ type: "boundary" });
+    setEditPoints(boundary);
+    setEditPosition(null);
+    setEditAnchorStart(null);
+    setCandidate(null);
+    setDraft([]);
+  }
+
+  function selectPath(path: LiveMapData["paths"][number]) {
+    setTool("select");
+    setSelection({ type: "path", id: path.id });
+    setEditPoints(path.points);
+    setEditPosition(null);
+    setEditAnchorStart(null);
+    setCandidate(null);
+    setDraft([]);
+  }
+
+  function selectRestrictedArea(area: LiveMapData["restrictedAreas"][number]) {
+    setTool("select");
+    setSelection({ type: "restrictedArea", id: area.id });
+    setEditPoints(area.polygon);
+    setEditPosition(null);
+    setEditAnchorStart(null);
+    setCandidate(null);
+    setDraft([]);
+  }
+
+  function selectAnchor(anchor: LiveMapData["anchors"][number]) {
+    setTool("select");
+    setSelection({ type: "anchor", id: anchor.id });
+    setEditPoints([]);
+    setEditPosition({ x: anchor.x, z: anchor.z });
+    setEditAnchorStart({ x: anchor.startX, z: anchor.startZ });
+    setCandidate(null);
+    setDraft([]);
+  }
+
+  function selectLocation(location: LiveMapData["locations"][number]) {
+    setTool("select");
+    setSelection({ type: "location", id: location.id });
+    setEditPoints([]);
+    setEditPosition({ x: location.x, z: location.z });
+    setEditAnchorStart(null);
+    setCandidate(null);
+    setDraft([]);
+  }
+
+  function clearSelection() {
+    setSelection(null);
+    setEditPoints([]);
+    setEditPosition(null);
+    setEditAnchorStart(null);
   }
 
   function readCanvasPoint(event: React.MouseEvent<SVGSVGElement>): MapPoint {
@@ -234,9 +295,9 @@ function LiveMapEditorContent({
           <CardHeader>
             <CardTitle className="text-base">Floor canvas</CardTitle>
             <CardDescription>
-              Select a tool, then click the canvas to place a point. Grey is
-              store boundary; red areas are not walkable; blue lines are
-              customer paths.
+              Use Select to click and update existing objects. Drawing tools
+              create new objects. Grey is the boundary, red is not walkable, and
+              blue is a customer path.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -257,25 +318,25 @@ function LiveMapEditorContent({
                 active={tool === "restricted"}
                 onClick={() => chooseTool("restricted")}
               >
-                No-walk area
+                Draw new no-walk
               </ToolButton>
               <ToolButton
                 active={tool === "path"}
                 onClick={() => chooseTool("path")}
               >
-                Walk path
+                Draw new path
               </ToolButton>
               <ToolButton
                 active={tool === "anchor"}
                 onClick={() => chooseTool("anchor")}
               >
-                Place QR Anchor
+                Place new QR Anchor
               </ToolButton>
               <ToolButton
                 active={tool === "product"}
                 onClick={() => chooseTool("product")}
               >
-                Place product
+                Place new product
               </ToolButton>
             </div>
 
@@ -315,37 +376,90 @@ function LiveMapEditorContent({
                 />
               ))}
               <polygon
+                data-testid="map-boundary"
                 points={pointsToSvg(boundary)}
                 fill="rgba(148,163,184,.08)"
-                stroke="#cbd5e1"
-                strokeWidth="0.12"
+                stroke={selection?.type === "boundary" ? "#c084fc" : "#cbd5e1"}
+                strokeWidth={selection?.type === "boundary" ? "0.22" : "0.12"}
+                pointerEvents="stroke"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  selectBoundary();
+                }}
               />
               {data.restrictedAreas.map((area) => (
                 <polygon
                   key={area.id}
+                  data-testid={`map-restricted-${area.id}`}
                   points={pointsToSvg(area.polygon)}
                   fill="rgba(239,68,68,.34)"
-                  stroke="#f87171"
-                  strokeWidth="0.1"
+                  stroke={
+                    selection?.type === "restrictedArea" &&
+                    selection.id === area.id
+                      ? "#c084fc"
+                      : "#f87171"
+                  }
+                  strokeWidth={
+                    selection?.type === "restrictedArea" &&
+                    selection.id === area.id
+                      ? "0.22"
+                      : "0.1"
+                  }
+                  className="cursor-pointer"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectRestrictedArea(area);
+                  }}
                 >
                   <title>{area.name}</title>
                 </polygon>
               ))}
               {data.paths.map((path) => (
-                <polyline
-                  key={path.id}
-                  points={pointsToSvg(path.points)}
-                  fill="none"
-                  stroke="#38bdf8"
-                  strokeWidth="0.18"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <title>{path.name}</title>
-                </polyline>
+                <g key={path.id}>
+                  <polyline
+                    data-testid={`map-path-${path.id}`}
+                    points={pointsToSvg(path.points)}
+                    fill="none"
+                    stroke={
+                      selection?.type === "path" && selection.id === path.id
+                        ? "#c084fc"
+                        : "#38bdf8"
+                    }
+                    strokeWidth={
+                      selection?.type === "path" && selection.id === path.id
+                        ? "0.28"
+                        : "0.18"
+                    }
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    pointerEvents="none"
+                  />
+                  <polyline
+                    points={pointsToSvg(path.points)}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth="0.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="cursor-pointer"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      selectPath(path);
+                    }}
+                  >
+                    <title>{path.name}</title>
+                  </polyline>
+                </g>
               ))}
               {data.anchors.map((anchor) => (
-                <g key={anchor.id}>
+                <g
+                  key={anchor.id}
+                  className="cursor-pointer"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectAnchor(anchor);
+                  }}
+                >
                   <line
                     x1={anchor.x}
                     y1={anchor.z}
@@ -356,12 +470,21 @@ function LiveMapEditorContent({
                     strokeDasharray="0.15 0.15"
                   />
                   <circle
+                    data-testid={`map-anchor-${anchor.id}`}
                     cx={anchor.x}
                     cy={anchor.z}
                     r="0.28"
                     fill="#fbbf24"
-                    stroke="#fff"
-                    strokeWidth="0.06"
+                    stroke={
+                      selection?.type === "anchor" && selection.id === anchor.id
+                        ? "#c084fc"
+                        : "#fff"
+                    }
+                    strokeWidth={
+                      selection?.type === "anchor" && selection.id === anchor.id
+                        ? "0.16"
+                        : "0.06"
+                    }
                   >
                     <title>{`${anchor.code}: ${anchor.name}`}</title>
                   </circle>
@@ -376,19 +499,111 @@ function LiveMapEditorContent({
                 </g>
               ))}
               {data.locations.map((location) => (
-                <g key={location.id}>
+                <g
+                  key={location.id}
+                  className="cursor-pointer"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    selectLocation(location);
+                  }}
+                >
                   <rect
+                    data-testid={`map-location-${location.id}`}
                     x={location.x - 0.19}
                     y={location.z - 0.19}
                     width="0.38"
                     height="0.38"
                     fill="#4ade80"
+                    stroke={
+                      selection?.type === "location" &&
+                      selection.id === location.id
+                        ? "#c084fc"
+                        : "none"
+                    }
+                    strokeWidth="0.14"
                     transform={`rotate(45 ${location.x} ${location.z})`}
                   >
                     <title>{`${location.inventoryName}: ${location.label}`}</title>
                   </rect>
                 </g>
               ))}
+              {selection &&
+                (selection.type === "boundary" ||
+                  selection.type === "path" ||
+                  selection.type === "restrictedArea") && (
+                  <g pointerEvents="none">
+                    {selection.type === "path" ? (
+                      <polyline
+                        points={pointsToSvg(editPoints)}
+                        fill="none"
+                        stroke="#c084fc"
+                        strokeWidth="0.22"
+                        strokeDasharray="0.18 0.1"
+                      />
+                    ) : (
+                      <polygon
+                        points={pointsToSvg(editPoints)}
+                        fill="rgba(168,85,247,.16)"
+                        stroke="#c084fc"
+                        strokeWidth="0.16"
+                        strokeDasharray="0.18 0.1"
+                      />
+                    )}
+                    {editPoints.map((point, index) => (
+                      <circle
+                        key={`edit-${index}`}
+                        cx={point.x}
+                        cy={point.z}
+                        r="0.18"
+                        fill="#e9d5ff"
+                        stroke="#7e22ce"
+                        strokeWidth="0.06"
+                      />
+                    ))}
+                  </g>
+                )}
+              {selection?.type === "anchor" &&
+                editPosition &&
+                editAnchorStart && (
+                  <g pointerEvents="none">
+                    <line
+                      x1={editPosition.x}
+                      y1={editPosition.z}
+                      x2={editAnchorStart.x}
+                      y2={editAnchorStart.z}
+                      stroke="#c084fc"
+                      strokeWidth="0.11"
+                      strokeDasharray="0.15 0.12"
+                    />
+                    <circle
+                      cx={editPosition.x}
+                      cy={editPosition.z}
+                      r="0.22"
+                      fill="#c084fc"
+                      stroke="#fff"
+                      strokeWidth="0.06"
+                    />
+                    <circle
+                      cx={editAnchorStart.x}
+                      cy={editAnchorStart.z}
+                      r="0.19"
+                      fill="#f9a8d4"
+                      stroke="#fff"
+                      strokeWidth="0.06"
+                    />
+                  </g>
+                )}
+              {selection?.type === "location" && editPosition && (
+                <circle
+                  cx={editPosition.x}
+                  cy={editPosition.z}
+                  r="0.23"
+                  fill="#c084fc"
+                  stroke="#fff"
+                  strokeWidth="0.06"
+                  pointerEvents="none"
+                />
+              )}
               {draft.length > 0 && (
                 <>
                   {draftIsPolygon ? (
@@ -442,13 +657,31 @@ function LiveMapEditorContent({
         </Card>
 
         <div className="grid content-start gap-4">
+          {selection && (
+            <SelectedFeatureEditor
+              data={data}
+              floor={floor}
+              selection={selection}
+              editPoints={editPoints}
+              setEditPoints={setEditPoints}
+              editPosition={editPosition}
+              setEditPosition={setEditPosition}
+              editAnchorStart={editAnchorStart}
+              setEditAnchorStart={setEditAnchorStart}
+              onCancel={clearSelection}
+            />
+          )}
+
+          {tool === "select" && !selection && (
+            <HelpCard text="Click an existing boundary line, no-walk area, walk path, QR Anchor, or product point to edit it." />
+          )}
+
           {tool === "boundary" && (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">Save store boundary</CardTitle>
                 <CardDescription>
-                  Use at least three points. The default rectangular boundary
-                  remains until saved.
+                  Use at least three points to create a new store outline.
                 </CardDescription>
               </CardHeader>
               <CardContent className="grid gap-3">
@@ -772,6 +1005,564 @@ function LiveMapEditorContent({
   );
 }
 
+function PointListEditor({
+  points,
+  setPoints,
+  minimum,
+  floor,
+}: {
+  points: MapPoint[];
+  setPoints: React.Dispatch<React.SetStateAction<MapPoint[]>>;
+  minimum: number;
+  floor: NonNullable<LiveMapData["floor"]>;
+}) {
+  function updatePoint(index: number, key: keyof MapPoint, rawValue: string) {
+    const value = Number(rawValue);
+    if (!Number.isFinite(value)) return;
+    setPoints((current) =>
+      current.map((point, pointIndex) =>
+        pointIndex === index
+          ? {
+              ...point,
+              [key]: clamp(
+                value,
+                0,
+                key === "x" ? floor.widthMeters : floor.lengthMeters,
+              ),
+            }
+          : point,
+      ),
+    );
+  }
+
+  function addPoint() {
+    setPoints((current) => {
+      const last = current.at(-1) ?? { x: 0, z: 0 };
+      return [
+        ...current,
+        {
+          x: clamp(last.x + 0.5, 0, floor.widthMeters),
+          z: clamp(last.z + 0.5, 0, floor.lengthMeters),
+        },
+      ];
+    });
+  }
+
+  return (
+    <div className="grid gap-2">
+      <p className="text-sm font-medium">Points</p>
+      {points.map((point, index) => (
+        <div
+          key={index}
+          className="grid grid-cols-[2rem_1fr_1fr_auto] items-end gap-2"
+        >
+          <span className="pb-2 text-xs text-muted-foreground">
+            {index + 1}
+          </span>
+          <label className="grid gap-1 text-xs">
+            X (m)
+            <input
+              className={inputClass}
+              type="number"
+              min="0"
+              max={floor.widthMeters}
+              step="0.01"
+              value={point.x}
+              onChange={(event) => updatePoint(index, "x", event.target.value)}
+            />
+          </label>
+          <label className="grid gap-1 text-xs">
+            Z (m)
+            <input
+              className={inputClass}
+              type="number"
+              min="0"
+              max={floor.lengthMeters}
+              step="0.01"
+              value={point.z}
+              onChange={(event) => updatePoint(index, "z", event.target.value)}
+            />
+          </label>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={points.length <= minimum}
+            onClick={() =>
+              setPoints((current) =>
+                current.filter((_, pointIndex) => pointIndex !== index),
+              )
+            }
+          >
+            Remove
+          </Button>
+        </div>
+      ))}
+      <Button type="button" size="sm" variant="outline" onClick={addPoint}>
+        Add point
+      </Button>
+    </div>
+  );
+}
+
+function PositionEditor({
+  title,
+  position,
+  setPosition,
+  floor,
+}: {
+  title: string;
+  position: MapPoint;
+  setPosition: React.Dispatch<React.SetStateAction<MapPoint | null>>;
+  floor: NonNullable<LiveMapData["floor"]>;
+}) {
+  function updatePosition(key: keyof MapPoint, rawValue: string) {
+    const value = Number(rawValue);
+    if (!Number.isFinite(value)) return;
+    setPosition((current) =>
+      current
+        ? {
+            ...current,
+            [key]: clamp(
+              value,
+              0,
+              key === "x" ? floor.widthMeters : floor.lengthMeters,
+            ),
+          }
+        : current,
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <p className="col-span-2 text-sm font-medium">{title}</p>
+      <label className="grid gap-1 text-xs">
+        X (m)
+        <input
+          className={inputClass}
+          type="number"
+          min="0"
+          max={floor.widthMeters}
+          step="0.01"
+          value={position.x}
+          onChange={(event) => updatePosition("x", event.target.value)}
+        />
+      </label>
+      <label className="grid gap-1 text-xs">
+        Z (m)
+        <input
+          className={inputClass}
+          type="number"
+          min="0"
+          max={floor.lengthMeters}
+          step="0.01"
+          value={position.z}
+          onChange={(event) => updatePosition("z", event.target.value)}
+        />
+      </label>
+    </div>
+  );
+}
+
+function DeleteFeatureForm({
+  type,
+  id,
+  label,
+  onDelete,
+}: {
+  type: "boundary" | "anchor" | "path" | "restrictedArea" | "location";
+  id: string;
+  label: string;
+  onDelete: () => void;
+}) {
+  return (
+    <form
+      action={deleteNavigationFeatureAction}
+      className="border-t pt-3"
+      onSubmit={(event) => {
+        if (!window.confirm(`Delete this ${label}?`)) {
+          event.preventDefault();
+          return;
+        }
+        onDelete();
+      }}
+    >
+      <input type="hidden" name="type" value={type} />
+      <input type="hidden" name="id" value={id} />
+      <Button type="submit" variant="destructive">
+        Delete {label}
+      </Button>
+    </form>
+  );
+}
+
+function SelectedFeatureEditor({
+  data,
+  floor,
+  selection,
+  editPoints,
+  setEditPoints,
+  editPosition,
+  setEditPosition,
+  editAnchorStart,
+  setEditAnchorStart,
+  onCancel,
+}: {
+  data: LiveMapData;
+  floor: NonNullable<LiveMapData["floor"]>;
+  selection: SelectedFeature;
+  editPoints: MapPoint[];
+  setEditPoints: React.Dispatch<React.SetStateAction<MapPoint[]>>;
+  editPosition: MapPoint | null;
+  setEditPosition: React.Dispatch<React.SetStateAction<MapPoint | null>>;
+  editAnchorStart: MapPoint | null;
+  setEditAnchorStart: React.Dispatch<React.SetStateAction<MapPoint | null>>;
+  onCancel: () => void;
+}) {
+  const selectedPath =
+    selection.type === "path"
+      ? data.paths.find((path) => path.id === selection.id)
+      : null;
+  const selectedArea =
+    selection.type === "restrictedArea"
+      ? data.restrictedAreas.find((area) => area.id === selection.id)
+      : null;
+  const selectedAnchor =
+    selection.type === "anchor"
+      ? data.anchors.find((anchor) => anchor.id === selection.id)
+      : null;
+  const selectedLocation =
+    selection.type === "location"
+      ? data.locations.find((location) => location.id === selection.id)
+      : null;
+
+  if (selection.type === "boundary") {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Edit store boundary</CardTitle>
+          <CardDescription>
+            Update the existing outline. This replaces the current boundary.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <form action={saveNavigationBoundaryAction} className="grid gap-3">
+            <input type="hidden" name="floorId" value={floor.id} />
+            <input
+              type="hidden"
+              name="points"
+              value={JSON.stringify(editPoints)}
+            />
+            <PointListEditor
+              points={editPoints}
+              setPoints={setEditPoints}
+              minimum={3}
+              floor={floor}
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={editPoints.length < 3}>
+                Update boundary
+              </Button>
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+          <DeleteFeatureForm
+            type="boundary"
+            id={floor.id}
+            label="boundary"
+            onDelete={onCancel}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (selection.type === "path" && selectedPath) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Edit walk path</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <form action={updateNavigationPathAction} className="grid gap-3">
+            <input type="hidden" name="id" value={selectedPath.id} />
+            <input
+              type="hidden"
+              name="points"
+              value={JSON.stringify(editPoints)}
+            />
+            <label className="grid gap-1 text-sm font-medium">
+              Path name
+              <input
+                className={inputClass}
+                name="name"
+                defaultValue={selectedPath.name}
+                required
+              />
+            </label>
+            <PointListEditor
+              points={editPoints}
+              setPoints={setEditPoints}
+              minimum={2}
+              floor={floor}
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={editPoints.length < 2}>
+                Update path
+              </Button>
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+          <DeleteFeatureForm
+            type="path"
+            id={selectedPath.id}
+            label="walk path"
+            onDelete={onCancel}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (selection.type === "restrictedArea" && selectedArea) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Edit no-walk area</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <form
+            action={updateNavigationRestrictedAreaAction}
+            className="grid gap-3"
+          >
+            <input type="hidden" name="id" value={selectedArea.id} />
+            <input
+              type="hidden"
+              name="polygon"
+              value={JSON.stringify(editPoints)}
+            />
+            <label className="grid gap-1 text-sm font-medium">
+              Area name
+              <input
+                className={inputClass}
+                name="name"
+                defaultValue={selectedArea.name}
+                required
+              />
+            </label>
+            <PointListEditor
+              points={editPoints}
+              setPoints={setEditPoints}
+              minimum={3}
+              floor={floor}
+            />
+            <div className="flex gap-2">
+              <Button type="submit" disabled={editPoints.length < 3}>
+                Update area
+              </Button>
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+          <DeleteFeatureForm
+            type="restrictedArea"
+            id={selectedArea.id}
+            label="no-walk area"
+            onDelete={onCancel}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (
+    selection.type === "anchor" &&
+    selectedAnchor &&
+    editPosition &&
+    editAnchorStart
+  ) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Edit QR Anchor</CardTitle>
+          <CardDescription>
+            Updating this Anchor does not change its QR URL.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <form action={updateNavigationAnchorAction} className="grid gap-3">
+            <input type="hidden" name="id" value={selectedAnchor.id} />
+            <input type="hidden" name="x" value={editPosition.x} />
+            <input type="hidden" name="z" value={editPosition.z} />
+            <input type="hidden" name="startX" value={editAnchorStart.x} />
+            <input type="hidden" name="startZ" value={editAnchorStart.z} />
+            <div className="grid grid-cols-2 gap-3">
+              <label className="grid gap-1 text-sm font-medium">
+                Code
+                <input
+                  className={inputClass}
+                  name="code"
+                  defaultValue={selectedAnchor.code}
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Name
+                <input
+                  className={inputClass}
+                  name="name"
+                  defaultValue={selectedAnchor.name}
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Sign width (m)
+                <input
+                  className={inputClass}
+                  name="widthMeters"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  defaultValue={selectedAnchor.widthMeters}
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Sign height (m)
+                <input
+                  className={inputClass}
+                  name="signHeightMeters"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  defaultValue={selectedAnchor.signHeightMeters}
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Mount height (m)
+                <input
+                  className={inputClass}
+                  name="heightMeters"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  defaultValue={selectedAnchor.heightMeters}
+                  required
+                />
+              </label>
+              <label className="grid gap-1 text-sm font-medium">
+                Sign yaw (°)
+                <input
+                  className={inputClass}
+                  name="yawDegrees"
+                  type="number"
+                  step="0.1"
+                  defaultValue={selectedAnchor.yawDegrees}
+                  required
+                />
+              </label>
+            </div>
+            <PositionEditor
+              title="Physical sign position"
+              position={editPosition}
+              setPosition={setEditPosition}
+              floor={floor}
+            />
+            <PositionEditor
+              title="Customer start point"
+              position={editAnchorStart}
+              setPosition={setEditAnchorStart}
+              floor={floor}
+            />
+            <div className="flex gap-2">
+              <Button type="submit">Update QR Anchor</Button>
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+          <DeleteFeatureForm
+            type="anchor"
+            id={selectedAnchor.id}
+            label="QR Anchor"
+            onDelete={onCancel}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (selection.type === "location" && selectedLocation && editPosition) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Edit product destination</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-3">
+          <form
+            action={updateInventoryNavigationLocationAction}
+            className="grid gap-3"
+          >
+            <input type="hidden" name="id" value={selectedLocation.id} />
+            <input type="hidden" name="x" value={editPosition.x} />
+            <input type="hidden" name="z" value={editPosition.z} />
+            <label className="grid gap-1 text-sm font-medium">
+              Product
+              <select
+                className={inputClass}
+                name="inventoryId"
+                defaultValue={selectedLocation.inventoryId}
+                required
+              >
+                {data.inventories.map((inventory) => (
+                  <option key={inventory.id} value={inventory.id}>
+                    {inventory.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-medium">
+              Customer-facing label
+              <input
+                className={inputClass}
+                name="label"
+                defaultValue={selectedLocation.label}
+                required
+              />
+            </label>
+            <PositionEditor
+              title="Customer destination"
+              position={editPosition}
+              setPosition={setEditPosition}
+              floor={floor}
+            />
+            <div className="flex gap-2">
+              <Button type="submit">Update destination</Button>
+              <Button type="button" variant="outline" onClick={onCancel}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+          <DeleteFeatureForm
+            type="location"
+            id={selectedLocation.id}
+            label="product destination"
+            onDelete={onCancel}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return <HelpCard text="This item is no longer available. Select it again." />;
+}
+
 function HelpCard({ text }: { text: string }) {
   return (
     <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
@@ -781,13 +1572,15 @@ function HelpCard({ text }: { text: string }) {
 }
 
 function AnchorList({ anchors }: { anchors: LiveMapData["anchors"] }) {
+  const [editingAnchorId, setEditingAnchorId] = useState<string | null>(null);
+
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-base">QR Anchors</CardTitle>
         <CardDescription>
-          Download or print the QR after saving an Anchor. Each QR opens only
-          its own Live Map start point.
+          Download, print, or edit an Anchor after saving it. Editing keeps the
+          existing QR URL valid.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -837,13 +1630,160 @@ function AnchorList({ anchors }: { anchors: LiveMapData["anchors"] }) {
                     </a>
                   </div>
                 </div>
-                <form action={deleteNavigationFeatureAction}>
-                  <input type="hidden" name="type" value="anchor" />
-                  <input type="hidden" name="id" value={anchor.id} />
-                  <Button type="submit" size="sm" variant="outline">
-                    Remove
+                <div className="flex items-start gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setEditingAnchorId((current) =>
+                        current === anchor.id ? null : anchor.id,
+                      )
+                    }
+                  >
+                    {editingAnchorId === anchor.id ? "Cancel" : "Edit"}
                   </Button>
-                </form>
+                  <form action={deleteNavigationFeatureAction}>
+                    <input type="hidden" name="type" value="anchor" />
+                    <input type="hidden" name="id" value={anchor.id} />
+                    <Button type="submit" size="sm" variant="outline">
+                      Remove
+                    </Button>
+                  </form>
+                </div>
+                {editingAnchorId === anchor.id ? (
+                  <form
+                    action={updateNavigationAnchorAction}
+                    className="grid gap-3 border-t pt-3 sm:col-span-3 sm:grid-cols-2"
+                  >
+                    <input type="hidden" name="id" value={anchor.id} />
+                    <label className="grid gap-1 text-xs">
+                      Code
+                      <input
+                        className={inputClass}
+                        name="code"
+                        defaultValue={anchor.code}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Name
+                      <input
+                        className={inputClass}
+                        name="name"
+                        defaultValue={anchor.name}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Sign X (m)
+                      <input
+                        className={inputClass}
+                        name="x"
+                        type="number"
+                        step="0.01"
+                        defaultValue={anchor.x}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Sign Z (m)
+                      <input
+                        className={inputClass}
+                        name="z"
+                        type="number"
+                        step="0.01"
+                        defaultValue={anchor.z}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Sign width (m)
+                      <input
+                        className={inputClass}
+                        name="widthMeters"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        defaultValue={anchor.widthMeters}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Sign height (m)
+                      <input
+                        className={inputClass}
+                        name="signHeightMeters"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        defaultValue={anchor.signHeightMeters}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Mount height (m)
+                      <input
+                        className={inputClass}
+                        name="heightMeters"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        defaultValue={anchor.heightMeters}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Sign yaw (°)
+                      <input
+                        className={inputClass}
+                        name="yawDegrees"
+                        type="number"
+                        step="0.1"
+                        defaultValue={anchor.yawDegrees}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Customer start X (m)
+                      <input
+                        className={inputClass}
+                        name="startX"
+                        type="number"
+                        step="0.01"
+                        defaultValue={anchor.startX}
+                        required
+                      />
+                    </label>
+                    <label className="grid gap-1 text-xs">
+                      Customer start Z (m)
+                      <input
+                        className={inputClass}
+                        name="startZ"
+                        type="number"
+                        step="0.01"
+                        defaultValue={anchor.startZ}
+                        required
+                      />
+                    </label>
+                    <div className="flex items-center gap-2 sm:col-span-2">
+                      <Button type="submit" size="sm">
+                        Save changes
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setEditingAnchorId(null)}
+                      >
+                        Cancel
+                      </Button>
+                      <span className="text-xs text-muted-foreground">
+                        The printed QR remains unchanged.
+                      </span>
+                    </div>
+                  </form>
+                ) : null}
               </li>
             ))}
           </ul>

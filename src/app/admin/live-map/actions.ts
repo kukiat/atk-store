@@ -35,13 +35,31 @@ export async function createNavigationAnchorAction(formData: FormData) {
   revalidateLiveMap();
 }
 
+export async function updateNavigationAnchorAction(formData: FormData) {
+  await liveMapService.updateAnchor(await requireAdminActor(), formData);
+  revalidateLiveMap();
+}
+
 export async function createNavigationPathAction(formData: FormData) {
   await liveMapService.createPath(await requireAdminActor(), formData);
   revalidateLiveMap();
 }
 
+export async function updateNavigationPathAction(formData: FormData) {
+  await liveMapService.updatePath(await requireAdminActor(), formData);
+  revalidateLiveMap();
+}
+
 export async function createNavigationRestrictedAreaAction(formData: FormData) {
   await liveMapService.createRestrictedArea(
+    await requireAdminActor(),
+    formData,
+  );
+  revalidateLiveMap();
+}
+
+export async function updateNavigationRestrictedAreaAction(formData: FormData) {
+  await liveMapService.updateRestrictedArea(
     await requireAdminActor(),
     formData,
   );
@@ -55,11 +73,19 @@ export async function createInventoryNavigationLocationAction(
   revalidateLiveMap();
 }
 
+export async function updateInventoryNavigationLocationAction(
+  formData: FormData,
+) {
+  await liveMapService.updateLocation(await requireAdminActor(), formData);
+  revalidateLiveMap();
+}
+
 export async function deleteNavigationFeatureAction(formData: FormData) {
   const type = formData.get("type");
   const id = formData.get("id");
   if (
-    (type !== "anchor" &&
+    (type !== "boundary" &&
+      type !== "anchor" &&
       type !== "path" &&
       type !== "restrictedArea" &&
       type !== "location") ||

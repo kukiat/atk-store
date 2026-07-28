@@ -1,0 +1,2 @@
+ALTER TABLE "auth"."navigation_anchors" ADD COLUMN "public_token" text DEFAULT gen_random_uuid()::text NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "navigation_anchors_public_token_unique" ON "auth"."navigation_anchors" USING btree ("public_token");

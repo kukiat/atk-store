@@ -15,6 +15,7 @@ const links = [
   { href: "/admin/inventory/iot-poc", label: "IOT PoC" },
   { href: "/admin/wallets", label: "Wallets" },
   { href: "/admin/attendance", label: "Demo Status" },
+  { href: "/admin/live-map", label: "Live Map" },
 ] as const;
 
 export function AdminNav() {

@@ -643,6 +643,119 @@ export const qrCodes = db_schema.table("qr_codes", {
   ...lifecycleColumns,
 });
 
+/**
+ * A physical store floor used exclusively by customer navigation. Inventory
+ * and IoT remain independent: this module only stores map coordinates and
+ * customer-facing destinations.
+ */
+export const navigationFloors = db_schema.table(
+  "navigation_floors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    widthMeters: doublePrecision("width_meters").notNull(),
+    lengthMeters: doublePrecision("length_meters").notNull(),
+    boundary: jsonb("boundary")
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    isActive: boolean("is_active").notNull().default(true),
+    ...lifecycleColumns,
+  },
+  (table) => [uniqueIndex("navigation_floors_code_unique").on(table.code)],
+);
+
+/** A QR/visual marker with a known real-world pose in a navigation floor. */
+export const navigationAnchors = db_schema.table(
+  "navigation_anchors",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    floorId: uuid("floor_id")
+      .notNull()
+      .references(() => navigationFloors.id, { onDelete: "cascade" }),
+    publicToken: text("public_token")
+      .notNull()
+      .default(sql`gen_random_uuid()::text`),
+    code: text("code").notNull(),
+    name: text("name").notNull(),
+    x: doublePrecision("x").notNull(),
+    z: doublePrecision("z").notNull(),
+    heightMeters: doublePrecision("height_meters").notNull(),
+    widthMeters: doublePrecision("width_meters").notNull(),
+    signHeightMeters: doublePrecision("sign_height_meters").notNull(),
+    yawDegrees: doublePrecision("yaw_degrees").notNull(),
+    startX: doublePrecision("start_x").notNull(),
+    startZ: doublePrecision("start_z").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    uniqueIndex("navigation_anchors_floor_code_unique").on(
+      table.floorId,
+      table.code,
+    ),
+    uniqueIndex("navigation_anchors_public_token_unique").on(table.publicToken),
+    index("navigation_anchors_floor_idx").on(table.floorId),
+  ],
+);
+
+/** A customer-walkable polyline manually drawn by an administrator. */
+export const navigationPaths = db_schema.table(
+  "navigation_paths",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    floorId: uuid("floor_id")
+      .notNull()
+      .references(() => navigationFloors.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    points: jsonb("points").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    ...lifecycleColumns,
+  },
+  (table) => [index("navigation_paths_floor_idx").on(table.floorId)],
+);
+
+/** A polygon customers must not cross while navigating. */
+export const navigationRestrictedAreas = db_schema.table(
+  "navigation_restricted_areas",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    floorId: uuid("floor_id")
+      .notNull()
+      .references(() => navigationFloors.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    polygon: jsonb("polygon").notNull(),
+    ...lifecycleColumns,
+  },
+  (table) => [index("navigation_restricted_areas_floor_idx").on(table.floorId)],
+);
+
+/**
+ * A customer destination for an inventory item. It deliberately does not
+ * reference shelves: device/shelf placement stays owned by the IoT domain.
+ */
+export const inventoryNavigationLocations = db_schema.table(
+  "inventory_navigation_locations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    inventoryId: uuid("inventory_id")
+      .notNull()
+      .references(() => inventories.id, { onDelete: "cascade" }),
+    floorId: uuid("floor_id")
+      .notNull()
+      .references(() => navigationFloors.id, { onDelete: "cascade" }),
+    label: text("label").notNull(),
+    x: doublePrecision("x").notNull(),
+    z: doublePrecision("z").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    index("inventory_navigation_locations_floor_idx").on(table.floorId),
+    index("inventory_navigation_locations_inventory_idx").on(table.inventoryId),
+  ],
+);
+
 export const orders = db_schema.table("orders", {
   id: uuid("id").primaryKey().defaultRandom(),
   clientVisitId: integer("client_visit_id")

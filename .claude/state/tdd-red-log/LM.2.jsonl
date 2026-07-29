@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-29T07:52:02Z","task_id":"LM.2","test_file":"src/lib/live-map-motion.test.ts","exit_code":1,"framework":"vitest","stderr_tail":"Cannot find package @/lib/live-map-motion","cwd_hash":"1d298365f0a0"}

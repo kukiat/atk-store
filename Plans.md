@@ -88,18 +88,19 @@ Purpose: prove the full path once within the $5 alert budget and leave an audita
 Purpose: publish successful entry and exit transitions, including the accepted
 camera frame, to the external animation server without duplicating side effects.
 
-| Task | Content                                                                                                                                                        | DoD                                                                                                                                                                                                 | Depends | Status |
-| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ |
-| 5.1  | Upload the frame that created an attendance transition and notify the animation server with bounded retries. [integration] [tdd:required]                    | Entry/exit transitions upload to their configured S3 folders and send `verify`/`pay` with `payload.imageURL`; stamp failures send `fail`; unchanged visits send nothing; S3 and HTTP get 3 attempts. | -       | cc:done |
+| Task | Content                                                                                                                                   | DoD                                                                                                                                                                                                  | Depends | Status  |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| 5.1  | Upload the frame that created an attendance transition and notify the animation server with bounded retries. [integration] [tdd:required] | Entry/exit transitions upload to their configured S3 folders and send `verify`/`pay` with `payload.imageURL`; stamp failures send `fail`; unchanged visits send nothing; S3 and HTTP get 3 attempts. | -       | cc:done |
 
 ## Live Map follow-up
 
 Purpose: keep customer navigation responsive after arrival and make the camera
 experience fit a mobile navigation flow.
 
-| Task | Content                                                                                             | DoD                                                                                                                                                     | Depends | Status |
-| ---- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ |
-| LM.1 | Fix post-arrival distance tracking and present the customer AR camera as a full-viewport experience. [tdd:required] | Walking away after arrival increases the displayed distance and clears arrival state; opening AR fills the viewport and its back arrow returns to product selection. | -       | cc:done |
+| Task | Content                                                                                                             | DoD                                                                                                                                                                                                 | Depends | Status  |
+| ---- | ------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------- |
+| LM.1 | Fix post-arrival distance tracking and present the customer AR camera as a full-viewport experience. [tdd:required] | Walking away after arrival increases the displayed distance and clears arrival state; opening AR fills the viewport and its back arrow returns to product selection.                                | -       | cc:done |
+| LM.2 | Improve WebAR motion responsiveness and heading accuracy across mobile sensor implementations. [tdd:required]       | Valid fallback acceleration detects walking without duplicate rapid steps; faster cadence updates distance promptly; heading follows the shortest turn across 0°/360° without a visible 300 ms lag. | LM.1    | cc:done |
 
 ## Explicitly deferred
 

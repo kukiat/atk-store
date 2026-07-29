@@ -25,6 +25,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  compassHeadingDegrees,
+  createStepDetectorState,
+  motionMagnitude,
+  normalizeDegrees,
+  processMotionSample,
+  smoothHeadingDegrees,
+} from "@/lib/live-map-motion";
+import {
   calculateNavigationProgress,
   calculateWalkRoute,
   mapBearingDegrees,
@@ -44,7 +52,6 @@ type PermissionAwareConstructor = {
 
 const inputClass =
   "h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40";
-const STEP_METERS = 0.68;
 const ARRIVAL_METERS = 0.7;
 const OFF_ROUTE_METERS = 1.1;
 
@@ -59,10 +66,6 @@ function defaultBoundary(data: CustomerLiveMapData): MapPoint[] {
     { x: data.floor.widthMeters, z: data.floor.lengthMeters },
     { x: 0, z: data.floor.lengthMeters },
   ];
-}
-
-function normalizeDegrees(value: number) {
-  return ((value % 360) + 360) % 360;
 }
 
 function pointDistance(first: MapPoint, second: MapPoint) {
@@ -99,7 +102,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   const sessionIdRef = useRef(sessionId);
   const modeRef = useRef(mode);
   const calibratedDeviceHeadingRef = useRef<number | null>(null);
-  const lastStepAtRef = useRef(0);
+  const stepDetectorRef = useRef(createStepDetectorState());
 
   const selectedDestination =
     data.destinations.find(
@@ -186,53 +189,56 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       const compassHeading = (
         event as DeviceOrientationEvent & { webkitCompassHeading?: number }
       ).webkitCompassHeading;
+      const tiltCompensatedHeading =
+        typeof event.alpha === "number" &&
+        typeof event.beta === "number" &&
+        typeof event.gamma === "number"
+          ? compassHeadingDegrees(event.alpha, event.beta, event.gamma)
+          : null;
       const heading =
-        compassHeading ??
-        (typeof event.alpha === "number" ? 360 - event.alpha : null);
+        typeof compassHeading === "number" && Number.isFinite(compassHeading)
+          ? compassHeading
+          : tiltCompensatedHeading;
       if (heading === null) return;
       const normalizedHeading = normalizeDegrees(heading);
       const calibratedHeading =
         calibratedDeviceHeadingRef.current ?? normalizedHeading;
       calibratedDeviceHeadingRef.current = calibratedHeading;
-      setMapHeadingDegrees(
-        normalizeDegrees(
-          data.anchor.yawDegrees + 180 + normalizedHeading - calibratedHeading,
-        ),
+      const targetHeading = normalizeDegrees(
+        data.anchor.yawDegrees + 180 + normalizedHeading - calibratedHeading,
       );
+      const responsiveHeading = smoothHeadingDegrees(
+        headingRef.current,
+        targetHeading,
+      );
+      headingRef.current = responsiveHeading;
+      setMapHeadingDegrees(responsiveHeading);
     }
 
     function handleMotion(event: DeviceMotionEvent) {
-      const acceleration = event.acceleration;
-      const gravityAcceleration = event.accelerationIncludingGravity;
-      const magnitude = acceleration
-        ? Math.hypot(
-            acceleration.x ?? 0,
-            acceleration.y ?? 0,
-            acceleration.z ?? 0,
-          )
-        : gravityAcceleration
-          ? Math.abs(
-              Math.hypot(
-                gravityAcceleration.x ?? 0,
-                gravityAcceleration.y ?? 0,
-                gravityAcceleration.z ?? 0,
-              ) - 9.81,
-            )
-          : 0;
-      const now = Date.now();
-      if (magnitude < 1.7 || now - lastStepAtRef.current < 430) return;
-      lastStepAtRef.current = now;
+      const magnitude = motionMagnitude(
+        event.acceleration,
+        event.accelerationIncludingGravity,
+      );
+      const detection = processMotionSample(
+        stepDetectorRef.current,
+        magnitude,
+        event.timeStamp > 0 ? event.timeStamp : performance.now(),
+      );
+      stepDetectorRef.current = detection.state;
+      if (!detection.detected) return;
 
       const heading = headingRef.current;
       const radians = (heading * Math.PI) / 180;
       const rawPosition = {
-        x: positionRef.current.x + Math.sin(radians) * STEP_METERS,
-        z: positionRef.current.z - Math.cos(radians) * STEP_METERS,
+        x: positionRef.current.x + Math.sin(radians) * detection.stepMeters,
+        z: positionRef.current.z - Math.cos(radians) * detection.stepMeters,
       };
       const nearest = nearestWalkPathPoint(data.paths, rawPosition);
       const isOffRoute = !nearest || nearest.distanceMeters > OFF_ROUTE_METERS;
       const nextPosition = nearest && !isOffRoute ? nearest.point : rawPosition;
       setOffRoute(isOffRoute);
+      positionRef.current = nextPosition;
       setCurrentPosition(nextPosition);
       const progress = calculateNavigationProgress(
         data.paths,
@@ -274,12 +280,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       window.removeEventListener("deviceorientation", handleOrientation, true);
       window.removeEventListener("devicemotion", handleMotion);
     };
-  }, [
-    cameraActive,
-    data.anchor.yawDegrees,
-    data.paths,
-    selectedDestination,
-  ]);
+  }, [cameraActive, data.anchor.yawDegrees, data.paths, selectedDestination]);
 
   useEffect(() => {
     if (!cameraActive) return;
@@ -414,7 +415,10 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       });
       streamRef.current = stream;
       calibratedDeviceHeadingRef.current = null;
-      setMapHeadingDegrees(normalizeDegrees(data.anchor.yawDegrees + 180));
+      stepDetectorRef.current = createStepDetectorState();
+      const initialHeading = normalizeDegrees(data.anchor.yawDegrees + 180);
+      headingRef.current = initialHeading;
+      setMapHeadingDegrees(initialHeading);
       setMode("ar");
       setCameraActive(true);
       setTrackingMessage("เปิด AR แล้ว ถือโทรศัพท์ให้ตรงและเริ่มเดิน");
@@ -457,7 +461,10 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   function recalibrate() {
     setCurrentPosition(data.anchor.start);
     calibratedDeviceHeadingRef.current = null;
-    setMapHeadingDegrees(normalizeDegrees(data.anchor.yawDegrees + 180));
+    stepDetectorRef.current = createStepDetectorState();
+    const initialHeading = normalizeDegrees(data.anchor.yawDegrees + 180);
+    headingRef.current = initialHeading;
+    setMapHeadingDegrees(initialHeading);
     setOffRoute(false);
     setArrived(false);
     setTrackingMessage("ตั้งตำแหน่งกลับไปยังจุด QR Anchor แล้ว");
@@ -516,7 +523,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
 
         <div className="absolute inset-0 flex items-center justify-center">
           <div
-            className="flex size-32 items-center justify-center rounded-full border-4 border-white/80 bg-cyan-400/80 shadow-2xl transition-transform duration-300"
+            className="flex size-32 will-change-transform items-center justify-center rounded-full border-4 border-white/80 bg-cyan-400/80 shadow-2xl"
             style={{ transform: `rotate(${arrowRotation}deg)` }}
           >
             <Navigation className="size-20 fill-current text-white" />

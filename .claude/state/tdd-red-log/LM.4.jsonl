@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-29T10:59:02Z","task_id":"LM.4","test_file":"src/lib/live-map-motion.test.ts,src/lib/live-map-tracking.test.ts","exit_code":1,"framework":"vitest","stderr_tail":"Expected RED: 10 new tests failed before route progress, heading calibration, confidence weighting, adaptive heading, and off-route hysteresis were implemented.","cwd_hash":"1d298365f0a0"}

@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   createArrivalTrackerState,
+  createOffRouteTrackerState,
+  createRouteProgressState,
   destinationDistanceMeters,
   updateArrivalTracker,
+  updateOffRouteTracker,
+  updateRouteProgress,
 } from "@/lib/live-map-tracking";
 
 describe("destinationDistanceMeters", () => {
@@ -84,5 +88,216 @@ describe("updateArrivalTracker", () => {
     expect(updateArrivalTracker(candidate, Number.NaN, 3_000)).toEqual(
       createArrivalTrackerState(),
     );
+  });
+});
+
+describe("route-relative progress", () => {
+  const route = [
+    { x: 0, z: 0 },
+    { x: 5, z: 0 },
+  ];
+
+  it("reduces distance while walking forward and increases it walking backward", () => {
+    const initial = createRouteProgressState(route);
+    const forward = updateRouteProgress(route, initial, 0.7, 90);
+    const backward = updateRouteProgress(route, forward, 0.7, 270);
+
+    expect(initial.remainingDistanceMeters).toBeCloseTo(5);
+    expect(forward.remainingDistanceMeters).toBeCloseTo(4.3);
+    expect(backward.remainingDistanceMeters).toBeCloseTo(5);
+  });
+
+  it("keeps sideways movement as lateral error instead of route teleportation", () => {
+    const result = updateRouteProgress(
+      route,
+      createRouteProgressState(route),
+      0.7,
+      180,
+    );
+
+    expect(result.progressMeters).toBeCloseTo(0);
+    expect(Math.abs(result.lateralMeters)).toBeCloseTo(0.7);
+    expect(result.remainingDistanceMeters).toBeGreaterThan(5);
+    expect(result.matchedPosition.x).toBeCloseTo(0);
+    expect(result.matchedPosition.z).toBeCloseTo(0);
+  });
+
+  it("allows walking past the destination to clear arrival distance", () => {
+    const atDestination = createRouteProgressState(route, 5);
+    const pastDestination = updateRouteProgress(route, atDestination, 0.7, 90);
+
+    expect(atDestination.remainingDistanceMeters).toBeCloseTo(0);
+    expect(pastDestination.progressMeters).toBeCloseTo(5.7);
+    expect(pastDestination.remainingDistanceMeters).toBeCloseTo(0.7);
+  });
+
+  it("uses the next segment bearing after reaching a corner", () => {
+    const cornerRoute = [
+      { x: 0, z: 0 },
+      { x: 2, z: 0 },
+      { x: 2, z: -2 },
+    ];
+    const atCorner = createRouteProgressState(cornerRoute, 2);
+    const afterTurn = updateRouteProgress(cornerRoute, atCorner, 0.7, 0);
+
+    expect(afterTurn.progressMeters).toBeCloseTo(2.7);
+    expect(afterTurn.matchedPosition.x).toBeCloseTo(2);
+    expect(afterTurn.matchedPosition.z).toBeCloseTo(-0.7);
+  });
+
+  it("continues progressing when the customer starts turning before a corner", () => {
+    const cornerRoute = [
+      { x: 0, z: 0 },
+      { x: 2, z: 0 },
+      { x: 2, z: -2 },
+    ];
+    const beforeCorner = createRouteProgressState(cornerRoute, 1.7);
+    const earlyTurn = updateRouteProgress(cornerRoute, beforeCorner, 0.7, 0);
+
+    expect(earlyTurn.progressMeters).toBeGreaterThan(
+      beforeCorner.progressMeters,
+    );
+    expect(
+      earlyTurn.progressMeters - beforeCorner.progressMeters,
+    ).toBeLessThanOrEqual(0.7);
+  });
+
+  it("crosses short adjacent segments without moving farther than one step", () => {
+    const shortSegments = [
+      { x: 0, z: 0 },
+      { x: 1, z: 0 },
+      { x: 1, z: -0.2 },
+      { x: 2, z: -0.2 },
+    ];
+    const beforeShortSegment = createRouteProgressState(shortSegments, 0.9);
+    const result = updateRouteProgress(
+      shortSegments,
+      beforeShortSegment,
+      0.7,
+      60,
+    );
+    const delta = result.progressMeters - beforeShortSegment.progressMeters;
+
+    expect(delta).toBeGreaterThan(0);
+    expect(delta).toBeLessThanOrEqual(0.7);
+    expect(result.matchedPosition.x).toBeGreaterThanOrEqual(0);
+    expect(result.matchedPosition.x).toBeLessThanOrEqual(2);
+  });
+
+  it("reduces a 2D lateral residual when walking back toward the route", () => {
+    const offPath = updateRouteProgress(
+      route,
+      createRouteProgressState(route),
+      0.7,
+      180,
+    );
+    const recovered = updateRouteProgress(route, offPath, 0.7, 0);
+
+    expect(offPath.crossTrackMeters).toBeCloseTo(0.7);
+    expect(recovered.crossTrackMeters).toBeLessThan(offPath.crossTrackMeters);
+    expect(recovered.crossTrackMeters).toBeLessThan(0.1);
+  });
+
+  it("fails safely for empty, one-point, and duplicate-only routes", () => {
+    const empty = createRouteProgressState([]);
+    const onePoint = createRouteProgressState([{ x: 2, z: 3 }]);
+    const duplicateOnly = createRouteProgressState([
+      { x: 2, z: 3 },
+      { x: 2, z: 3 },
+    ]);
+    const invalidPrefix = createRouteProgressState([
+      { x: Number.NaN, z: Number.NaN },
+      { x: 2, z: 3 },
+      { x: 3, z: 3 },
+    ]);
+
+    expect(empty.totalDistanceMeters).toBe(0);
+    expect(empty.remainingDistanceMeters).toBe(0);
+    expect(onePoint.matchedPosition).toEqual({ x: 2, z: 3 });
+    expect(duplicateOnly.totalDistanceMeters).toBe(0);
+    expect(invalidPrefix.totalDistanceMeters).toBeCloseTo(1);
+    expect(updateRouteProgress([], empty, 0.7, 90)).toEqual(empty);
+  });
+
+  it("bounds progress contribution by confidence-weighted step length", () => {
+    const result = updateRouteProgress(
+      route,
+      createRouteProgressState(route),
+      0.7,
+      90,
+      0.6,
+    );
+
+    expect(result.progressMeters).toBeCloseTo(0.42);
+  });
+
+  it("credits only the forward component of an approximate heading", () => {
+    const result = updateRouteProgress(
+      route,
+      createRouteProgressState(route),
+      0.7,
+      45,
+    );
+
+    expect(result.progressMeters).toBeGreaterThan(0);
+    expect(result.progressMeters).toBeLessThan(0.7);
+    expect(result.progressMeters).toBeCloseTo(0.7 * Math.SQRT1_2);
+  });
+
+  it("confirms at the route end and clears after enough reverse progress", () => {
+    let progress = createRouteProgressState(route, 5);
+    let arrival = createArrivalTrackerState();
+    for (const nowMs of [1_000, 1_400, 1_800, 2_200]) {
+      arrival = updateArrivalTracker(
+        arrival,
+        progress.remainingDistanceMeters,
+        nowMs,
+      );
+    }
+    expect(arrival.arrived).toBe(true);
+
+    progress = updateRouteProgress(route, progress, 0.7, 270);
+    arrival = updateArrivalTracker(
+      arrival,
+      progress.remainingDistanceMeters,
+      2_500,
+    );
+    expect(arrival.arrived).toBe(true);
+
+    progress = updateRouteProgress(route, progress, 0.4, 270);
+    arrival = updateArrivalTracker(
+      arrival,
+      progress.remainingDistanceMeters,
+      2_900,
+    );
+    expect(arrival.arrived).toBe(false);
+  });
+});
+
+describe("off-route hysteresis", () => {
+  it("requires sustained evidence to enter and consecutive recovery samples to clear", () => {
+    let state = createOffRouteTrackerState();
+
+    state = updateOffRouteTracker(state, 1.2);
+    state = updateOffRouteTracker(state, 1.2);
+    expect(state.offRoute).toBe(false);
+
+    state = updateOffRouteTracker(state, 1.2);
+    expect(state.offRoute).toBe(true);
+
+    state = updateOffRouteTracker(state, 0.6);
+    expect(state.offRoute).toBe(true);
+
+    state = updateOffRouteTracker(state, 0.6);
+    expect(state.offRoute).toBe(false);
+  });
+
+  it("resets partial evidence when the estimate returns to the neutral band", () => {
+    let state = updateOffRouteTracker(createOffRouteTrackerState(), 1.2);
+    state = updateOffRouteTracker(state, 0.8);
+    state = updateOffRouteTracker(state, 1.2);
+
+    expect(state.offRoute).toBe(false);
+    expect(state.enterSamples).toBe(1);
   });
 });

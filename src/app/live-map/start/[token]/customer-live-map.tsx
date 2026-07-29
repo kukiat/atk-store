@@ -25,24 +25,26 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  adaptiveHeadingResponsiveness,
   compassHeadingDegrees,
+  createHeadingCalibrationState,
   createStepDetectorState,
   motionMagnitude,
   normalizeDegrees,
+  processHeadingSample,
   processMotionSample,
   rotationRateMagnitude,
   smoothHeadingDegrees,
 } from "@/lib/live-map-motion";
-import {
-  calculateWalkRoute,
-  mapBearingDegrees,
-  nearestWalkPathPoint,
-} from "@/lib/live-map-routing";
+import { calculateWalkRoute } from "@/lib/live-map-routing";
 import {
   createArrivalTrackerState,
-  destinationDistanceMeters,
-  PATH_SNAP_METERS,
+  createOffRouteTrackerState,
+  createRouteProgressState,
+  type RouteProgressState,
   updateArrivalTracker,
+  updateOffRouteTracker,
+  updateRouteProgress,
 } from "@/lib/live-map-tracking";
 import { cn } from "@/lib/utils";
 import type {
@@ -72,10 +74,6 @@ function defaultBoundary(data: CustomerLiveMapData): MapPoint[] {
   ];
 }
 
-function pointDistance(first: MapPoint, second: MapPoint) {
-  return Math.hypot(first.x - second.x, first.z - second.z);
-}
-
 function formatElapsed(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   const remainingSeconds = seconds % 60;
@@ -86,7 +84,9 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   const [query, setQuery] = useState("");
   const [selectedDestinationId, setSelectedDestinationId] = useState("");
   const [currentPosition, setCurrentPosition] = useState(data.anchor.start);
-  const [estimatedPosition, setEstimatedPosition] = useState(data.anchor.start);
+  const [routeProgress, setRouteProgress] = useState<RouteProgressState | null>(
+    null,
+  );
   const [mode, setMode] = useState<NavigationMode>("map");
   const [cameraActive, setCameraActive] = useState(false);
   const [mapHeadingDegrees, setMapHeadingDegrees] = useState(
@@ -94,6 +94,9 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   );
   const [offRoute, setOffRoute] = useState(false);
   const [arrived, setArrived] = useState(false);
+  const [headingCalibrated, setHeadingCalibrated] = useState(false);
+  const [headingCalibrationActive, setHeadingCalibrationActive] =
+    useState(false);
   const [trackingMessage, setTrackingMessage] = useState(
     "เลือกสินค้าเพื่อเริ่มนำทาง",
   );
@@ -103,13 +106,18 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   const productSelectionRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const positionRef = useRef(currentPosition);
-  const estimatedPositionRef = useRef(estimatedPosition);
+  const routeProgressRef = useRef<RouteProgressState | null>(routeProgress);
   const headingRef = useRef(mapHeadingDegrees);
   const sessionIdRef = useRef(sessionId);
   const modeRef = useRef(mode);
-  const calibratedDeviceHeadingRef = useRef<number | null>(null);
+  const headingCalibrationRef = useRef(
+    createHeadingCalibrationState(mapHeadingDegrees),
+  );
+  const headingCalibrationActiveRef = useRef(false);
+  const lastAppliedHeadingAtRef = useRef<number | null>(null);
   const stepDetectorRef = useRef(createStepDetectorState());
   const arrivalTrackerRef = useRef(createArrivalTrackerState());
+  const offRouteTrackerRef = useRef(createOffRouteTrackerState());
 
   const selectedDestination =
     data.destinations.find(
@@ -117,18 +125,14 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     ) ?? null;
   const route = useMemo(() => {
     if (!selectedDestination) return null;
-    return calculateWalkRoute(data.paths, currentPosition, selectedDestination);
-  }, [currentPosition, data.paths, selectedDestination]);
-  const estimatedRoute = useMemo(() => {
-    if (!selectedDestination) return null;
     return calculateWalkRoute(
       data.paths,
-      estimatedPosition,
+      data.anchor.start,
       selectedDestination,
     );
-  }, [data.paths, estimatedPosition, selectedDestination]);
+  }, [data.anchor.start, data.paths, selectedDestination]);
   const remainingDistanceMeters =
-    estimatedRoute?.distanceMeters ?? route?.distanceMeters ?? null;
+    routeProgress?.remainingDistanceMeters ?? route?.distanceMeters ?? null;
   const visibleDestinations = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("th-TH");
     if (!normalized) return data.destinations;
@@ -147,25 +151,20 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   const pathStroke = mapScale * 0.018;
   const routeStroke = mapScale * 0.045;
   const markerRadius = mapScale * 0.035;
-  const nextRoutePoint =
-    route?.points.find(
-      (point) => pointDistance(point, currentPosition) > 0.25,
-    ) ??
-    selectedDestination ??
-    null;
-  const arrowRotation = nextRoutePoint
-    ? normalizeDegrees(
-        mapBearingDegrees(currentPosition, nextRoutePoint) - mapHeadingDegrees,
-      )
-    : 0;
+  const routeBearingDegrees =
+    routeProgress?.routeBearingDegrees ??
+    (route ? createRouteProgressState(route.points).routeBearingDegrees : 0);
+  const arrowRotation = normalizeDegrees(
+    routeBearingDegrees - mapHeadingDegrees,
+  );
 
   useEffect(() => {
     positionRef.current = currentPosition;
   }, [currentPosition]);
 
   useEffect(() => {
-    estimatedPositionRef.current = estimatedPosition;
-  }, [estimatedPosition]);
+    routeProgressRef.current = routeProgress;
+  }, [routeProgress]);
 
   useEffect(() => {
     headingRef.current = mapHeadingDegrees;
@@ -197,10 +196,12 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   }, [cameraActive]);
 
   useEffect(() => {
-    if (!cameraActive || !selectedDestination) return;
+    if (!cameraActive || !selectedDestination || !route) return;
     const destination = selectedDestination;
+    const routePoints = route.points;
 
     function handleOrientation(event: DeviceOrientationEvent) {
+      if (!headingCalibrationActiveRef.current) return;
       const compassHeading = (
         event as DeviceOrientationEvent & { webkitCompassHeading?: number }
       ).webkitCompassHeading;
@@ -215,22 +216,50 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
           ? compassHeading
           : tiltCompensatedHeading;
       if (heading === null) return;
-      const normalizedHeading = normalizeDegrees(heading);
-      const calibratedHeading =
-        calibratedDeviceHeadingRef.current ?? normalizedHeading;
-      calibratedDeviceHeadingRef.current = calibratedHeading;
-      const targetHeading = normalizeDegrees(
-        data.anchor.yawDegrees + 180 + normalizedHeading - calibratedHeading,
+      const now = event.timeStamp > 0 ? event.timeStamp : performance.now();
+      const wasCalibrated =
+        headingCalibrationRef.current.calibratedDeviceHeadingDegrees !== null;
+      const calibration = processHeadingSample(
+        headingCalibrationRef.current,
+        heading,
+        now,
       );
+      headingCalibrationRef.current = calibration.state;
+      if (!calibration.accepted || calibration.mapHeadingDegrees === null) {
+        return;
+      }
+      if (!wasCalibrated && calibration.calibrated) {
+        stepDetectorRef.current = createStepDetectorState();
+        setHeadingCalibrated(true);
+        setTrackingMessage("ตั้งทิศเรียบร้อย เริ่มเดินตามลูกศรได้");
+      }
+      const elapsedMs =
+        lastAppliedHeadingAtRef.current === null
+          ? 16
+          : now - lastAppliedHeadingAtRef.current;
+      lastAppliedHeadingAtRef.current = now;
+      const targetHeading = calibration.mapHeadingDegrees;
       const responsiveHeading = smoothHeadingDegrees(
         headingRef.current,
         targetHeading,
+        adaptiveHeadingResponsiveness(
+          headingRef.current,
+          targetHeading,
+          elapsedMs,
+        ),
       );
       headingRef.current = responsiveHeading;
       setMapHeadingDegrees(responsiveHeading);
     }
 
     function handleMotion(event: DeviceMotionEvent) {
+      if (
+        headingCalibrationRef.current.calibratedDeviceHeadingDegrees === null
+      ) {
+        return;
+      }
+      const currentRouteProgress = routeProgressRef.current;
+      if (!currentRouteProgress) return;
       const now = event.timeStamp > 0 ? event.timeStamp : performance.now();
       const magnitude = motionMagnitude(
         event.acceleration,
@@ -244,36 +273,39 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       );
       stepDetectorRef.current = detection.state;
 
-      let nextEstimatedPosition = estimatedPositionRef.current;
+      let nextRouteProgress = currentRouteProgress;
       let nextPosition = positionRef.current;
-      let isOffRoute = false;
+      let isOffRoute = offRouteTrackerRef.current.offRoute;
       if (detection.detected) {
-        const heading = headingRef.current;
-        const radians = (heading * Math.PI) / 180;
-        nextEstimatedPosition = {
-          x:
-            estimatedPositionRef.current.x +
-            Math.sin(radians) * detection.stepMeters,
-          z:
-            estimatedPositionRef.current.z -
-            Math.cos(radians) * detection.stepMeters,
-        };
-        estimatedPositionRef.current = nextEstimatedPosition;
-        setEstimatedPosition(nextEstimatedPosition);
-
-        const nearest = nearestWalkPathPoint(data.paths, nextEstimatedPosition);
-        isOffRoute = !nearest || nearest.distanceMeters > PATH_SNAP_METERS;
-        nextPosition =
-          nearest && !isOffRoute ? nearest.point : nextEstimatedPosition;
-        setOffRoute(isOffRoute);
+        nextRouteProgress = updateRouteProgress(
+          routePoints,
+          currentRouteProgress,
+          detection.stepMeters,
+          headingRef.current,
+          detection.confidence,
+        );
+        routeProgressRef.current = nextRouteProgress;
+        setRouteProgress(nextRouteProgress);
+        nextPosition = nextRouteProgress.matchedPosition;
         positionRef.current = nextPosition;
         setCurrentPosition(nextPosition);
+
+        const previousOffRoute = offRouteTrackerRef.current;
+        const nextOffRoute = updateOffRouteTracker(
+          previousOffRoute,
+          nextRouteProgress.crossTrackMeters,
+        );
+        offRouteTrackerRef.current = nextOffRoute;
+        isOffRoute = nextOffRoute.offRoute;
+        if (previousOffRoute.offRoute !== nextOffRoute.offRoute) {
+          setOffRoute(nextOffRoute.offRoute);
+        }
       }
 
       const previousArrival = arrivalTrackerRef.current;
       const nextArrival = updateArrivalTracker(
         previousArrival,
-        destinationDistanceMeters(nextEstimatedPosition, destination),
+        nextRouteProgress.remainingDistanceMeters,
         now,
       );
       arrivalTrackerRef.current = nextArrival;
@@ -314,13 +346,65 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       }
     }
 
-    window.addEventListener("deviceorientation", handleOrientation, true);
+    function handleScreenOrientationChange() {
+      const currentRouteProgress = routeProgressRef.current;
+      if (!currentRouteProgress) return;
+      headingCalibrationRef.current = createHeadingCalibrationState(
+        currentRouteProgress.routeBearingDegrees,
+      );
+      lastAppliedHeadingAtRef.current = null;
+      stepDetectorRef.current = createStepDetectorState();
+      headingRef.current = currentRouteProgress.routeBearingDegrees;
+      setMapHeadingDegrees(currentRouteProgress.routeBearingDegrees);
+      setHeadingCalibrated(false);
+      headingCalibrationActiveRef.current = false;
+      setHeadingCalibrationActive(false);
+      setTrackingMessage(
+        "หน้าจอหมุนแล้ว ชี้โทรศัพท์ตามทางแล้วแตะตั้งทิศอีกครั้ง",
+      );
+    }
+
+    const supportsAbsoluteOrientation = "ondeviceorientationabsolute" in window;
+    const orientationEventName = supportsAbsoluteOrientation
+      ? "deviceorientationabsolute"
+      : "deviceorientation";
+    window.addEventListener(
+      orientationEventName,
+      handleOrientation as EventListener,
+      true,
+    );
     window.addEventListener("devicemotion", handleMotion);
+    if (window.screen.orientation) {
+      window.screen.orientation.addEventListener(
+        "change",
+        handleScreenOrientationChange,
+      );
+    } else {
+      window.addEventListener(
+        "orientationchange",
+        handleScreenOrientationChange,
+      );
+    }
     return () => {
-      window.removeEventListener("deviceorientation", handleOrientation, true);
+      window.removeEventListener(
+        orientationEventName,
+        handleOrientation as EventListener,
+        true,
+      );
       window.removeEventListener("devicemotion", handleMotion);
+      if (window.screen.orientation) {
+        window.screen.orientation.removeEventListener(
+          "change",
+          handleScreenOrientationChange,
+        );
+      } else {
+        window.removeEventListener(
+          "orientationchange",
+          handleScreenOrientationChange,
+        );
+      }
     };
-  }, [cameraActive, data.anchor.yawDegrees, data.paths, selectedDestination]);
+  }, [cameraActive, route, selectedDestination]);
 
   useEffect(() => {
     if (!cameraActive) return;
@@ -383,11 +467,15 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     setSelectedDestinationId(destinationId);
     positionRef.current = data.anchor.start;
     setCurrentPosition(data.anchor.start);
-    estimatedPositionRef.current = data.anchor.start;
-    setEstimatedPosition(data.anchor.start);
+    routeProgressRef.current = null;
+    setRouteProgress(null);
     arrivalTrackerRef.current = createArrivalTrackerState();
+    offRouteTrackerRef.current = createOffRouteTrackerState();
     setOffRoute(false);
     setArrived(false);
+    setHeadingCalibrated(false);
+    headingCalibrationActiveRef.current = false;
+    setHeadingCalibrationActive(false);
     setElapsedSeconds(0);
     setTrackingMessage("พร้อมเริ่มนำทางจากจุดสแกน QR");
     setSessionId(null);
@@ -403,6 +491,16 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       setTrackingMessage("ยังไม่มี Walk path ที่เชื่อมไปยังสินค้านี้");
       return;
     }
+    const initialProgress = createRouteProgressState(initialRoute.points);
+    routeProgressRef.current = initialProgress;
+    setRouteProgress(initialProgress);
+    positionRef.current = initialProgress.matchedPosition;
+    setCurrentPosition(initialProgress.matchedPosition);
+    headingCalibrationRef.current = createHeadingCalibrationState(
+      initialProgress.routeBearingDegrees,
+    );
+    headingRef.current = initialProgress.routeBearingDegrees;
+    setMapHeadingDegrees(initialProgress.routeBearingDegrees);
 
     try {
       const response = await fetch("/api/live-map/sessions", {
@@ -461,14 +559,27 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       arrivalTrackerRef.current = createArrivalTrackerState(
         arrivalTrackerRef.current.arrived,
       );
-      calibratedDeviceHeadingRef.current = null;
+      const currentRouteProgress = routeProgressRef.current;
+      if (!currentRouteProgress) {
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        setTrackingMessage("ยังไม่มีเส้นทางที่พร้อมสำหรับ AR");
+        return;
+      }
+      headingCalibrationRef.current = createHeadingCalibrationState(
+        currentRouteProgress.routeBearingDegrees,
+      );
+      lastAppliedHeadingAtRef.current = null;
       stepDetectorRef.current = createStepDetectorState();
-      const initialHeading = normalizeDegrees(data.anchor.yawDegrees + 180);
+      const initialHeading = currentRouteProgress.routeBearingDegrees;
       headingRef.current = initialHeading;
       setMapHeadingDegrees(initialHeading);
+      setHeadingCalibrated(false);
+      headingCalibrationActiveRef.current = false;
+      setHeadingCalibrationActive(false);
       setMode("ar");
       setCameraActive(true);
-      setTrackingMessage("เปิด AR แล้ว ถือโทรศัพท์ให้ตรงและเริ่มเดิน");
+      setTrackingMessage("ชี้โทรศัพท์ไปตามทางเดิน แล้วแตะตั้งทิศและเริ่มเดิน");
 
       const activeSessionId = sessionIdRef.current;
       if (activeSessionId) {
@@ -499,6 +610,9 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraActive(false);
     setMode("map");
+    setHeadingCalibrated(false);
+    headingCalibrationActiveRef.current = false;
+    setHeadingCalibrationActive(false);
     setTrackingMessage("ปิดกล้องแล้ว ยังดูเส้นทางบนแผนที่ได้");
     window.requestAnimationFrame(() => {
       productSelectionRef.current?.scrollIntoView({
@@ -509,19 +623,50 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   }
 
   function recalibrate() {
-    positionRef.current = data.anchor.start;
-    setCurrentPosition(data.anchor.start);
-    estimatedPositionRef.current = data.anchor.start;
-    setEstimatedPosition(data.anchor.start);
-    calibratedDeviceHeadingRef.current = null;
+    if (!route) return;
+    const initialProgress = createRouteProgressState(route.points);
+    routeProgressRef.current = initialProgress;
+    setRouteProgress(initialProgress);
+    positionRef.current = initialProgress.matchedPosition;
+    setCurrentPosition(initialProgress.matchedPosition);
+    headingCalibrationRef.current = createHeadingCalibrationState(
+      initialProgress.routeBearingDegrees,
+    );
+    lastAppliedHeadingAtRef.current = null;
     stepDetectorRef.current = createStepDetectorState();
     arrivalTrackerRef.current = createArrivalTrackerState();
-    const initialHeading = normalizeDegrees(data.anchor.yawDegrees + 180);
+    offRouteTrackerRef.current = createOffRouteTrackerState();
+    const initialHeading = initialProgress.routeBearingDegrees;
     headingRef.current = initialHeading;
     setMapHeadingDegrees(initialHeading);
+    setHeadingCalibrated(false);
+    headingCalibrationActiveRef.current = false;
+    setHeadingCalibrationActive(false);
     setOffRoute(false);
     setArrived(false);
     setTrackingMessage("ตั้งตำแหน่งกลับไปยังจุด QR Anchor แล้ว");
+  }
+
+  function beginHeadingCalibration(message: string) {
+    const currentRouteProgress = routeProgressRef.current;
+    if (!currentRouteProgress) return;
+    headingCalibrationRef.current = createHeadingCalibrationState(
+      currentRouteProgress.routeBearingDegrees,
+    );
+    lastAppliedHeadingAtRef.current = null;
+    stepDetectorRef.current = createStepDetectorState();
+    headingRef.current = currentRouteProgress.routeBearingDegrees;
+    setMapHeadingDegrees(currentRouteProgress.routeBearingDegrees);
+    setHeadingCalibrated(false);
+    headingCalibrationActiveRef.current = true;
+    setHeadingCalibrationActive(true);
+    setTrackingMessage(message);
+  }
+
+  function recalibrateHeading() {
+    beginHeadingCalibration(
+      "กำลังตั้งทิศใหม่ กรุณาชี้ตามทางและถือนิ่งประมาณ 1 วินาที",
+    );
   }
 
   async function markArrived() {
@@ -568,21 +713,47 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
               {selectedDestination.inventoryName}
             </p>
             <p className="text-xs text-white/80">
-              {remainingDistanceMeters !== null
-                ? `เหลือประมาณ ${remainingDistanceMeters.toFixed(1)} เมตร`
-                : "กำลังหาเส้นทาง"}
+              {!headingCalibrationActive
+                ? "ชี้ตามทางแล้วแตะปุ่มตั้งทิศด้านล่าง"
+                : !headingCalibrated
+                  ? "กำลังตั้งทิศ กรุณาถือโทรศัพท์ให้นิ่ง"
+                  : remainingDistanceMeters !== null
+                    ? `เหลือประมาณ ${remainingDistanceMeters.toFixed(1)} เมตร`
+                    : "กำลังหาเส้นทาง"}
             </p>
           </div>
-          <div aria-hidden="true" className="size-9 shrink-0" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={recalibrateHeading}
+            aria-label="ตั้งทิศลูกศรใหม่"
+            className="shrink-0 rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 hover:text-white"
+          >
+            <RotateCcw className="size-5" />
+          </Button>
         </div>
 
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-5">
           <div
             className="flex size-32 will-change-transform items-center justify-center rounded-full border-4 border-white/80 bg-cyan-400/80 shadow-2xl"
             style={{ transform: `rotate(${arrowRotation}deg)` }}
           >
             <Navigation className="size-20 fill-current text-white" />
           </div>
+          {!headingCalibrationActive && (
+            <Button
+              type="button"
+              onClick={() =>
+                beginHeadingCalibration(
+                  "กำลังตั้งทิศ กรุณาชี้ตามทางและถือนิ่งประมาณ 1 วินาที",
+                )
+              }
+              className="rounded-full bg-white px-6 text-black shadow-xl hover:bg-white/90"
+            >
+              ตั้งทิศและเริ่มเดิน
+            </Button>
+          )}
         </div>
 
         <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -712,7 +883,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
                   ) : (
                     <Button type="button" onClick={() => void startAr()}>
                       <Video className="size-4" />
-                      หันเข้าหาป้ายแล้วเริ่ม AR
+                      เปิด AR และตั้งทิศตามทางเดิน
                     </Button>
                   )}
                   <Button type="button" variant="outline" onClick={recalibrate}>

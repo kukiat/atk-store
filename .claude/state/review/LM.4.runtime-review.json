@@ -1,0 +1,33 @@
+{
+  "schema_version": "runtime-review.v1",
+  "generated_at": "2026-07-29T11:25:31Z",
+  "task": {
+    "id": "LM.4",
+    "title": "Stabilize WebAR navigation with route-relative progress, calibrated heading, confidence-weighted steps, and state hysteresis. [tdd:required]"
+  },
+  "reviewer_profile": "runtime",
+  "verdict": "APPROVE",
+  "checks": [
+    {
+      "label": "package-test",
+      "command": "rtk npm test",
+      "status": "passed",
+      "exit_code": 0,
+      "output": "> vitest run\n RUN  v4.1.9 /Users/thanachottesjaroen/Desktop/Banpu/ATK_STORE/atk-store\n Test Files  21 passed (21)\n      Tests  123 passed (123)\n   Start at  18:25:27\n   Duration  539ms (transform 605ms, setup 0ms, import 1.56s, tests 121ms, environment 1ms)"
+    },
+    {
+      "label": "package-lint",
+      "command": "rtk npm run lint",
+      "status": "passed",
+      "exit_code": 0,
+      "output": "> eslint\n/Users/thanachottesjaroen/Desktop/Banpu/ATK_STORE/atk-store/tmp/aws_face_constrain_builder/build.mjs\n  38:10  warning  'setFormulas' is defined but never used  @typescript-eslint/no-unused-vars\n  85:10  warning  'currency' is defined but never used     @typescript-eslint/no-unused-vars\n✖ 2 problems (0 errors, 2 warnings)"
+    },
+    {
+      "label": "reviewer-runtime",
+      "command": "rtk npm test -- src/lib/live-map-motion.test.ts src/lib/live-map-tracking.test.ts src/lib/live-map-routing.test.ts",
+      "status": "passed",
+      "exit_code": 0,
+      "output": "> vitest run src/lib/live-map-motion.test.ts src/lib/live-map-tracking.test.ts src/lib/live-map-routing.test.ts\n RUN  v4.1.9 /Users/thanachottesjaroen/Desktop/Banpu/ATK_STORE/atk-store\n Test Files  3 passed (3)\n      Tests  49 passed (49)\n   Start at  18:25:31\n   Duration  104ms (transform 60ms, setup 0ms, import 80ms, tests 8ms, environment 0ms)"
+    }
+  ]
+}

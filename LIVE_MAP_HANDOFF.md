@@ -24,8 +24,9 @@ using `S3_LIVEMAP_IMAGE_FOLDER`.
   - elapsed navigation time
   - navigation session statistics
   - a WebAR prototype using the camera, device orientation, and motion
-  - Anchor-yaw calibration, step estimation, map matching, off-route warnings,
-    and arrival state
+  - explicit route-relative heading calibration, cadence-aware step estimation,
+    signed route progress, soft map matching, off-route hysteresis, and arrival
+    state
 - Customer camera frames and video are neither uploaded nor stored.
 - `navigation_sessions` and its API routes were added in
   `drizzle/0011_hot_scarlet_witch.sql`.
@@ -70,10 +71,10 @@ using `S3_LIVEMAP_IMAGE_FOLDER`.
   - it is not a `data:` or base64 URL
   - it points to the configured public S3 `/livemap/` folder
   - browser verification confirmed that the PNG loads at 512×512
-- Tests passed: 77/77.
+- Tests passed: 123/123.
 - Lint has no errors. Two unrelated existing warnings remain in
   `tmp/aws_face_constrain_builder/build.mjs`.
-- Production build passed when network access was available for Google Fonts.
+- Production build passes when network access is available for Google Fonts.
 
 ## Deployment status
 
@@ -85,6 +86,8 @@ using `S3_LIVEMAP_IMAGE_FOLDER`.
   ```
 
 - Deployment of the later S3 QR-image source changes has not been confirmed.
+- Deployment of the LM.4 route-progress and sensor-calibration changes has not
+  been performed or confirmed.
 - The database migration and legacy `ENT1` S3 backfill have already been
   applied against the configured database.
 - Before deploying the S3 source change, confirm the production runtime has:
@@ -115,15 +118,37 @@ using `S3_LIVEMAP_IMAGE_FOLDER`.
 
 ## Customer navigation accuracy contract
 
-- The raw dead-reckoning position derived from accepted steps is the source of
-  truth for remaining distance and arrival. Map matching must not overwrite it.
-- Projection onto a Walk path is display-only and applies only within 0.55 m.
-- Automatic arrival requires the raw position to stay within 0.45 m of the
-  destination for at least 1.2 seconds with continuous sensor callbacks.
+- A navigation session keeps signed progress along the initially calculated
+  route. Each accepted step is projected onto the current route bearing, so
+  forward movement reduces remaining distance, reverse movement increases it,
+  and sideways movement contributes primarily to lateral error.
+- Progress may extend before the route start or beyond its destination. This is
+  required so walking away after arrival increases remaining distance instead
+  of pinning the customer to an endpoint.
+- The displayed map position is route-matched. A separately tracked, bounded
+  lateral estimate contributes to remaining distance and off-route confidence
+  without allowing inertial drift to jump to an unrelated path segment.
+- Device heading calibrates from multiple stable orientation samples against the
+  bearing of the active route segment. Motion must not update route progress
+  before calibration completes. Initial sampling starts only after the customer
+  points along the route and explicitly taps the calibration button, then holds
+  that direction for at least 0.6 seconds. The customer can reset heading
+  calibration without resetting their route progress.
+- Heading interpolation uses the shortest angular turn and adapts to sensor
+  timing so large turns catch up quickly without making small changes jitter.
+- Rotation rate raises the confidence threshold and reduces the contribution of
+  a step instead of categorically rejecting every step taken while turning.
+  High-rotation steps additionally require recent walking cadence and a complete
+  peak/release waveform. Rotation-only peaks must still be rejected.
+- Off-route state uses hysteresis: entering requires sustained lateral evidence
+  and clearing requires consecutive samples inside a narrower recovery radius.
+- Automatic arrival requires route-relative remaining distance to stay within
+  0.45 m of the destination for at least 1.2 seconds with continuous sensor
+  callbacks.
 - A sensor callback gap over 0.5 seconds or pausing AR resets a pending arrival
   confirmation without clearing an already confirmed arrival.
-- Once arrived, the state remains stable until the raw position moves more than
-  0.9 m away.
+- Once arrived, the state remains stable until route-relative remaining distance
+  moves more than 0.9 m away.
 - Walking away resumes both the customer UI and the persisted navigation
   session, clearing its previous completion timestamp and duration.
 - Device-motion samples recorded during rapid rotation must not create walking
@@ -152,7 +177,8 @@ using `S3_LIVEMAP_IMAGE_FOLDER`.
 ## Current Git/worktree state
 
 - Branch: `features/live-map`
-- Live Map and S3 changes are modified or untracked locally.
+- LM.4 source, tests, plan/handoff, sprint contract, TDD evidence, and review
+  artifacts are modified or untracked locally.
 - Codex did not commit or push because the user did not explicitly request
   those exact Git actions.
 - Start by running:

@@ -1,7 +1,4 @@
-import {
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -14,6 +11,7 @@ const envNames = [
   "S3_ENDPOINT",
   "S3_REGION",
   "S3_BUCKET",
+  "S3_LIVEMAP_IMAGE_FOLDER",
   "S3_ENTRY_IMAGE_FOLDER",
   "S3_EXIT_IMAGE_FOLDER",
 ] as const;
@@ -24,12 +22,39 @@ const originalEnv = Object.fromEntries(
 beforeEach(() => {
   process.env.S3_ACCESS_KEY_ID = "test-key";
   process.env.S3_SECRET_KEY = "test-secret";
-  process.env.S3_ENDPOINT =
-    "https://storage.example/storage/v1/s3";
+  process.env.S3_ENDPOINT = "https://storage.example/storage/v1/s3";
   process.env.S3_REGION = "ap-southeast-1";
   process.env.S3_BUCKET = "atk-store";
+  process.env.S3_LIVEMAP_IMAGE_FOLDER = "/livemap/";
   process.env.S3_ENTRY_IMAGE_FOLDER = "/entry/";
   process.env.S3_EXIT_IMAGE_FOLDER = "exit";
+});
+
+describe("S3StorageService Live Map QR images", () => {
+  it("uploads QR PNG data URLs to the configured Live Map folder", async () => {
+    const send = vi
+      .spyOn(S3Client.prototype, "send")
+      .mockImplementation(async () => undefined as never);
+    const dataUrl = `data:image/png;base64,${Buffer.from("qr-image").toString("base64")}`;
+
+    const imageUrl = await s3StorageService.uploadLiveMapQrDataUrl(
+      dataUrl,
+      "ENT 1",
+    );
+
+    expect(send).toHaveBeenCalledOnce();
+    const command = send.mock.calls[0]?.[0] as PutObjectCommand;
+    expect(command.input).toMatchObject({
+      Bucket: "atk-store",
+      ContentType: "image/png",
+    });
+    expect(command.input.Key).toMatch(
+      /^livemap\/[0-9a-f-]+-live-map-ent-1\.png$/,
+    );
+    expect(imageUrl).toMatch(
+      /^https:\/\/storage\.example\/storage\/v1\/object\/public\/atk-store\/livemap\/[0-9a-f-]+-live-map-ent-1\.png$/,
+    );
+  });
 });
 
 afterEach(() => {

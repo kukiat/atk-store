@@ -15,6 +15,7 @@ import {
 } from "@/db/schema";
 import { generateQrDataUrl } from "@/lib/qr-image";
 import type { AdminActor } from "@/services/admin-user.service";
+import { s3StorageService } from "@/services/s3-storage.service";
 
 export type MapPoint = { x: number; z: number };
 
@@ -42,7 +43,7 @@ export type LiveMapData = {
     startX: number;
     startZ: number;
     qrUrl: string;
-    qrImageDataUrl: string;
+    qrImageUrl: string;
   }>;
   paths: Array<{ id: string; name: string; points: MapPoint[] }>;
   restrictedAreas: Array<{ id: string; name: string; polygon: MapPoint[] }>;
@@ -66,8 +67,10 @@ export type CustomerLiveMapData = {
     boundary: MapPoint[];
   };
   anchor: {
+    token: string;
     code: string;
     name: string;
+    yawDegrees: number;
     start: MapPoint;
   };
   paths: Array<{ id: string; name: string; points: MapPoint[] }>;
@@ -86,6 +89,25 @@ function requireNavigationPermission(actor: AdminActor) {
   if (!actor.permissions.canAccessAdmin) {
     throw new Error("Admin permission is required");
   }
+}
+
+function getLiveMapQrUrl(publicToken: string): string {
+  const authUrl = (process.env.AUTH_URL ?? "http://localhost:3000").replace(
+    /\/+$/,
+    "",
+  );
+  return `${authUrl}/live-map/start/${publicToken}`;
+}
+
+async function uploadLiveMapQrImage(input: {
+  publicToken: string;
+  code: string;
+}): Promise<string> {
+  const qrUrl = getLiveMapQrUrl(input.publicToken);
+  return s3StorageService.uploadLiveMapQrDataUrl(
+    await generateQrDataUrl(qrUrl),
+    input.code,
+  );
 }
 
 function readText(formData: FormData, key: string): string {
@@ -208,6 +230,7 @@ class LiveMapService {
           yawDegrees: navigationAnchors.yawDegrees,
           startX: navigationAnchors.startX,
           startZ: navigationAnchors.startZ,
+          qrImageUrl: navigationAnchors.qrImageUrl,
         })
         .from(navigationAnchors)
         .where(
@@ -272,17 +295,21 @@ class LiveMapService {
         .orderBy(asc(inventories.name)),
     ]);
 
-    const authUrl = (process.env.AUTH_URL ?? "http://localhost:3000").replace(
-      /\/+$/,
-      "",
-    );
     const anchors = await Promise.all(
       anchorRows.map(async (anchor) => {
-        const qrUrl = `${authUrl}/live-map/start/${anchor.publicToken}`;
+        const qrUrl = getLiveMapQrUrl(anchor.publicToken);
+        let qrImageUrl = anchor.qrImageUrl;
+        if (!qrImageUrl) {
+          qrImageUrl = await uploadLiveMapQrImage(anchor);
+          await db
+            .update(navigationAnchors)
+            .set({ qrImageUrl, updatedAt: new Date() })
+            .where(eq(navigationAnchors.id, anchor.id));
+        }
         return {
           ...anchor,
           qrUrl,
-          qrImageDataUrl: await generateQrDataUrl(qrUrl),
+          qrImageUrl,
         };
       }),
     );
@@ -346,10 +373,13 @@ class LiveMapService {
 
   async createAnchor(actor: AdminActor, formData: FormData): Promise<void> {
     requireNavigationPermission(actor);
+    const publicToken = crypto.randomBytes(32).toString("base64url");
+    const code = readText(formData, "code").toUpperCase();
+    const qrImageUrl = await uploadLiveMapQrImage({ publicToken, code });
     await db.insert(navigationAnchors).values({
       floorId: readText(formData, "floorId"),
-      publicToken: crypto.randomBytes(32).toString("base64url"),
-      code: readText(formData, "code").toUpperCase(),
+      publicToken,
+      code,
       name: readText(formData, "name"),
       x: readNumber(formData, "x"),
       z: readNumber(formData, "z"),
@@ -359,6 +389,7 @@ class LiveMapService {
       yawDegrees: readNumber(formData, "yawDegrees"),
       startX: readNumber(formData, "startX"),
       startZ: readNumber(formData, "startZ"),
+      qrImageUrl,
       updatedAt: new Date(),
     });
   }
@@ -528,6 +559,7 @@ class LiveMapService {
         id: navigationAnchors.id,
         code: navigationAnchors.code,
         name: navigationAnchors.name,
+        yawDegrees: navigationAnchors.yawDegrees,
         startX: navigationAnchors.startX,
         startZ: navigationAnchors.startZ,
         floorName: navigationFloors.name,
@@ -559,6 +591,7 @@ class LiveMapService {
         name: navigationAnchors.name,
         startX: navigationAnchors.startX,
         startZ: navigationAnchors.startZ,
+        yawDegrees: navigationAnchors.yawDegrees,
         floorId: navigationFloors.id,
         floorName: navigationFloors.name,
         widthMeters: navigationFloors.widthMeters,
@@ -647,8 +680,10 @@ class LiveMapService {
         boundary: asPoints(anchor.boundary),
       },
       anchor: {
+        token,
         code: anchor.code,
         name: anchor.name,
+        yawDegrees: anchor.yawDegrees,
         start: { x: anchor.startX, z: anchor.startZ },
       },
       paths: pathRows.map((path) => ({

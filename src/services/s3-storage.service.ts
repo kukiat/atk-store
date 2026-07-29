@@ -14,7 +14,7 @@ const allowedImageTypes = new Set([
 ]);
 const allowedAttendanceImageTypes = new Set(["image/jpeg", "image/png"]);
 
-type UploadFolder = "product" | "qr" | "entry" | "exit";
+type UploadFolder = "product" | "qr" | "liveMap" | "entry" | "exit";
 
 function readRequiredEnv(name: string): string {
   const value = process.env[name]?.trim();
@@ -26,6 +26,7 @@ function getFolder(folder: UploadFolder): string {
   const envName = {
     product: "S3_PRODUCT_IMAGE_FOLDER",
     qr: "S3_QR_CODE_IMAGE_FOLDER",
+    liveMap: "S3_LIVEMAP_IMAGE_FOLDER",
     entry: "S3_ENTRY_IMAGE_FOLDER",
     exit: "S3_EXIT_IMAGE_FOLDER",
   }[folder];
@@ -96,14 +97,37 @@ class S3StorageService {
   }
 
   async uploadQrDataUrl(dataUrl: string): Promise<string> {
-    const match = dataUrl.match(/^data:(.+);base64,(.+)$/);
+    return this.uploadDataUrl({
+      dataUrl,
+      filename: "qr-code.png",
+      folder: "qr",
+    });
+  }
+
+  async uploadLiveMapQrDataUrl(
+    dataUrl: string,
+    anchorCode: string,
+  ): Promise<string> {
+    return this.uploadDataUrl({
+      dataUrl,
+      filename: sanitizeFilename(`live-map-${anchorCode}.png`),
+      folder: "liveMap",
+    });
+  }
+
+  private async uploadDataUrl(input: {
+    dataUrl: string;
+    filename: string;
+    folder: UploadFolder;
+  }): Promise<string> {
+    const match = input.dataUrl.match(/^data:(.+);base64,(.+)$/);
     if (!match) throw new Error("Invalid QR data URL");
 
     return this.uploadBytes({
       bytes: Buffer.from(match[2] ?? "", "base64"),
       contentType: match[1] ?? "image/png",
-      filename: "qr-code.png",
-      folder: "qr",
+      filename: input.filename,
+      folder: input.folder,
     });
   }
 

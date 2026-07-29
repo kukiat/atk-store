@@ -686,6 +686,7 @@ export const navigationAnchors = db_schema.table(
     yawDegrees: doublePrecision("yaw_degrees").notNull(),
     startX: doublePrecision("start_x").notNull(),
     startZ: doublePrecision("start_z").notNull(),
+    qrImageUrl: text("qr_image_url"),
     isActive: boolean("is_active").notNull().default(true),
     ...lifecycleColumns,
   },
@@ -753,6 +754,47 @@ export const inventoryNavigationLocations = db_schema.table(
   (table) => [
     index("inventory_navigation_locations_floor_idx").on(table.floorId),
     index("inventory_navigation_locations_inventory_idx").on(table.inventoryId),
+  ],
+);
+
+/**
+ * One customer navigation attempt. Only lightweight coordinates, timing and
+ * status are stored; camera frames and video never leave the customer's phone.
+ */
+export const navigationSessions = db_schema.table(
+  "navigation_sessions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    clientVisitId: integer("client_visit_id")
+      .notNull()
+      .references(() => clientVisits.id, { onDelete: "cascade" }),
+    anchorId: uuid("anchor_id")
+      .notNull()
+      .references(() => navigationAnchors.id, { onDelete: "restrict" }),
+    destinationId: uuid("destination_id")
+      .notNull()
+      .references(() => inventoryNavigationLocations.id, {
+        onDelete: "restrict",
+      }),
+    status: text("status").notNull().default("navigating"),
+    mode: text("mode").notNull().default("map"),
+    initialDistanceMeters: doublePrecision("initial_distance_meters").notNull(),
+    lastX: doublePrecision("last_x").notNull(),
+    lastZ: doublePrecision("last_z").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    durationSeconds: integer("duration_seconds"),
+    ...lifecycleColumns,
+  },
+  (table) => [
+    index("navigation_sessions_user_idx").on(table.userId),
+    index("navigation_sessions_visit_idx").on(table.clientVisitId),
+    index("navigation_sessions_started_at_idx").on(table.startedAt),
   ],
 );
 
@@ -1358,6 +1400,8 @@ export type NewClientAttendanceEvent =
   typeof clientAttendanceEvents.$inferInsert;
 export type ClientVisit = typeof clientVisits.$inferSelect;
 export type NewClientVisit = typeof clientVisits.$inferInsert;
+export type NavigationSession = typeof navigationSessions.$inferSelect;
+export type NewNavigationSession = typeof navigationSessions.$inferInsert;
 
 /** Union of supported sign-in channels, e.g. "google" | "line" | … */
 export type AuthMethod = (typeof authMethodEnum.enumValues)[number];

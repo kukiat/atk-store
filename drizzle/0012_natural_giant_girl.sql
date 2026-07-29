@@ -1,0 +1,1 @@
+ALTER TABLE "auth"."navigation_anchors" ADD COLUMN "qr_image_url" text;

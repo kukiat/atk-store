@@ -94,6 +94,21 @@ function closestProjection(point: RoutePoint, segments: Segment[]) {
   return best;
 }
 
+export function nearestWalkPathPoint(
+  paths: WalkPath[],
+  point: RoutePoint,
+): { point: RoutePoint; distanceMeters: number } | null {
+  const projection = closestProjection(point, buildSegments(paths));
+  return projection
+    ? { point: projection.point, distanceMeters: projection.distance }
+    : null;
+}
+
+export function mapBearingDegrees(from: RoutePoint, to: RoutePoint) {
+  const degrees = (Math.atan2(to.x - from.x, -(to.z - from.z)) * 180) / Math.PI;
+  return (degrees + 360) % 360;
+}
+
 function simplifyRoute(points: RoutePoint[]) {
   const deduplicated = points.filter(
     (point, index) =>

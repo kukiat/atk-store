@@ -2,8 +2,6 @@
 
 import { useState } from "react";
 
-import Image from "next/image";
-
 import {
   createInventoryNavigationLocationAction,
   createNavigationAnchorAction,
@@ -25,6 +23,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { validateLiveMap } from "@/lib/live-map-validation";
 import type { LiveMapData, MapPoint } from "@/services/live-map.service";
 
 type Tool =
@@ -105,6 +104,15 @@ function LiveMapEditorContent({
   const [editPosition, setEditPosition] = useState<MapPoint | null>(null);
   const [editAnchorStart, setEditAnchorStart] = useState<MapPoint | null>(null);
   const boundary = floor.boundary;
+  const readinessIssues = validateLiveMap({
+    boundary,
+    paths: data.paths,
+    anchors: data.anchors,
+    locations: data.locations,
+  });
+  const readinessErrors = readinessIssues.filter(
+    (issue) => issue.severity === "error",
+  );
 
   function chooseTool(nextTool: Tool) {
     setTool(nextTool);
@@ -288,6 +296,46 @@ function LiveMapEditorContent({
             </Button>
           </form>
         </CardContent>
+      </Card>
+
+      <Card
+        className={
+          readinessErrors.length === 0
+            ? "border-green-500/40"
+            : "border-amber-500/50"
+        }
+      >
+        <CardHeader>
+          <CardTitle className="text-base">
+            {readinessErrors.length === 0
+              ? "Map ready for navigation"
+              : "Map needs attention"}
+          </CardTitle>
+          <CardDescription>
+            {readinessErrors.length === 0
+              ? "Boundary, QR Anchor, Walk path และตำแหน่งสินค้าพร้อมคำนวณเส้นทาง"
+              : "แก้รายการด้านล่างก่อนนำ QR ไปให้ลูกค้าใช้งาน"}
+          </CardDescription>
+        </CardHeader>
+        {readinessIssues.length > 0 && (
+          <CardContent>
+            <ul className="grid gap-2 text-sm">
+              {readinessIssues.map((issue) => (
+                <li
+                  key={issue.code}
+                  className={
+                    issue.severity === "error"
+                      ? "text-destructive"
+                      : "text-amber-700 dark:text-amber-300"
+                  }
+                >
+                  {issue.severity === "error" ? "Error" : "Warning"}:{" "}
+                  {issue.message}
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        )}
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
@@ -1593,12 +1641,12 @@ function AnchorList({ anchors }: { anchors: LiveMapData["anchors"] }) {
                 key={anchor.id}
                 className="grid gap-3 rounded-lg border p-3 sm:grid-cols-[7rem_1fr_auto]"
               >
-                <Image
-                  src={anchor.qrImageDataUrl}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={anchor.qrImageUrl}
                   alt={`QR code for ${anchor.code}`}
                   width={112}
                   height={112}
-                  unoptimized
                   className="size-28 rounded-md border bg-white p-1"
                 />
                 <div className="min-w-0 text-sm">
@@ -1614,14 +1662,14 @@ function AnchorList({ anchors }: { anchors: LiveMapData["anchors"] }) {
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <a
-                      href={anchor.qrImageDataUrl}
+                      href={anchor.qrImageUrl}
                       download={`live-map-${anchor.code}.png`}
                       className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted"
                     >
                       Download QR
                     </a>
                     <a
-                      href={anchor.qrImageDataUrl}
+                      href={anchor.qrImageUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-muted"

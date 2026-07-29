@@ -78,6 +78,20 @@
       "when": 1785233417215,
       "tag": "0010_messy_talon",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785238997979,
+      "tag": "0011_hot_scarlet_witch",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785306076591,
+      "tag": "0012_natural_giant_girl",
+      "breakpoints": true
     }
   ]
 }

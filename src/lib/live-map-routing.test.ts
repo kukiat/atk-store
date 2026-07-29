@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { calculateWalkRoute } from "@/lib/live-map-routing";
+import {
+  calculateWalkRoute,
+  mapBearingDegrees,
+  nearestWalkPathPoint,
+} from "@/lib/live-map-routing";
 
 describe("calculateWalkRoute", () => {
   it("follows an L-shaped walk path", () => {
@@ -79,5 +83,32 @@ describe("calculateWalkRoute", () => {
 
   it("returns null when no walk path exists", () => {
     expect(calculateWalkRoute([], { x: 0, z: 0 }, { x: 1, z: 1 })).toBeNull();
+  });
+});
+
+describe("live position helpers", () => {
+  it("projects an estimated position onto the nearest walk path", () => {
+    expect(
+      nearestWalkPathPoint(
+        [
+          {
+            points: [
+              { x: 0, z: 2 },
+              { x: 5, z: 2 },
+            ],
+          },
+        ],
+        { x: 3, z: 3 },
+      ),
+    ).toEqual({
+      point: { x: 3, z: 2 },
+      distanceMeters: 1,
+    });
+  });
+
+  it("uses map-up as 0 degrees and map-right as 90 degrees", () => {
+    expect(mapBearingDegrees({ x: 2, z: 2 }, { x: 2, z: 1 })).toBeCloseTo(0);
+    expect(mapBearingDegrees({ x: 2, z: 2 }, { x: 3, z: 2 })).toBeCloseTo(90);
+    expect(mapBearingDegrees({ x: 2, z: 2 }, { x: 2, z: 3 })).toBeCloseTo(180);
   });
 });

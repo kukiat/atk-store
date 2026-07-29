@@ -1,0 +1,104 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-07-29T09:06:52Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "LM.3"
+  },
+  "metadata": {
+    "spec_path": "LIVE_MAP_HANDOFF.md",
+    "lane": "fast",
+    "stage": "closeout",
+    "research_evidence": "/Users/thanachottesjaroen/Desktop/3b396a96-6f1b-46a3-b83d-c815aad63287.mp4 and current WebAR tracking implementation",
+    "tdd_red_log": ".claude/state/tdd-red-log/LM.3.jsonl",
+    "review_artifact": {
+      "verdict": "APPROVE",
+      "findings": []
+    }
+  },
+  "task": {
+    "id": "LM.3",
+    "title": "Prevent premature WebAR arrival and reject phone rotation as walking. [tdd:required]",
+    "definition_of_done": "Raw estimated position controls remaining distance and arrival; path snapping is display-only within 0.55 m; arrival requires staying within 0.45 m for 1.2 s and clears beyond 0.9 m; rapid rotation does not create steps.",
+    "depends_on": ["LM.2"],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "Raw estimated position controls remaining distance and arrival; path snapping is display-only within 0.55 m; arrival requires staying within 0.45 m for 1.2 s and clears beyond 0.9 m; rapid rotation does not create steps."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Arrival uses raw estimated position, not its path projection"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Entry dwell and exit hysteresis prevent status flicker"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Rapid rotation is rejected without disabling the next real step"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Persisted sessions resume from arrived to navigating and clear completion fields"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Tracking pauses and sensor callback gaps reset pending arrival confirmation"
+      }
+    ],
+    "non_goals": [],
+    "runtime_validation": [
+      {
+        "id": "",
+        "label": "package-test",
+        "command": "CI=true npm test"
+      },
+      {
+        "id": "",
+        "label": "package-lint",
+        "command": "npm run lint"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": ["ux-regression"],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": ["normal", "boundary", "error"],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "runtime",
+    "max_iterations": 3,
+    "reviewer_notes": [
+      "Initial review found terminal-session recovery and paused-dwell issues; both were fixed before approval."
+    ],
+    "gaps": [],
+    "followups": [
+      "Add a future database-backed service test for clearing completion fields on arrived-to-navigating updates."
+    ],
+    "approved_at": "2026-07-29T09:20:46Z"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "schema_version": "review-result.v1",
+  "generated_at": "2026-07-29T09:20:46Z",
+  "verdict": "APPROVE",
+  "browser_verdict": null,
+  "reviewer_profile": "runtime",
+  "task": "LM.3",
+  "type": null,
+  "commit_hash": null,
+  "execution": null,
+  "calibration": null,
+  "checks": [
+    "Raw estimated position remains separate from display-only path matching.",
+    "Arrival dwell and exit hysteresis are stable across sensor callbacks.",
+    "Rapid rotation is rejected and the detector recovers for the next real step.",
+    "Persisted sessions can resume from arrived to navigating.",
+    "Pausing tracking resets pending arrival confirmation."
+  ],
+  "gaps": [],
+  "followups": [
+    "Add a future database-backed service test for clearing completion fields on arrived-to-navigating updates."
+  ],
+  "dual_review": null
+}

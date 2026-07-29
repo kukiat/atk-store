@@ -1,0 +1,16 @@
+{
+  "verdict": "APPROVE",
+  "reviewer_profile": "runtime",
+  "task": "LM.3",
+  "checks": [
+    "Raw estimated position remains separate from display-only path matching.",
+    "Arrival dwell and exit hysteresis are stable across sensor callbacks.",
+    "Rapid rotation is rejected and the detector recovers for the next real step.",
+    "Persisted sessions can resume from arrived to navigating.",
+    "Pausing tracking resets pending arrival confirmation."
+  ],
+  "gaps": [],
+  "recommendations": [
+    "Add a future database-backed service test for clearing completion fields on arrived-to-navigating updates."
+  ]
+}

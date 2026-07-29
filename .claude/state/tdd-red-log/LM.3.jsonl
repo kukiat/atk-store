@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-29T09:06:47Z","task_id":"LM.3","test_file":"src/lib/live-map-tracking.test.ts","exit_code":1,"framework":"vitest","stderr_tail":"Missing live-map-tracking module; rapid rotation was counted as a step","cwd_hash":"1d298365f0a0"}
+{"timestamp":"2026-07-29T09:17:58Z","task_id":"LM.3","test_file":"src/lib/navigation-session-status.test.ts","exit_code":1,"framework":"vitest","stderr_tail":"Arrived session could not resume navigating; dwell survived a sensor callback gap","cwd_hash":"1d298365f0a0"}

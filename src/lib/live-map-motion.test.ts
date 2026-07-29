@@ -5,6 +5,7 @@ import {
   createStepDetectorState,
   motionMagnitude,
   processMotionSample,
+  rotationRateMagnitude,
   smoothHeadingDegrees,
 } from "@/lib/live-map-motion";
 
@@ -48,6 +49,35 @@ describe("processMotionSample", () => {
     const result = processMotionSample(createStepDetectorState(), 0.6, 1_000);
 
     expect(result.detected).toBe(false);
+  });
+
+  it("rejects a motion peak during rapid phone rotation", () => {
+    const rotated = processMotionSample(
+      createStepDetectorState(),
+      2,
+      1_000,
+      180,
+    );
+    const settled = processMotionSample(rotated.state, 0, 1_100, 0);
+    const walking = processMotionSample(settled.state, 2, 1_400, 0);
+
+    expect(rotated.detected).toBe(false);
+    expect(walking.detected).toBe(true);
+  });
+
+  it("keeps normal turns eligible for step detection", () => {
+    expect(
+      processMotionSample(createStepDetectorState(), 2, 1_000, 60).detected,
+    ).toBe(true);
+  });
+});
+
+describe("rotationRateMagnitude", () => {
+  it("combines the available rotation axes and ignores missing values", () => {
+    expect(rotationRateMagnitude({ alpha: 30, beta: 40, gamma: null })).toBe(
+      50,
+    );
+    expect(rotationRateMagnitude(null)).toBe(0);
   });
 });
 

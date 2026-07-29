@@ -30,14 +30,20 @@ import {
   motionMagnitude,
   normalizeDegrees,
   processMotionSample,
+  rotationRateMagnitude,
   smoothHeadingDegrees,
 } from "@/lib/live-map-motion";
 import {
-  calculateNavigationProgress,
   calculateWalkRoute,
   mapBearingDegrees,
   nearestWalkPathPoint,
 } from "@/lib/live-map-routing";
+import {
+  createArrivalTrackerState,
+  destinationDistanceMeters,
+  PATH_SNAP_METERS,
+  updateArrivalTracker,
+} from "@/lib/live-map-tracking";
 import { cn } from "@/lib/utils";
 import type {
   CustomerLiveMapData,
@@ -52,8 +58,6 @@ type PermissionAwareConstructor = {
 
 const inputClass =
   "h-11 w-full rounded-lg border border-input bg-background pl-10 pr-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/40";
-const ARRIVAL_METERS = 0.7;
-const OFF_ROUTE_METERS = 1.1;
 
 function pointsToSvg(points: MapPoint[]) {
   return points.map((point) => `${point.x},${point.z}`).join(" ");
@@ -82,6 +86,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   const [query, setQuery] = useState("");
   const [selectedDestinationId, setSelectedDestinationId] = useState("");
   const [currentPosition, setCurrentPosition] = useState(data.anchor.start);
+  const [estimatedPosition, setEstimatedPosition] = useState(data.anchor.start);
   const [mode, setMode] = useState<NavigationMode>("map");
   const [cameraActive, setCameraActive] = useState(false);
   const [mapHeadingDegrees, setMapHeadingDegrees] = useState(
@@ -98,26 +103,32 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   const productSelectionRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const positionRef = useRef(currentPosition);
+  const estimatedPositionRef = useRef(estimatedPosition);
   const headingRef = useRef(mapHeadingDegrees);
   const sessionIdRef = useRef(sessionId);
   const modeRef = useRef(mode);
   const calibratedDeviceHeadingRef = useRef<number | null>(null);
   const stepDetectorRef = useRef(createStepDetectorState());
+  const arrivalTrackerRef = useRef(createArrivalTrackerState());
 
   const selectedDestination =
     data.destinations.find(
       (destination) => destination.id === selectedDestinationId,
     ) ?? null;
-  const navigationProgress = useMemo(() => {
+  const route = useMemo(() => {
     if (!selectedDestination) return null;
-    return calculateNavigationProgress(
-      data.paths,
-      currentPosition,
-      selectedDestination,
-      ARRIVAL_METERS,
-    );
+    return calculateWalkRoute(data.paths, currentPosition, selectedDestination);
   }, [currentPosition, data.paths, selectedDestination]);
-  const route = navigationProgress?.route ?? null;
+  const estimatedRoute = useMemo(() => {
+    if (!selectedDestination) return null;
+    return calculateWalkRoute(
+      data.paths,
+      estimatedPosition,
+      selectedDestination,
+    );
+  }, [data.paths, estimatedPosition, selectedDestination]);
+  const remainingDistanceMeters =
+    estimatedRoute?.distanceMeters ?? route?.distanceMeters ?? null;
   const visibleDestinations = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("th-TH");
     if (!normalized) return data.destinations;
@@ -151,6 +162,10 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   useEffect(() => {
     positionRef.current = currentPosition;
   }, [currentPosition]);
+
+  useEffect(() => {
+    estimatedPositionRef.current = estimatedPosition;
+  }, [estimatedPosition]);
 
   useEffect(() => {
     headingRef.current = mapHeadingDegrees;
@@ -216,6 +231,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     }
 
     function handleMotion(event: DeviceMotionEvent) {
+      const now = event.timeStamp > 0 ? event.timeStamp : performance.now();
       const magnitude = motionMagnitude(
         event.acceleration,
         event.accelerationIncludingGravity,
@@ -223,40 +239,64 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       const detection = processMotionSample(
         stepDetectorRef.current,
         magnitude,
-        event.timeStamp > 0 ? event.timeStamp : performance.now(),
+        now,
+        rotationRateMagnitude(event.rotationRate),
       );
       stepDetectorRef.current = detection.state;
-      if (!detection.detected) return;
 
-      const heading = headingRef.current;
-      const radians = (heading * Math.PI) / 180;
-      const rawPosition = {
-        x: positionRef.current.x + Math.sin(radians) * detection.stepMeters,
-        z: positionRef.current.z - Math.cos(radians) * detection.stepMeters,
-      };
-      const nearest = nearestWalkPathPoint(data.paths, rawPosition);
-      const isOffRoute = !nearest || nearest.distanceMeters > OFF_ROUTE_METERS;
-      const nextPosition = nearest && !isOffRoute ? nearest.point : rawPosition;
-      setOffRoute(isOffRoute);
-      positionRef.current = nextPosition;
-      setCurrentPosition(nextPosition);
-      const progress = calculateNavigationProgress(
-        data.paths,
-        nextPosition,
-        destination,
-        ARRIVAL_METERS,
+      let nextEstimatedPosition = estimatedPositionRef.current;
+      let nextPosition = positionRef.current;
+      let isOffRoute = false;
+      if (detection.detected) {
+        const heading = headingRef.current;
+        const radians = (heading * Math.PI) / 180;
+        nextEstimatedPosition = {
+          x:
+            estimatedPositionRef.current.x +
+            Math.sin(radians) * detection.stepMeters,
+          z:
+            estimatedPositionRef.current.z -
+            Math.cos(radians) * detection.stepMeters,
+        };
+        estimatedPositionRef.current = nextEstimatedPosition;
+        setEstimatedPosition(nextEstimatedPosition);
+
+        const nearest = nearestWalkPathPoint(data.paths, nextEstimatedPosition);
+        isOffRoute = !nearest || nearest.distanceMeters > PATH_SNAP_METERS;
+        nextPosition =
+          nearest && !isOffRoute ? nearest.point : nextEstimatedPosition;
+        setOffRoute(isOffRoute);
+        positionRef.current = nextPosition;
+        setCurrentPosition(nextPosition);
+      }
+
+      const previousArrival = arrivalTrackerRef.current;
+      const nextArrival = updateArrivalTracker(
+        previousArrival,
+        destinationDistanceMeters(nextEstimatedPosition, destination),
+        now,
       );
-      const reachedDestination = progress.arrived;
-      setArrived(reachedDestination);
-      if (reachedDestination) {
+      arrivalTrackerRef.current = nextArrival;
+      const arrivalChanged = previousArrival.arrived !== nextArrival.arrived;
+      const candidateChanged =
+        previousArrival.candidateSinceMs !== nextArrival.candidateSinceMs;
+      if (arrivalChanged) setArrived(nextArrival.arrived);
+
+      if (nextArrival.arrived) {
         setTrackingMessage(`ถึง ${destination.inventoryName} แล้ว`);
-      } else {
+      } else if (nextArrival.candidateSinceMs !== null) {
+        setTrackingMessage(
+          "ใกล้ถึงสินค้าแล้ว อยู่ในตำแหน่งนี้สักครู่เพื่อยืนยัน",
+        );
+      } else if (detection.detected || candidateChanged) {
         setTrackingMessage(
           isOffRoute
             ? "ดูเหมือนออกนอกเส้นทาง กรุณากลับไปหาเส้นสีฟ้า"
             : "กำลังติดตามตำแหน่งจากการเดิน",
         );
       }
+
+      if (!detection.detected && !arrivalChanged) return;
 
       const activeSessionId = sessionIdRef.current;
       if (activeSessionId) {
@@ -267,7 +307,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
             x: nextPosition.x,
             z: nextPosition.z,
             mode: "ar",
-            status: reachedDestination ? "arrived" : "navigating",
+            status: nextArrival.arrived ? "arrived" : "navigating",
           }),
           keepalive: true,
         });
@@ -341,7 +381,11 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       (item) => item.id === destinationId,
     );
     setSelectedDestinationId(destinationId);
+    positionRef.current = data.anchor.start;
     setCurrentPosition(data.anchor.start);
+    estimatedPositionRef.current = data.anchor.start;
+    setEstimatedPosition(data.anchor.start);
+    arrivalTrackerRef.current = createArrivalTrackerState();
     setOffRoute(false);
     setArrived(false);
     setElapsedSeconds(0);
@@ -414,6 +458,9 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
         video: { facingMode: { ideal: "environment" } },
       });
       streamRef.current = stream;
+      arrivalTrackerRef.current = createArrivalTrackerState(
+        arrivalTrackerRef.current.arrived,
+      );
       calibratedDeviceHeadingRef.current = null;
       stepDetectorRef.current = createStepDetectorState();
       const initialHeading = normalizeDegrees(data.anchor.yawDegrees + 180);
@@ -444,6 +491,9 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   }
 
   function stopAr() {
+    arrivalTrackerRef.current = createArrivalTrackerState(
+      arrivalTrackerRef.current.arrived,
+    );
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
@@ -459,9 +509,13 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   }
 
   function recalibrate() {
+    positionRef.current = data.anchor.start;
     setCurrentPosition(data.anchor.start);
+    estimatedPositionRef.current = data.anchor.start;
+    setEstimatedPosition(data.anchor.start);
     calibratedDeviceHeadingRef.current = null;
     stepDetectorRef.current = createStepDetectorState();
+    arrivalTrackerRef.current = createArrivalTrackerState();
     const initialHeading = normalizeDegrees(data.anchor.yawDegrees + 180);
     headingRef.current = initialHeading;
     setMapHeadingDegrees(initialHeading);
@@ -471,6 +525,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   }
 
   async function markArrived() {
+    arrivalTrackerRef.current = createArrivalTrackerState(true);
     setArrived(true);
     setTrackingMessage(
       selectedDestination
@@ -513,8 +568,8 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
               {selectedDestination.inventoryName}
             </p>
             <p className="text-xs text-white/80">
-              {route
-                ? `เหลือประมาณ ${route.distanceMeters.toFixed(1)} เมตร`
+              {remainingDistanceMeters !== null
+                ? `เหลือประมาณ ${remainingDistanceMeters.toFixed(1)} เมตร`
                 : "กำลังหาเส้นทาง"}
             </p>
           </div>
@@ -629,7 +684,9 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
               <div className="rounded-lg border p-2">
                 <p className="text-xs text-muted-foreground">ระยะเหลือ</p>
                 <p className="font-semibold">
-                  {route ? `${route.distanceMeters.toFixed(1)} m` : "—"}
+                  {remainingDistanceMeters !== null
+                    ? `${remainingDistanceMeters.toFixed(1)} m`
+                    : "—"}
                 </p>
               </div>
               <div className="rounded-lg border p-2">

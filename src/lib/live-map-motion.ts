@@ -4,6 +4,12 @@ type AccelerationAxes = {
   z: number | null;
 };
 
+type RotationRateAxes = {
+  alpha: number | null;
+  beta: number | null;
+  gamma: number | null;
+};
+
 export type StepDetectorState = {
   filteredMagnitude: number;
   armed: boolean;
@@ -16,6 +22,7 @@ const STEP_TRIGGER = 0.8;
 const RAW_STEP_TRIGGER = 1.6;
 const STEP_RELEASE = 0.5;
 const MIN_STEP_INTERVAL_MS = 260;
+const MAX_WALKING_ROTATION_RATE = 120;
 const DEFAULT_STEP_METERS = 0.68;
 const MIN_STEP_METERS = 0.56;
 const MAX_STEP_METERS = 0.78;
@@ -80,6 +87,14 @@ export function motionMagnitude(
     : 0;
 }
 
+export function rotationRateMagnitude(rotationRate: RotationRateAxes | null) {
+  if (!rotationRate) return 0;
+  const axes = [rotationRate.alpha, rotationRate.beta, rotationRate.gamma].map(
+    (axis) => (typeof axis === "number" && Number.isFinite(axis) ? axis : 0),
+  );
+  return Math.hypot(...axes);
+}
+
 export function createStepDetectorState(): StepDetectorState {
   return {
     filteredMagnitude: 0,
@@ -100,7 +115,23 @@ export function processMotionSample(
   state: StepDetectorState,
   magnitude: number,
   nowMs: number,
+  rotationRateDegreesPerSecond = 0,
 ) {
+  if (
+    Number.isFinite(rotationRateDegreesPerSecond) &&
+    rotationRateDegreesPerSecond > MAX_WALKING_ROTATION_RATE
+  ) {
+    return {
+      detected: false,
+      stepMeters: 0,
+      state: {
+        filteredMagnitude: 0,
+        armed: false,
+        lastStepAtMs: state.lastStepAtMs,
+      },
+    };
+  }
+
   const safeMagnitude =
     Number.isFinite(magnitude) && magnitude > 0 ? magnitude : 0;
   const filteredMagnitude =

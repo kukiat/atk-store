@@ -9,6 +9,10 @@ import {
   navigationAnchors,
   navigationSessions,
 } from "@/db/schema";
+import {
+  canUpdateNavigationSession,
+  type NavigationSessionStatus,
+} from "@/lib/navigation-session-status";
 
 export type NavigationMode = "map" | "ar";
 export type NavigationStatus = "navigating" | "arrived" | "cancelled";
@@ -120,7 +124,12 @@ class NavigationSessionService {
       )
       .limit(1);
     if (!existing) throw new Error("Navigation session not found");
-    if (existing.status !== "navigating") {
+    if (
+      !canUpdateNavigationSession(
+        existing.status as NavigationSessionStatus,
+        input.status,
+      )
+    ) {
       return {
         id: existing.id,
         completedAt: undefined,
@@ -147,7 +156,8 @@ class NavigationSessionService {
         lastZ: finiteNumber(input.z, "z"),
         mode: input.mode,
         status: input.status,
-        ...(completedAt ? { completedAt, durationSeconds } : {}),
+        completedAt: completedAt ?? null,
+        durationSeconds: durationSeconds ?? null,
         updatedAt: now,
       })
       .where(eq(navigationSessions.id, existing.id));

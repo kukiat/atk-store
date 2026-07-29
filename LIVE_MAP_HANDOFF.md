@@ -113,6 +113,24 @@ using `S3_LIVEMAP_IMAGE_FOLDER`.
   Read the relevant local Next.js documentation before modifying Next-specific
   APIs.
 
+## Customer navigation accuracy contract
+
+- The raw dead-reckoning position derived from accepted steps is the source of
+  truth for remaining distance and arrival. Map matching must not overwrite it.
+- Projection onto a Walk path is display-only and applies only within 0.55 m.
+- Automatic arrival requires the raw position to stay within 0.45 m of the
+  destination for at least 1.2 seconds with continuous sensor callbacks.
+- A sensor callback gap over 0.5 seconds or pausing AR resets a pending arrival
+  confirmation without clearing an already confirmed arrival.
+- Once arrived, the state remains stable until the raw position moves more than
+  0.9 m away.
+- Walking away resumes both the customer UI and the persisted navigation
+  session, clearing its previous completion timestamp and duration.
+- Device-motion samples recorded during rapid rotation must not create walking
+  steps. Normal turns must remain usable.
+- Camera frames and customer video remain local to the browser and are not
+  uploaded or stored.
+
 ## Relevant files
 
 - `AGENTS.md`

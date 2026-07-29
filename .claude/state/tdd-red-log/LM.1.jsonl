@@ -1,0 +1,1 @@
+{"timestamp":"2026-07-29T07:23:27Z","task_id":"LM.1","test_file":"src/lib/live-map-routing.test.ts","exit_code":1,"framework":"vitest","stderr_tail":"calculateNavigationProgress is not a function","cwd_hash":"1d298365f0a0"}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  calculateNavigationProgress,
   calculateWalkRoute,
   mapBearingDegrees,
   nearestWalkPathPoint,
@@ -87,6 +88,66 @@ describe("calculateWalkRoute", () => {
 });
 
 describe("live position helpers", () => {
+  it("increases the remaining distance after walking away from an arrived destination", () => {
+    const paths = [
+      {
+        points: [
+          { x: 0, z: 0 },
+          { x: 5, z: 0 },
+        ],
+      },
+    ];
+    const destination = { x: 5, z: 0 };
+
+    const atDestination = calculateNavigationProgress(
+      paths,
+      destination,
+      destination,
+      0.7,
+    );
+    const afterWalkingAway = calculateNavigationProgress(
+      paths,
+      { x: 3.5, z: 0 },
+      destination,
+      0.7,
+    );
+
+    expect(atDestination.arrived).toBe(true);
+    expect(atDestination.route?.distanceMeters).toBeCloseTo(0);
+    expect(afterWalkingAway.arrived).toBe(false);
+    expect(afterWalkingAway.route?.distanceMeters).toBeCloseTo(1.5);
+  });
+
+  it("treats the arrival threshold itself as arrived", () => {
+    const progress = calculateNavigationProgress(
+      [
+        {
+          points: [
+            { x: 0, z: 0 },
+            { x: 5, z: 0 },
+          ],
+        },
+      ],
+      { x: 4.3, z: 0 },
+      { x: 5, z: 0 },
+      0.7,
+    );
+
+    expect(progress.route?.distanceMeters).toBeCloseTo(0.7);
+    expect(progress.arrived).toBe(true);
+  });
+
+  it("does not report arrival when no walk route exists", () => {
+    expect(
+      calculateNavigationProgress(
+        [],
+        { x: 0, z: 0 },
+        { x: 1, z: 1 },
+        0.7,
+      ),
+    ).toEqual({ route: null, arrived: false });
+  });
+
   it("projects an estimated position onto the nearest walk path", () => {
     expect(
       nearestWalkPathPoint(

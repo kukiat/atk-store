@@ -92,6 +92,15 @@ camera frame, to the external animation server without duplicating side effects.
 | ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ |
 | 5.1  | Upload the frame that created an attendance transition and notify the animation server with bounded retries. [integration] [tdd:required]                    | Entry/exit transitions upload to their configured S3 folders and send `verify`/`pay` with `payload.imageURL`; stamp failures send `fail`; unchanged visits send nothing; S3 and HTTP get 3 attempts. | -       | cc:done |
 
+## Live Map follow-up
+
+Purpose: keep customer navigation responsive after arrival and make the camera
+experience fit a mobile navigation flow.
+
+| Task | Content                                                                                             | DoD                                                                                                                                                     | Depends | Status |
+| ---- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------ |
+| LM.1 | Fix post-arrival distance tracking and present the customer AR camera as a full-viewport experience. [tdd:required] | Walking away after arrival increases the displayed distance and clears arrival state; opening AR fills the viewport and its back arrow returns to product selection. | -       | cc:done |
+
 ## Explicitly deferred
 
 - Face Collection and face-vector indexing/search.

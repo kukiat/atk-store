@@ -1,0 +1,91 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-07-29T07:15:12Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "LM.1"
+  },
+  "metadata": {
+    "spec_path": "LIVE_MAP_HANDOFF.md",
+    "lane": "fast",
+    "stage": "closeout",
+    "research_evidence": "LIVE_MAP_HANDOFF.md",
+    "tdd_red_log": ".claude/state/tdd-red-log/LM.1.jsonl",
+    "review_artifact": {
+      "verdict": "APPROVE",
+      "findings": []
+    }
+  },
+  "task": {
+    "id": "LM.1",
+    "title": "Fix post-arrival distance tracking and present the customer AR camera as a full-viewport experience. [tdd:required]",
+    "definition_of_done": "Walking away after arrival increases the displayed distance and clears arrival state; opening AR fills the viewport and its back arrow returns to product selection.",
+    "depends_on": [],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "Walking away after arrival increases the displayed distance and clears arrival state; opening AR fills the viewport and its back arrow returns to product selection."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Walking away after arrival recalculates remaining distance and clears arrival state"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "AR camera fills the viewport and back returns to product selection"
+      }
+    ],
+    "non_goals": [],
+    "runtime_validation": [
+      {
+        "id": "",
+        "label": "package-test",
+        "command": "CI=true npm test"
+      },
+      {
+        "id": "",
+        "label": "package-lint",
+        "command": "npm run lint"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": [
+      "ux-regression"
+    ],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": false,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "static",
+    "max_iterations": 3,
+    "reviewer_notes": [],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-07-29T07:15:24Z"
+  }
+}

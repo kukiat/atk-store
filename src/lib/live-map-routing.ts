@@ -240,3 +240,17 @@ export function calculateWalkRoute(
     distanceMeters: costs[targetId]!,
   };
 }
+
+export function calculateNavigationProgress(
+  paths: WalkPath[],
+  position: RoutePoint,
+  target: RoutePoint,
+  arrivalDistanceMeters: number,
+) {
+  const route = calculateWalkRoute(paths, position, target);
+  return {
+    route,
+    arrived:
+      route !== null && route.distanceMeters <= arrivalDistanceMeters + EPSILON,
+  };
+}

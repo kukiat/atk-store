@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  ArrowLeft,
   CheckCircle2,
   Footprints,
   MapPin,
@@ -24,6 +25,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import {
+  calculateNavigationProgress,
   calculateWalkRoute,
   mapBearingDegrees,
   nearestWalkPathPoint,
@@ -90,6 +92,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const productSelectionRef = useRef<HTMLDivElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const positionRef = useRef(currentPosition);
   const headingRef = useRef(mapHeadingDegrees);
@@ -102,10 +105,16 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     data.destinations.find(
       (destination) => destination.id === selectedDestinationId,
     ) ?? null;
-  const route = useMemo(() => {
+  const navigationProgress = useMemo(() => {
     if (!selectedDestination) return null;
-    return calculateWalkRoute(data.paths, currentPosition, selectedDestination);
+    return calculateNavigationProgress(
+      data.paths,
+      currentPosition,
+      selectedDestination,
+      ARRIVAL_METERS,
+    );
   }, [currentPosition, data.paths, selectedDestination]);
+  const route = navigationProgress?.route ?? null;
   const visibleDestinations = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("th-TH");
     if (!normalized) return data.destinations;
@@ -170,7 +179,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   }, [cameraActive]);
 
   useEffect(() => {
-    if (!cameraActive || !selectedDestination || arrived) return;
+    if (!cameraActive || !selectedDestination) return;
     const destination = selectedDestination;
 
     function handleOrientation(event: DeviceOrientationEvent) {
@@ -225,16 +234,15 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       const nextPosition = nearest && !isOffRoute ? nearest.point : rawPosition;
       setOffRoute(isOffRoute);
       setCurrentPosition(nextPosition);
-      const remainingRoute = calculateWalkRoute(
+      const progress = calculateNavigationProgress(
         data.paths,
         nextPosition,
         destination,
+        ARRIVAL_METERS,
       );
-      const reachedDestination =
-        remainingRoute !== null &&
-        remainingRoute.distanceMeters <= ARRIVAL_METERS;
+      const reachedDestination = progress.arrived;
+      setArrived(reachedDestination);
       if (reachedDestination) {
-        setArrived(true);
         setTrackingMessage(`ถึง ${destination.inventoryName} แล้ว`);
       } else {
         setTrackingMessage(
@@ -267,12 +275,23 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       window.removeEventListener("devicemotion", handleMotion);
     };
   }, [
-    arrived,
     cameraActive,
     data.anchor.yawDegrees,
     data.paths,
     selectedDestination,
   ]);
+
+  useEffect(() => {
+    if (!cameraActive) return;
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousRootOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousRootOverflow;
+    };
+  }, [cameraActive]);
 
   useEffect(() => {
     function closeOnPageExit() {
@@ -427,6 +446,12 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     setCameraActive(false);
     setMode("map");
     setTrackingMessage("ปิดกล้องแล้ว ยังดูเส้นทางบนแผนที่ได้");
+    window.requestAnimationFrame(() => {
+      productSelectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
   }
 
   function recalibrate() {
@@ -448,9 +473,69 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     await closeCurrentSession("arrived");
   }
 
+  if (cameraActive && selectedDestination) {
+    return (
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label={`AR นำทางไป ${selectedDestination.inventoryName}`}
+        className="fixed inset-0 z-50 h-dvh w-screen overflow-hidden bg-black"
+      >
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          autoPlay
+          className="absolute inset-0 size-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/55 via-transparent to-black/70" />
+
+        <div className="absolute inset-x-0 top-0 z-20 flex items-start px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={stopAr}
+            aria-label="กลับไปเลือกสินค้า"
+            className="shrink-0 rounded-full bg-black/55 text-white backdrop-blur hover:bg-black/75 hover:text-white"
+          >
+            <ArrowLeft className="size-6" />
+          </Button>
+          <div className="pointer-events-none min-w-0 flex-1 px-3 text-center text-white">
+            <p className="truncate text-sm font-medium">
+              {selectedDestination.inventoryName}
+            </p>
+            <p className="text-xs text-white/80">
+              {route
+                ? `เหลือประมาณ ${route.distanceMeters.toFixed(1)} เมตร`
+                : "กำลังหาเส้นทาง"}
+            </p>
+          </div>
+          <div aria-hidden="true" className="size-9 shrink-0" />
+        </div>
+
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div
+            className="flex size-32 items-center justify-center rounded-full border-4 border-white/80 bg-cyan-400/80 shadow-2xl transition-transform duration-300"
+            style={{ transform: `rotate(${arrowRotation}deg)` }}
+          >
+            <Navigation className="size-20 fill-current text-white" />
+          </div>
+        </div>
+
+        <div className="absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <p className="rounded-full bg-black/65 px-4 py-2 text-center text-sm text-white backdrop-blur">
+            <Footprints className="mr-2 inline size-4" />
+            {trackingMessage}
+          </p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <main className="mx-auto grid w-full max-w-4xl flex-1 gap-4 px-4 py-4 sm:px-6 sm:py-6">
-      <Card>
+      <Card ref={productSelectionRef}>
         <CardHeader>
           <div className="flex items-start gap-3">
             <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-400 text-amber-950">
@@ -607,47 +692,6 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
                 ถึง {selectedDestination.inventoryName} แล้ว
               </p>
             )}
-          </CardContent>
-        </Card>
-      )}
-
-      {cameraActive && selectedDestination && (
-        <Card className="overflow-hidden">
-          <CardContent className="p-0">
-            <div className="relative aspect-[3/4] max-h-[75dvh] overflow-hidden bg-black">
-              <video
-                ref={videoRef}
-                muted
-                playsInline
-                autoPlay
-                className="size-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-black/65" />
-              <div className="absolute inset-x-0 top-4 px-4 text-center text-white">
-                <p className="text-sm font-medium">
-                  {selectedDestination.inventoryName}
-                </p>
-                <p className="text-xs text-white/80">
-                  {route
-                    ? `เหลือประมาณ ${route.distanceMeters.toFixed(1)} เมตร`
-                    : "กำลังหาเส้นทาง"}
-                </p>
-              </div>
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div
-                  className="flex size-32 items-center justify-center rounded-full border-4 border-white/80 bg-cyan-400/80 shadow-2xl transition-transform duration-300"
-                  style={{ transform: `rotate(${arrowRotation}deg)` }}
-                >
-                  <Navigation className="size-20 fill-current text-white" />
-                </div>
-              </div>
-              <div className="absolute inset-x-0 bottom-4 flex justify-center px-4">
-                <p className="rounded-full bg-black/65 px-4 py-2 text-center text-sm text-white backdrop-blur">
-                  <Footprints className="mr-2 inline size-4" />
-                  {trackingMessage}
-                </p>
-              </div>
-            </div>
           </CardContent>
         </Card>
       )}

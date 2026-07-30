@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 
+import { ArDirectionArrow } from "@/components/live-map/ar-direction-arrow";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Card,
@@ -735,12 +736,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
         </div>
 
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-5">
-          <div
-            className="flex size-32 will-change-transform items-center justify-center rounded-full border-4 border-white/80 bg-cyan-400/80 shadow-2xl"
-            style={{ transform: `rotate(${arrowRotation}deg)` }}
-          >
-            <Navigation className="size-20 fill-current text-white" />
-          </div>
+          <ArDirectionArrow rotationDegrees={arrowRotation} />
           {!headingCalibrationActive && (
             <Button
               type="button"

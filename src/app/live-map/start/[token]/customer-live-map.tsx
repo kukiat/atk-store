@@ -90,6 +90,7 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   );
   const [mode, setMode] = useState<NavigationMode>("map");
   const [cameraActive, setCameraActive] = useState(false);
+  const [arStarting, setArStarting] = useState(false);
   const [mapHeadingDegrees, setMapHeadingDegrees] = useState(
     normalizeDegrees(data.anchor.yawDegrees + 180),
   );
@@ -151,12 +152,15 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
   const mapScale = Math.max(data.floor.widthMeters, data.floor.lengthMeters, 1);
   const pathStroke = mapScale * 0.018;
   const routeStroke = mapScale * 0.045;
+  const routeArrowSize = mapScale * 0.07;
   const markerRadius = mapScale * 0.035;
-  const routeBearingDegrees =
-    routeProgress?.routeBearingDegrees ??
-    (route ? createRouteProgressState(route.points).routeBearingDegrees : 0);
+  const navigationBearingDegrees =
+    routeProgress?.navigationBearingDegrees ??
+    (route
+      ? createRouteProgressState(route.points).navigationBearingDegrees
+      : 0);
   const arrowRotation = normalizeDegrees(
-    routeBearingDegrees - mapHeadingDegrees,
+    navigationBearingDegrees - mapHeadingDegrees,
   );
 
   useEffect(() => {
@@ -351,12 +355,12 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       const currentRouteProgress = routeProgressRef.current;
       if (!currentRouteProgress) return;
       headingCalibrationRef.current = createHeadingCalibrationState(
-        currentRouteProgress.routeBearingDegrees,
+        currentRouteProgress.navigationBearingDegrees,
       );
       lastAppliedHeadingAtRef.current = null;
       stepDetectorRef.current = createStepDetectorState();
-      headingRef.current = currentRouteProgress.routeBearingDegrees;
-      setMapHeadingDegrees(currentRouteProgress.routeBearingDegrees);
+      headingRef.current = currentRouteProgress.navigationBearingDegrees;
+      setMapHeadingDegrees(currentRouteProgress.navigationBearingDegrees);
       setHeadingCalibrated(false);
       headingCalibrationActiveRef.current = false;
       setHeadingCalibrationActive(false);
@@ -498,10 +502,10 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     positionRef.current = initialProgress.matchedPosition;
     setCurrentPosition(initialProgress.matchedPosition);
     headingCalibrationRef.current = createHeadingCalibrationState(
-      initialProgress.routeBearingDegrees,
+      initialProgress.navigationBearingDegrees,
     );
-    headingRef.current = initialProgress.routeBearingDegrees;
-    setMapHeadingDegrees(initialProgress.routeBearingDegrees);
+    headingRef.current = initialProgress.navigationBearingDegrees;
+    setMapHeadingDegrees(initialProgress.navigationBearingDegrees);
 
     try {
       const response = await fetch("/api/live-map/sessions", {
@@ -540,6 +544,8 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       return;
     }
 
+    setArStarting(true);
+    setTrackingMessage("กำลังขอสิทธิ์ใช้กล้องและ motion sensor...");
     try {
       const orientationAllowed = await requestSensorPermission(
         window.DeviceOrientationEvent as unknown as PermissionAwareConstructor,
@@ -568,11 +574,11 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
         return;
       }
       headingCalibrationRef.current = createHeadingCalibrationState(
-        currentRouteProgress.routeBearingDegrees,
+        currentRouteProgress.navigationBearingDegrees,
       );
       lastAppliedHeadingAtRef.current = null;
       stepDetectorRef.current = createStepDetectorState();
-      const initialHeading = currentRouteProgress.routeBearingDegrees;
+      const initialHeading = currentRouteProgress.navigationBearingDegrees;
       headingRef.current = initialHeading;
       setMapHeadingDegrees(initialHeading);
       setHeadingCalibrated(false);
@@ -599,6 +605,8 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
       setTrackingMessage(
         "เปิดกล้องไม่ได้ กรุณาอนุญาต Camera และ Motion ในเบราว์เซอร์",
       );
+    } finally {
+      setArStarting(false);
     }
   }
 
@@ -631,13 +639,13 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     positionRef.current = initialProgress.matchedPosition;
     setCurrentPosition(initialProgress.matchedPosition);
     headingCalibrationRef.current = createHeadingCalibrationState(
-      initialProgress.routeBearingDegrees,
+      initialProgress.navigationBearingDegrees,
     );
     lastAppliedHeadingAtRef.current = null;
     stepDetectorRef.current = createStepDetectorState();
     arrivalTrackerRef.current = createArrivalTrackerState();
     offRouteTrackerRef.current = createOffRouteTrackerState();
-    const initialHeading = initialProgress.routeBearingDegrees;
+    const initialHeading = initialProgress.navigationBearingDegrees;
     headingRef.current = initialHeading;
     setMapHeadingDegrees(initialHeading);
     setHeadingCalibrated(false);
@@ -652,12 +660,12 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
     const currentRouteProgress = routeProgressRef.current;
     if (!currentRouteProgress) return;
     headingCalibrationRef.current = createHeadingCalibrationState(
-      currentRouteProgress.routeBearingDegrees,
+      currentRouteProgress.navigationBearingDegrees,
     );
     lastAppliedHeadingAtRef.current = null;
     stepDetectorRef.current = createStepDetectorState();
-    headingRef.current = currentRouteProgress.routeBearingDegrees;
-    setMapHeadingDegrees(currentRouteProgress.routeBearingDegrees);
+    headingRef.current = currentRouteProgress.navigationBearingDegrees;
+    setMapHeadingDegrees(currentRouteProgress.navigationBearingDegrees);
     setHeadingCalibrated(false);
     headingCalibrationActiveRef.current = true;
     setHeadingCalibrationActive(true);
@@ -877,9 +885,15 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
                       ปิดกล้อง
                     </Button>
                   ) : (
-                    <Button type="button" onClick={() => void startAr()}>
+                    <Button
+                      type="button"
+                      disabled={arStarting}
+                      onClick={() => void startAr()}
+                    >
                       <Video className="size-4" />
-                      เปิด AR และตั้งทิศตามทางเดิน
+                      {arStarting
+                        ? "กำลังขอสิทธิ์กล้อง..."
+                        : "เปิด AR และตั้งทิศตามทางเดิน"}
                     </Button>
                   )}
                   <Button type="button" variant="outline" onClick={recalibrate}>
@@ -952,14 +966,15 @@ export function CustomerLiveMap({ data }: { data: CustomerLiveMapData }) {
             <defs>
               <marker
                 id="live-map-route-arrow"
-                markerWidth="7"
-                markerHeight="7"
-                refX="5"
-                refY="3.5"
+                viewBox="0 0 10 10"
+                markerWidth={routeArrowSize}
+                markerHeight={routeArrowSize}
+                refX="9"
+                refY="5"
                 orient="auto"
-                markerUnits="strokeWidth"
+                markerUnits="userSpaceOnUse"
               >
-                <path d="M0,0 L7,3.5 L0,7 z" fill="#22d3ee" />
+                <path d="M0,0 L10,5 L0,10 z" fill="#22d3ee" />
               </marker>
             </defs>
             <rect

@@ -129,6 +129,42 @@ describe("route-relative progress", () => {
     expect(atDestination.remainingDistanceMeters).toBeCloseTo(0);
     expect(pastDestination.progressMeters).toBeCloseTo(5.7);
     expect(pastDestination.remainingDistanceMeters).toBeCloseTo(0.7);
+    expect(pastDestination.estimatedPosition.x).toBeCloseTo(5.7);
+    expect(pastDestination.residual.x).toBeCloseTo(0);
+  });
+
+  it("points back toward the destination after walking past the route end", () => {
+    const pastDestination = createRouteProgressState(route, 5.7);
+    const returning = updateRouteProgress(route, pastDestination, 0.4, 270);
+
+    expect(pastDestination.routeBearingDegrees).toBeCloseTo(90);
+    expect(pastDestination.navigationBearingDegrees).toBeCloseTo(270);
+    expect(returning.remainingDistanceMeters).toBeLessThan(
+      pastDestination.remainingDistanceMeters,
+    );
+  });
+
+  it("keeps the first segment bearing before the route start", () => {
+    const multiSegmentRoute = [
+      { x: 0, z: 0 },
+      { x: 2, z: 0 },
+      { x: 2, z: -2 },
+    ];
+    const beforeStart = createRouteProgressState(multiSegmentRoute, -1);
+    const approachingStart = updateRouteProgress(
+      multiSegmentRoute,
+      beforeStart,
+      0.4,
+      90,
+    );
+
+    expect(beforeStart.routeBearingDegrees).toBeCloseTo(90);
+    expect(beforeStart.navigationBearingDegrees).toBeCloseTo(90);
+    expect(approachingStart.remainingDistanceMeters).toBeLessThan(
+      beforeStart.remainingDistanceMeters,
+    );
+    expect(approachingStart.estimatedPosition.x).toBeCloseTo(-0.6);
+    expect(approachingStart.residual.x).toBeCloseTo(0);
   });
 
   it("uses the next segment bearing after reaching a corner", () => {
@@ -143,6 +179,37 @@ describe("route-relative progress", () => {
     expect(afterTurn.progressMeters).toBeCloseTo(2.7);
     expect(afterTurn.matchedPosition.x).toBeCloseTo(2);
     expect(afterTurn.matchedPosition.z).toBeCloseTo(-0.7);
+  });
+
+  it("increases distance when walking opposite either leg of the production L route", () => {
+    const productionRoute = [
+      { x: 0.99, z: 3.6 },
+      { x: 0.99, z: 0.99 },
+      { x: 3.65, z: 0.99 },
+    ];
+    const atStart = createRouteProgressState(productionRoute);
+    const awayFromFirstLeg = updateRouteProgress(
+      productionRoute,
+      atStart,
+      0.7,
+      180,
+    );
+    const atCorner = createRouteProgressState(productionRoute, 2.61);
+    const awayFromSecondLeg = updateRouteProgress(
+      productionRoute,
+      atCorner,
+      0.7,
+      270,
+    );
+
+    expect(atStart.navigationBearingDegrees).toBeCloseTo(0);
+    expect(awayFromFirstLeg.remainingDistanceMeters).toBeGreaterThan(
+      atStart.remainingDistanceMeters,
+    );
+    expect(atCorner.navigationBearingDegrees).toBeCloseTo(90);
+    expect(awayFromSecondLeg.remainingDistanceMeters).toBeGreaterThan(
+      atCorner.remainingDistanceMeters,
+    );
   });
 
   it("continues progressing when the customer starts turning before a corner", () => {
@@ -196,6 +263,28 @@ describe("route-relative progress", () => {
     expect(offPath.crossTrackMeters).toBeCloseTo(0.7);
     expect(recovered.crossTrackMeters).toBeLessThan(offPath.crossTrackMeters);
     expect(recovered.crossTrackMeters).toBeLessThan(0.1);
+  });
+
+  it("guides an off-route customer diagonally back toward the route", () => {
+    const offPath = updateRouteProgress(
+      route,
+      createRouteProgressState(route),
+      0.7,
+      180,
+    );
+    const followingGuidance = updateRouteProgress(
+      route,
+      offPath,
+      0.4,
+      offPath.navigationBearingDegrees,
+    );
+
+    expect(offPath.routeBearingDegrees).toBeCloseTo(90);
+    expect(offPath.navigationBearingDegrees).toBeGreaterThan(0);
+    expect(offPath.navigationBearingDegrees).toBeLessThan(90);
+    expect(followingGuidance.remainingDistanceMeters).toBeLessThan(
+      offPath.remainingDistanceMeters,
+    );
   });
 
   it("fails safely for empty, one-point, and duplicate-only routes", () => {

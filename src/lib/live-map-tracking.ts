@@ -18,7 +18,10 @@ export type RouteProgressState = {
   matchedPosition: TrackingPoint;
   estimatedPosition: TrackingPoint;
   remainingDistanceMeters: number;
+  /** Forward tangent used to project signed progress onto the authored route. */
   routeBearingDegrees: number;
+  /** Direction the customer should face to reduce the remaining distance. */
+  navigationBearingDegrees: number;
 };
 
 export type OffRouteTrackerState = {
@@ -117,6 +120,10 @@ function routeTangentAtProgress(
   progressMeters: number,
 ) {
   if (geometry.segments.length === 0) return { x: 0, z: -1 };
+  if (progressMeters <= 0) return geometry.segments[0]!.tangent;
+  if (progressMeters >= geometry.totalDistanceMeters) {
+    return geometry.segments.at(-1)!.tangent;
+  }
   const current = matchedPointAtProgress(geometry, progressMeters);
   const ahead = matchedPointAtProgress(
     geometry,
@@ -146,6 +153,68 @@ function bearingFromTangent(tangent: TrackingPoint) {
   return normalizeDegrees((Math.atan2(tangent.x, -tangent.z) * 180) / Math.PI);
 }
 
+function extrapolatedPointAtProgress(
+  geometry: ReturnType<typeof routeGeometry>,
+  progressMeters: number,
+) {
+  const fallback = geometry.routePoints[0] ?? { x: 0, z: 0 };
+  const firstSegment = geometry.segments[0];
+  const lastSegment = geometry.segments.at(-1);
+  if (!firstSegment || !lastSegment) return fallback;
+  if (progressMeters < 0) {
+    return {
+      x: firstSegment.start.x + firstSegment.tangent.x * progressMeters,
+      z: firstSegment.start.z + firstSegment.tangent.z * progressMeters,
+    };
+  }
+  if (progressMeters > geometry.totalDistanceMeters) {
+    const overrunMeters = progressMeters - geometry.totalDistanceMeters;
+    return {
+      x: lastSegment.end.x + lastSegment.tangent.x * overrunMeters,
+      z: lastSegment.end.z + lastSegment.tangent.z * overrunMeters,
+    };
+  }
+  return matchedPointAtProgress(geometry, progressMeters);
+}
+
+function navigationTangentAtProgress(
+  geometry: ReturnType<typeof routeGeometry>,
+  progressMeters: number,
+  residual: TrackingPoint,
+) {
+  const routeTangent = routeTangentAtProgress(geometry, progressMeters);
+  if (geometry.segments.length === 0) return routeTangent;
+  const extrapolatedPosition = extrapolatedPointAtProgress(
+    geometry,
+    progressMeters,
+  );
+  const estimatedPosition = {
+    x: extrapolatedPosition.x + residual.x,
+    z: extrapolatedPosition.z + residual.z,
+  };
+  const targetPosition =
+    progressMeters < 0
+      ? geometry.segments[0]!.start
+      : progressMeters > geometry.totalDistanceMeters
+        ? geometry.segments.at(-1)!.end
+        : matchedPointAtProgress(
+            geometry,
+            Math.min(
+              geometry.totalDistanceMeters,
+              progressMeters + ROUTE_LOOK_AHEAD_METERS,
+            ),
+          );
+  const dx = targetPosition.x - estimatedPosition.x;
+  const dz = targetPosition.z - estimatedPosition.z;
+  const distance = Math.hypot(dx, dz);
+  if (distance > EPSILON) {
+    return { x: dx / distance, z: dz / distance };
+  }
+  return progressMeters > geometry.totalDistanceMeters
+    ? { x: -routeTangent.x, z: -routeTangent.z }
+    : routeTangent;
+}
+
 function boundedVector(vector: TrackingPoint, maxMagnitude: number) {
   const magnitude = Math.hypot(vector.x, vector.z);
   if (magnitude <= maxMagnitude || magnitude <= EPSILON) return vector;
@@ -161,6 +230,15 @@ function routeProgressState(
   const matchedPosition = matchedPointAtProgress(geometry, progressMeters);
   const tangent = routeTangentAtProgress(geometry, progressMeters);
   const boundedResidual = boundedVector(residual, MAX_RESIDUAL_METERS);
+  const extrapolatedPosition = extrapolatedPointAtProgress(
+    geometry,
+    progressMeters,
+  );
+  const navigationTangent = navigationTangentAtProgress(
+    geometry,
+    progressMeters,
+    boundedResidual,
+  );
   const lateralMeters =
     tangent.x * boundedResidual.z - tangent.z * boundedResidual.x;
   const crossTrackMeters = Math.abs(lateralMeters);
@@ -172,14 +250,15 @@ function routeProgressState(
     residual: boundedResidual,
     matchedPosition,
     estimatedPosition: {
-      x: matchedPosition.x + boundedResidual.x,
-      z: matchedPosition.z + boundedResidual.z,
+      x: extrapolatedPosition.x + boundedResidual.x,
+      z: extrapolatedPosition.z + boundedResidual.z,
     },
     remainingDistanceMeters: Math.hypot(
       Math.abs(geometry.totalDistanceMeters - progressMeters),
       crossTrackMeters,
     ),
     routeBearingDegrees: bearingFromTangent(tangent),
+    navigationBearingDegrees: bearingFromTangent(navigationTangent),
   };
 }
 
@@ -226,11 +305,11 @@ export function updateRouteProgress(
     ),
   );
   const nextProgressMeters = state.progressMeters + progressDelta;
-  const previousMatchedPosition = matchedPointAtProgress(
+  const previousEstimatedRoutePosition = extrapolatedPointAtProgress(
     geometry,
     state.progressMeters,
   );
-  const nextMatchedPosition = matchedPointAtProgress(
+  const nextEstimatedRoutePosition = extrapolatedPointAtProgress(
     geometry,
     nextProgressMeters,
   );
@@ -238,11 +317,11 @@ export function updateRouteProgress(
     x:
       state.residual.x * RESIDUAL_RETENTION_PER_STEP +
       stepVector.x -
-      (nextMatchedPosition.x - previousMatchedPosition.x),
+      (nextEstimatedRoutePosition.x - previousEstimatedRoutePosition.x),
     z:
       state.residual.z * RESIDUAL_RETENTION_PER_STEP +
       stepVector.z -
-      (nextMatchedPosition.z - previousMatchedPosition.z),
+      (nextEstimatedRoutePosition.z - previousEstimatedRoutePosition.z),
   };
   return routeProgressState(geometry, nextProgressMeters, residual);
 }

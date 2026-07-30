@@ -915,7 +915,7 @@ function LiveMapEditorContent({
                       className={inputClass}
                       name="startX"
                       type="number"
-                      step="0.01"
+                      step="any"
                       value={anchorStart.x}
                       onChange={(event) =>
                         setAnchorStart((current) =>
@@ -933,7 +933,7 @@ function LiveMapEditorContent({
                       className={inputClass}
                       name="startZ"
                       type="number"
-                      step="0.01"
+                      step="any"
                       value={anchorStart.z}
                       onChange={(event) =>
                         setAnchorStart((current) =>
@@ -1114,7 +1114,7 @@ function PointListEditor({
               type="number"
               min="0"
               max={floor.widthMeters}
-              step="0.01"
+              step="any"
               value={point.x}
               onChange={(event) => updatePoint(index, "x", event.target.value)}
             />
@@ -1126,7 +1126,7 @@ function PointListEditor({
               type="number"
               min="0"
               max={floor.lengthMeters}
-              step="0.01"
+              step="any"
               value={point.z}
               onChange={(event) => updatePoint(index, "z", event.target.value)}
             />
@@ -1191,7 +1191,7 @@ function PositionEditor({
           type="number"
           min="0"
           max={floor.widthMeters}
-          step="0.01"
+          step="any"
           value={position.x}
           onChange={(event) => updatePosition("x", event.target.value)}
         />
@@ -1203,7 +1203,7 @@ function PositionEditor({
           type="number"
           min="0"
           max={floor.lengthMeters}
-          step="0.01"
+          step="any"
           value={position.z}
           onChange={(event) => updatePosition("z", event.target.value)}
         />
@@ -1729,7 +1729,7 @@ function AnchorList({ anchors }: { anchors: LiveMapData["anchors"] }) {
                         className={inputClass}
                         name="x"
                         type="number"
-                        step="0.01"
+                        step="any"
                         defaultValue={anchor.x}
                         required
                       />
@@ -1740,7 +1740,7 @@ function AnchorList({ anchors }: { anchors: LiveMapData["anchors"] }) {
                         className={inputClass}
                         name="z"
                         type="number"
-                        step="0.01"
+                        step="any"
                         defaultValue={anchor.z}
                         required
                       />
@@ -1798,7 +1798,7 @@ function AnchorList({ anchors }: { anchors: LiveMapData["anchors"] }) {
                         className={inputClass}
                         name="startX"
                         type="number"
-                        step="0.01"
+                        step="any"
                         defaultValue={anchor.startX}
                         required
                       />
@@ -1809,7 +1809,7 @@ function AnchorList({ anchors }: { anchors: LiveMapData["anchors"] }) {
                         className={inputClass}
                         name="startZ"
                         type="number"
-                        step="0.01"
+                        step="any"
                         defaultValue={anchor.startZ}
                         required
                       />

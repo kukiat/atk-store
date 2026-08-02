@@ -1,0 +1,100 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-08-02T09:48:07Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "LM.10"
+  },
+  "spec_path": "docs/spec/livemap-app.md",
+  "lane": "fast",
+  "stage": "closeout",
+  "research_evidence": "The supplied Android video shows the process exiting immediately after selecting an anchored product. HomeScreen inspection found IndexedStack kept the Anchor Setup AR camera mounted while ResolveAnchorScreen created a second AR session; native dispose also destroyed SceneView before removing point-cloud children.",
+  "tdd_red_log": ".claude/state/tdd-red-log/LM.10.jsonl",
+  "review_artifact": {
+    "verdict": "APPROVE",
+    "findings": [],
+    "validation": [
+      "flutter test: 11 passed",
+      "flutter analyze: no issues",
+      "flutter build apk --release: passed",
+      "git diff --check: passed"
+    ]
+  },
+  "task": {
+    "id": "LM.10",
+    "title": "Prevent Product Finder from opening a second concurrent Android AR session. [bugfix] [tdd:required]",
+    "definition_of_done": "Only the visible LiveMap destination owns an AR camera; switching from Anchor Setup disposes its AR view before Product Finder can open Resolve; native point-cloud nodes are removed before the scene is destroyed; regression tests, analysis, and release APK build pass.",
+    "depends_on": [
+      "LM.9"
+    ],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "Only the visible LiveMap destination owns an AR camera; switching from Anchor Setup disposes its AR view before Product Finder can open Resolve; native point-cloud nodes are removed before the scene is destroyed; regression tests, analysis, and release APK build pass."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Verify only one AR screen remains mounted, Product Finder can open resolve after host camera disposal, and Android child-node cleanup precedes scene destruction."
+      }
+    ],
+    "non_goals": [],
+    "runtime_validation": [
+      {
+        "id": "flutter-test",
+        "label": "Flutter test suite",
+        "command": "cd ../livemap && flutter test"
+      },
+      {
+        "id": "flutter-analyze",
+        "label": "Flutter static analysis",
+        "command": "cd ../livemap && flutter analyze"
+      },
+      {
+        "id": "android-release",
+        "label": "Android release APK",
+        "command": "cd ../livemap && flutter build apk --release"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": [
+      "state-migration",
+      "ux-regression"
+    ],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [
+      "state-migration"
+    ],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "runtime",
+    "max_iterations": 3,
+    "reviewer_notes": [],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-08-02T09:50:49Z"
+  }
+}

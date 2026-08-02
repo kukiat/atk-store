@@ -1,0 +1,1 @@
+{"timestamp":"2026-08-02T06:56:15Z","task_id":"LM.7","test_file":"../livemap/test/arcore_plane_detection_regression_test.dart","exit_code":1,"framework":"flutter_test","stderr_tail":"selectAnchorHit is missing; point fallback is not implemented.","cwd_hash":"1d298365f0a0"}

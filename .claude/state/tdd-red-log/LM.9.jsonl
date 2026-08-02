@@ -1,0 +1,1 @@
+{"timestamp":"2026-08-02T07:31:05Z","task_id":"LM.9","test_file":"test/android_cloud_anchor_hosting_regression_test.dart","exit_code":1,"framework":"flutter_test","stderr_tail":"Expected no blocking canHostCloudAnchor loop, but native Android upload still contains it.","cwd_hash":"1d298365f0a0"}

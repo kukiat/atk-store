@@ -1,0 +1,97 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-08-02T07:12:47Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "LM.8"
+  },
+  "spec_path": "docs/spec/livemap-app.md",
+  "lane": "fast",
+  "stage": "closeout",
+  "research_evidence": "The supplied Android video shows local hit-test placement succeeding before Cloud Anchor host readiness fails; Google ARCore Cloud Anchor guidance requires scanning around an anchor to build sufficient visual data.",
+  "tdd_red_log": ".claude/state/tdd-red-log/LM.8.jsonl",
+  "review_artifact": {
+    "verdict": "APPROVE",
+    "findings": [],
+    "validation": [
+      "flutter test: 8 passed",
+      "flutter analyze: no issues",
+      "flutter build apk --release: passed"
+    ]
+  },
+  "task": {
+    "id": "LM.8",
+    "title": "Wait for sufficient Cloud Anchor scan quality and remove the upload callback race. [bugfix] [tdd:required]",
+    "definition_of_done": "After local placement the UI asks the operator to scan around the marker; Android waits with a bounded timeout for host readiness instead of failing immediately; upload callbacks can find their pending anchor; tests, analysis, and release APK build pass.",
+    "depends_on": [
+      "LM.7"
+    ],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "After local placement the UI asks the operator to scan around the marker; Android waits with a bounded timeout for host readiness instead of failing immediately; upload callbacks can find their pending anchor; tests, analysis, and release APK build pass."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Verify host readiness wait is bounded, pending anchors exist before callbacks, and timeout/auth errors remain distinguishable."
+      }
+    ],
+    "non_goals": [],
+    "runtime_validation": [
+      {
+        "id": "flutter-test",
+        "label": "Flutter test suite",
+        "command": "flutter test"
+      },
+      {
+        "id": "flutter-analyze",
+        "label": "Flutter static analysis",
+        "command": "flutter analyze"
+      },
+      {
+        "id": "android-release",
+        "label": "Android release APK",
+        "command": "flutter build apk --release"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": [
+      "ux-regression"
+    ],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "runtime",
+    "max_iterations": 3,
+    "browser_mode": "scripted",
+    "reviewer_notes": [],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-08-02T07:19:18Z"
+  }
+}

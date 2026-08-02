@@ -1,0 +1,1 @@
+{"timestamp":"2026-08-02T09:48:07Z","task_id":"LM.10","test_file":"test/widget_test.dart,test/android_ar_session_lifecycle_regression_test.dart","exit_code":1,"framework":"flutter_test","stderr_tail":"AnchorSetupScreen remained mounted offstage after switching to Product Finder; Android also destroyed sceneView before removing pointCloudNodes.","cwd_hash":"1d298365f0a0"}

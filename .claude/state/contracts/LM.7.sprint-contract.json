@@ -1,0 +1,92 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-08-02T06:56:21Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "LM.7"
+  },
+  "spec_path": "docs/spec/livemap-app.md",
+  "lane": "fast",
+  "stage": "closeout",
+  "research_evidence": "Google ARCore Android hit-test and Depth API guides confirm standard hit tests can return Plane, DepthPoint, and Point results.",
+  "tdd_red_log": ".claude/state/tdd-red-log/LM.7.jsonl",
+  "review_artifact": {
+    "verdict": "APPROVE",
+    "findings": [],
+    "validation": [
+      "flutter test: 6 passed",
+      "flutter analyze: no issues",
+      "flutter build apk --debug: passed",
+      "flutter build apk --release: passed"
+    ]
+  },
+  "task": {
+    "id": "LM.7",
+    "title": "Add ARCore depth/feature-point hit-test fallback and remove the obstructive native scan guide. [bugfix] [tdd:required]",
+    "definition_of_done": "Android returns tracked plane, depth, and feature-point hits while preferring planes; LiveMap can place an anchor from a tracked point when no plane exists; the camera remains unobstructed; tests, analysis, and release APK build pass.",
+    "depends_on": [
+      "LM.6"
+    ],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "Android returns tracked plane, depth, and feature-point hits while preferring planes; LiveMap can place an anchor from a tracked point when no plane exists; the camera remains unobstructed; tests, analysis, and release APK build pass."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Verify Android hit tests return planes first, then tracked depth/feature points, and preserve the ARCore hit pose."
+      }
+    ],
+    "non_goals": [],
+    "runtime_validation": [
+      {
+        "id": "",
+        "label": "package-test",
+        "command": "CI=true npm test"
+      },
+      {
+        "id": "",
+        "label": "package-lint",
+        "command": "npm run lint"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": [
+      "ux-regression"
+    ],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "runtime",
+    "max_iterations": 3,
+    "reviewer_notes": [],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-08-02T06:56:26Z"
+  }
+}

@@ -57,6 +57,28 @@ and iOS bundle identifier.
 The Android platform view must receive the requested plane-detection mode at
 creation time. The initial ARCore session must not start with plane finding
 disabled and depend on a later asynchronous method-channel call to enable it.
+When a full plane is not yet available, Android may use a tracked depth point
+or feature point returned by ARCore's standard hit test. A plane remains the
+preferred result. The app-provided status UI replaces the native animated scan
+guide so the camera view is not obstructed while scanning.
+After local placement, the operator must be prompted to keep the shelf fixed
+and keep it in view while ARCore hosts the anchor. Cloud Anchor mode is part of
+the initial Android session configuration. Feature-map quality may inform the
+operator but must not block the actual host request; the host request itself
+has a bounded timeout and must distinguish configuration, API-key, service,
+and timeout errors. The Dart upload manager registers an anchor as pending
+before the native upload starts so an immediate success callback cannot be
+lost.
+Only the currently visible LiveMap destination may own an AR camera session.
+Switching from Anchor Setup to Product Finder disposes the hosting AR view
+before a product can open the resolving AR view. On Android, child point-cloud
+nodes are removed before the native AR scene is destroyed.
+Cloud Anchor resolution is local visual relocalization, not long-range product
+navigation: the operator must return to the same physical shelf and scan the
+surrounding visual features captured while the anchor was hosted. A resolve
+request must finish with success or an actionable native error within a bounded
+timeout. Product Finder must surface that error and provide Retry by replacing
+the existing AR view, while preserving the one-visible-session rule.
 - AR device behavior is not considered testable in a simulator. Static analysis,
   unit/widget tests, and platform configuration checks are the local acceptance
   baseline; physical Android and iOS device verification remains required before

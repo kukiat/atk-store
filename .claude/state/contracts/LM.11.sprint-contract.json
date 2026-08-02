@@ -1,0 +1,102 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-08-02T10:12:21Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "LM.11"
+  },
+  "spec_path": "docs/spec/livemap-app.md",
+  "lane": "fast",
+  "stage": "closeout",
+  "research_evidence": "The supplied Product Finder screenshot shows a live AR camera with an indefinitely pending resolve status. Inspection found the Dart manager did not await downloadAnchor errors and Android CloudAnchorNode.resolve had no timeout or cancellation path. Cloud Anchor resolution also requires viewing the original hosted shelf environment.",
+  "tdd_red_log": ".claude/state/tdd-red-log/LM.11.jsonl",
+  "review_artifact": {
+    "verdict": "APPROVE",
+    "findings": [],
+    "validation": [
+      "flutter test: 15 passed",
+      "flutter analyze: no issues",
+      "flutter build apk --release: passed",
+      "git diff --check: passed",
+      "AI residual scan: APPROVE"
+    ],
+    "note": "The configured companion reviewer was unavailable, so the final review used the sprint-contract thresholds, focused source inspection, runtime validation, and AI residual scan."
+  },
+  "task": {
+    "id": "LM.11",
+    "title": "Bound Cloud Anchor resolution and expose actionable Product Finder recovery. [bugfix] [tdd:required]",
+    "definition_of_done": "Product Finder explains that resolution requires the original shelf; Android resolve always succeeds or returns a precise error within a bounded timeout; Dart awaits the native result, shows the error, and offers a Retry action that recreates a single AR session; focused tests, analysis, and release APK build pass.",
+    "depends_on": [
+      "LM.10"
+    ],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "Product Finder explains that resolution requires the original shelf; Android resolve always succeeds or returns a precise error within a bounded timeout; Dart awaits the native result, shows the error, and offers a Retry action that recreates a single AR session; focused tests, analysis, and release APK build pass."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Verify native resolve completes once, timeout cancellation cannot race the callback, Dart surfaces PlatformException messages, and Retry replaces rather than duplicates the AR view."
+      }
+    ],
+    "non_goals": [
+      "Turn Cloud Anchors into long-range indoor navigation",
+      "Resolve an anchor from a visually unrelated location"
+    ],
+    "runtime_validation": [
+      {
+        "id": "flutter-test",
+        "label": "Flutter test suite",
+        "command": "cd ../livemap && flutter test"
+      },
+      {
+        "id": "flutter-analyze",
+        "label": "Flutter static analysis",
+        "command": "cd ../livemap && flutter analyze"
+      },
+      {
+        "id": "android-release",
+        "label": "Android release APK",
+        "command": "cd ../livemap && flutter build apk --release"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": ["native-async", "ux-regression"],
+    "tdd_required": true,
+    "test_framework": "flutter_test",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [
+      "state-migration"
+    ],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "runtime",
+    "max_iterations": 3,
+    "reviewer_notes": [],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-08-02T10:25:00Z"
+  }
+}

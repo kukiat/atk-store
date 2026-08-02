@@ -1,0 +1,1 @@
+ALTER TABLE "auth"."inventories" ADD COLUMN "anchor_id" text;

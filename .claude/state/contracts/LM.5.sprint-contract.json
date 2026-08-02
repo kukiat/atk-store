@@ -1,0 +1,78 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-08-02T04:36:23Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "LM.5"
+  },
+  "task": {
+    "id": "LM.5",
+    "title": "Add the root `livemap` Flutter app, API-key-protected `livemap-app` routes, and nullable inventory anchor storage. [feature:security] [integration] [tdd:required]",
+    "definition_of_done": "Android/iOS permissions and AR dependencies are configured; staff can host an anchor, see its ID, select inventory, persist the pair, list/search anchored inventory, and resolve a selected anchor; every API route rejects a missing or invalid `LIVEMAP_APP_API_KEY`; focused tests, lint/analyze, and build-capable checks pass where the local toolchain permits.",
+    "depends_on": [],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "Android/iOS permissions and AR dependencies are configured; staff can host an anchor, see its ID, select inventory, persist the pair, list/search anchored inventory, and resolve a selected anchor; every API route rejects a missing or invalid `LIVEMAP_APP_API_KEY`; focused tests, lint/analyze, and build-capable checks pass where the local toolchain permits."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Verify API-key rejection, inventory mapping behavior, Flutter AR flows, and Android/iOS permission configuration"
+      }
+    ],
+    "non_goals": [],
+    "runtime_validation": [
+      {
+        "id": "",
+        "label": "package-test",
+        "command": "CI=true npm test"
+      },
+      {
+        "id": "",
+        "label": "package-lint",
+        "command": "npm run lint"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": [
+      "security-sensitive",
+      "ux-regression"
+    ],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [
+      "security-sensitive"
+    ],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "runtime",
+    "max_iterations": 3,
+    "reviewer_notes": [],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-08-02T04:36:30Z"
+  }
+}

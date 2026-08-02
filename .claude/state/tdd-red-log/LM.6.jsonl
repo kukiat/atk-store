@@ -1,0 +1,1 @@
+{"timestamp":"2026-08-02T06:34:30Z","task_id":"LM.6","test_file":"../livemap/test/arcore_plane_detection_regression_test.dart","exit_code":1,"framework":"flutter_test","stderr_tail":"Expected planeDetectionConfig 3, actual creation parameters were empty.","cwd_hash":"1d298365f0a0"}

@@ -1,0 +1,1 @@
+{"timestamp":"2026-08-02T04:37:34Z","task_id":"LM.5","test_file":"src/lib/livemap-app-auth.test.ts,src/lib/livemap-app-contract.test.ts","exit_code":1,"framework":"vitest","stderr_tail":"Cannot find livemap app implementation modules","cwd_hash":"1d298365f0a0"}

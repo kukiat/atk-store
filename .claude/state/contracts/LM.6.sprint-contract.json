@@ -1,0 +1,95 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-08-02T06:34:38Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "LM.6"
+  },
+  "spec_path": "docs/spec/livemap-app.md",
+  "lane": "fast",
+  "stage": "closeout",
+  "research_evidence": "Android ARView creation and session configuration inspected in the vendored ar_flutter_plugin_2 source.",
+  "tdd_red_log": ".claude/state/tdd-red-log/LM.6.jsonl",
+  "review_artifact": {
+    "verdict": "APPROVE",
+    "findings": [],
+    "validation": [
+      "flutter test: 4 passed",
+      "flutter analyze: no issues",
+      "flutter build apk --debug: passed",
+      "flutter build apk --release: passed"
+    ]
+  },
+  "task": {
+    "id": "LM.6",
+    "title": "Fix the Android AR session initialization race that can leave plane detection disabled. [bugfix] [tdd:required]",
+    "definition_of_done": "The requested plane mode is passed when the native view is created, the initial ARCore session uses that mode, later initialization keeps the same mode, regression tests pass, and a debug APK builds successfully.",
+    "depends_on": [
+      "LM.5"
+    ],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "The requested plane mode is passed when the native view is created, the initial ARCore session uses that mode, later initialization keeps the same mode, regression tests pass, and a debug APK builds successfully."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "Verify Android creation parameters reach the native view and initial ARCore session plane finding is enabled."
+      }
+    ],
+    "non_goals": [],
+    "runtime_validation": [
+      {
+        "id": "",
+        "label": "package-test",
+        "command": "CI=true npm test"
+      },
+      {
+        "id": "",
+        "label": "package-lint",
+        "command": "npm run lint"
+      }
+    ],
+    "browser_validation": [],
+    "risk_flags": [
+      "state-migration",
+      "ux-regression"
+    ],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [
+      "state-migration"
+    ],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "runtime",
+    "max_iterations": 3,
+    "reviewer_notes": [],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-08-02T06:34:43Z"
+  }
+}

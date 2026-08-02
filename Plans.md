@@ -104,6 +104,16 @@ experience fit a mobile navigation flow.
 | LM.3 | Prevent premature WebAR arrival and reject phone rotation as walking. [tdd:required]                                                         | Raw estimated position controls remaining distance and arrival; path snapping is display-only within 0.55 m; arrival requires staying within 0.45 m for 1.2 s and clears beyond 0.9 m; rapid rotation does not create steps.                                                                                                                                     | LM.2    | cc:done |
 | LM.4 | Stabilize WebAR navigation with route-relative progress, calibrated heading, confidence-weighted steps, and state hysteresis. [tdd:required] | Signed route progress makes forward/reverse distance deterministic; heading calibrates from stable samples to the active route and can be reset in AR; arrow turns responsively; turning steps are confidence-weighted; off-route state requires sustained enter/exit evidence; arrival uses stable route-relative distance and still clears after walking away. | LM.3    | cc:done |
 
+## Native LiveMap operator app
+
+Purpose: let store staff place persistent ARCore Cloud Anchors on shelves and
+associate them with inventory records from a dedicated Android/iOS Flutter app.
+
+| Task | Content | DoD | Depends | Status |
+| ---- | ------- | --- | ------- | ------ |
+| LM.5 | Add the root `livemap` Flutter app, API-key-protected `livemap-app` routes, and nullable inventory anchor storage. [feature:security] [integration] [tdd:required] | Android/iOS permissions and AR dependencies are configured; staff can host an anchor, see its ID, select inventory, persist the pair, list/search anchored inventory, and resolve a selected anchor; every API route rejects a missing or invalid `LIVEMAP_APP_API_KEY`; focused tests, lint/analyze, and build-capable checks pass where the local toolchain permits. | - | cc:done |
+| LM.6 | Fix the Android AR session initialization race that can leave plane detection disabled. [bugfix] [tdd:required] | The requested plane mode is passed when the native view is created, the initial ARCore session uses that mode, later initialization keeps the same mode, regression tests pass, and a debug APK builds successfully. | LM.5 | cc:done |
+
 ## Explicitly deferred
 
 - Face Collection and face-vector indexing/search.

@@ -631,6 +631,8 @@ export const inventories = db_schema.table("inventories", {
     .references(() => units.id, { onDelete: "restrict" }),
   isActive: boolean("is_active").notNull().default(true),
   imageUrl: text("image_url"),
+  /** ARCore Cloud Anchor ID assigned by the native LiveMap operator app. */
+  anchorId: text("anchor_id"),
   ...lifecycleColumns,
 });
 

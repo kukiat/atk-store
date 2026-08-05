@@ -18,20 +18,53 @@ export type ScanQrAnimationStatusUpdate = {
   sku: string;
 };
 
+export type CreateAnimationUserInput = {
+  id: number;
+  name: string | null;
+  email: string;
+  avatarUrl: string | null;
+};
+
 function getAnimationServerUrl(): string {
   const value = process.env.ANIMATION_SERVER_URL?.trim();
+
   if (!value) {
     throw new Error("Missing required env var: ANIMATION_SERVER_URL");
   }
+
   return value.replace(/\/+$/g, "");
 }
 
 export class AnimationClientService {
+  async createUser(input: CreateAnimationUserInput): Promise<void> {
+    const response = await fetch(`${getAnimationServerUrl()}/users`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        id: input.id,
+        name: input.name ?? "",
+        gender: "male",
+        email: input.email,
+        avatar_url: input.avatarUrl ?? "",
+        auth_method: "google",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Animation user creation failed with status ${response.status}`,
+      );
+    }
+  }
+
   async updateUserStatus(input: AnimationStatusUpdate): Promise<void> {
     const payload = {
       result: input.result,
       ...(input.imageURL ? { imageURL: input.imageURL } : {}),
     };
+
     await this.postUserStatus(
       input.userId,
       input.direction === "entry" ? "verify" : "pay",
@@ -58,8 +91,13 @@ export class AnimationClientService {
       `${getAnimationServerUrl()}/users/${userId}/status`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, payload }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          payload,
+        }),
       },
     );
 

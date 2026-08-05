@@ -13,8 +13,7 @@ import {
 import { createOpaqueToken, hashSessionToken } from "@/lib/auth-tokens";
 import { roleService } from "@/services/role.service";
 
-/** How long a login session stays valid. */
-const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
+const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 30;
 
 type UpsertOAuthUserInput = {
   email: string;
@@ -22,6 +21,11 @@ type UpsertOAuthUserInput = {
   avatarUrl?: string | null;
   authMethod: AuthMethod;
   providerAccountId?: string | null;
+};
+
+type UpsertOAuthUserResult = {
+  user: User;
+  isNewUser: boolean;
 };
 
 export class OAuthIdentityConflictError extends Error {
@@ -38,17 +42,10 @@ export class AccountNotActiveError extends Error {
   }
 }
 
-/**
- * Users + login sessions. Keeps all auth-related data access in one place so
- * route handlers and the data-access layer share the same logic.
- */
 class UserService {
-  /**
-   * Insert a user on first sign-in, or refresh their profile on return.
-   * The immutable provider identity is authoritative. An existing email with a
-   * different provider subject is rejected instead of being linked silently.
-   */
-  async upsertOAuthUser(input: UpsertOAuthUserInput): Promise<User> {
+  async upsertOAuthUser(
+    input: UpsertOAuthUserInput,
+  ): Promise<UpsertOAuthUserResult> {
     const email = input.email.trim().toLowerCase();
     const now = new Date();
 
@@ -80,13 +77,23 @@ class UserService {
         .where(eq(users.id, existingByProvider.id))
         .returning();
 
-      await roleService.syncRolesAfterSignIn(updatedUser.id, updatedUser.email);
+      await roleService.syncRolesAfterSignIn(
+        updatedUser.id,
+        updatedUser.email,
+      );
+
       await this.assertAccountCanUseApp(updatedUser);
-      return updatedUser;
+
+      return {
+        user: updatedUser,
+        isNewUser: false,
+      };
     }
 
     const [existingByEmail] = await db
-      .select({ id: users.id })
+      .select({
+        id: users.id,
+      })
       .from(users)
       .where(eq(users.email, email))
       .limit(1);
@@ -102,45 +109,78 @@ class UserService {
         name: input.name ?? null,
         avatarUrl: input.avatarUrl ?? null,
         authMethod: input.authMethod,
-        providerAccountId: input.providerAccountId ?? null,
+        providerAccountId: input.providerAccountId,
         lastLoginAt: now,
       })
       .returning();
 
-    await roleService.syncRolesAfterSignIn(user.id, user.email);
-    return user;
+    await roleService.syncRolesAfterSignIn(
+      user.id,
+      user.email,
+    );
+
+    return {
+      user,
+      isNewUser: true,
+    };
   }
 
-  /** Create a fresh session row and return its token + expiry. */
   async createSession(
     userId: number,
-  ): Promise<{ token: string; expiresAt: Date }> {
+  ): Promise<{
+    token: string;
+    expiresAt: Date;
+  }> {
     const token = createOpaqueToken();
-    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
+
+    const expiresAt = new Date(
+      Date.now() + SESSION_TTL_MS,
+    );
 
     await db
       .insert(sessions)
-      .values({ id: hashSessionToken(token), userId, expiresAt });
+      .values({
+        id: hashSessionToken(token),
+        userId,
+        expiresAt,
+      });
 
-    return { token, expiresAt };
+    return {
+      token,
+      expiresAt,
+    };
   }
 
-  /**
-   * Resolve a session token to its user. Returns null when the token is
-   * missing, unknown, or expired (expired rows are cleaned up on read).
-   */
-  async getUserBySession(token: string | undefined): Promise<User | null> {
-    if (!token) return null;
+  async getUserBySession(
+    token: string | undefined,
+  ): Promise<User | null> {
+    if (!token) {
+      return null;
+    }
 
     const rows = await db
-      .select({ user: users, expiresAt: sessions.expiresAt })
+      .select({
+        user: users,
+        expiresAt: sessions.expiresAt,
+      })
       .from(sessions)
-      .innerJoin(users, eq(sessions.userId, users.id))
-      .where(eq(sessions.id, hashSessionToken(token)))
+      .innerJoin(
+        users,
+        eq(sessions.userId, users.id),
+      )
+      .where(
+        eq(
+          sessions.id,
+          hashSessionToken(token),
+        ),
+      )
       .limit(1);
 
     const found = rows[0];
-    if (!found) return null;
+
+    if (!found) {
+      return null;
+    }
 
     if (found.expiresAt.getTime() < Date.now()) {
       await this.deleteSession(token);
@@ -154,20 +194,35 @@ class UserService {
     return found.user;
   }
 
-  /** Remove a single session (logout). */
   async deleteSession(token: string): Promise<void> {
-    await db.delete(sessions).where(eq(sessions.id, hashSessionToken(token)));
+    await db
+      .delete(sessions)
+      .where(
+        eq(
+          sessions.id,
+          hashSessionToken(token),
+        ),
+      );
   }
 
-  private async assertAccountCanUseApp(user: User): Promise<void> {
+  private async assertAccountCanUseApp(
+    user: User,
+  ): Promise<void> {
     if (!(await this.canAccountUseApp(user))) {
       throw new AccountNotActiveError();
     }
   }
 
-  private async canAccountUseApp(user: User): Promise<boolean> {
-    if (user.accountStatus === "active") return true;
-    if (user.accountStatus === "blocked") return false;
+  private async canAccountUseApp(
+    user: User,
+  ): Promise<boolean> {
+    if (user.accountStatus === "active") {
+      return true;
+    }
+
+    if (user.accountStatus === "blocked") {
+      return false;
+    }
 
     if (
       user.accountStatus === "disabled" &&
@@ -183,6 +238,7 @@ class UserService {
           updatedAt: new Date(),
         })
         .where(eq(users.id, user.id));
+
       return true;
     }
 

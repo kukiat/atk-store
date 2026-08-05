@@ -1,0 +1,1 @@
+{"timestamp":"2026-08-02T16:24:02Z","task_id":"QR.1","test_file":"src/lib/qr-camera.test.ts","exit_code":1,"framework":"vitest","stderr_tail":"Cannot find module ./qr-camera","cwd_hash":"1d298365f0a0"}

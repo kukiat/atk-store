@@ -119,6 +119,16 @@ associate them with inventory records from a dedicated Android/iOS Flutter app.
 | LM.10 | Prevent Product Finder from opening a second concurrent Android AR session. [bugfix] [tdd:required] | Only the visible LiveMap destination owns an AR camera; switching from Anchor Setup disposes its AR view before Product Finder can open Resolve; native point-cloud nodes are removed before the scene is destroyed; regression tests, analysis, and release APK build pass. | LM.9 | cc:done |
 | LM.11 | Bound Cloud Anchor resolution and expose actionable Product Finder recovery. [bugfix] [tdd:required] | Product Finder explains that resolution requires the original shelf; Android resolve always succeeds or returns a precise error within a bounded timeout; Dart awaits the native result, shows the error, and offers a Retry action that recreates a single AR session; focused tests, analysis, and release APK build pass. | LM.10 | cc:done |
 
+## Customer QR scanner compatibility
+
+Purpose: keep the existing inventory QR flow working in iOS browsers that do
+not provide a usable native `BarcodeDetector` implementation.
+
+| Task | Content | DoD | Depends | Status |
+| ---- | ------- | --- | ------- | ------ |
+| QR.1 | Replace the inventory scanner's hard dependency on native `BarcodeDetector` with a cross-browser software decoder and recoverable camera lifecycle. [bugfix] [tdd:required] | iOS can open the rear camera and decode the existing QR payload; Android and manual payload flows remain unchanged; permission/start failures are actionable and retryable; camera resources are released; focused tests, lint, and production build pass. | - | cc:done |
+| QR.2 | Run the release smoke matrix on physical iOS and Android devices over deployed HTTPS. [integration] | iOS allow/deny/retry, successful scan, background/foreground, rotation, and navigate-away pass; Android native scanning and manual payload entry remain unchanged; deployed WASM returns successfully. | QR.1 | cc:TODO |
+
 ## Explicitly deferred
 
 - Face Collection and face-vector indexing/search.

@@ -1,0 +1,99 @@
+{
+  "schema_version": "sprint-contract.v1",
+  "generated_at": "2026-08-02T16:24:14Z",
+  "source": {
+    "plans_file": "Plans.md",
+    "task_id": "QR.1"
+  },
+  "task": {
+    "id": "QR.1",
+    "title": "Replace the inventory scanner's hard dependency on native `BarcodeDetector` with a cross-browser software decoder and recoverable camera lifecycle. [bugfix] [tdd:required]",
+    "definition_of_done": "iOS can open the rear camera and decode the existing QR payload; Android and manual payload flows remain unchanged; permission/start failures are actionable and retryable; camera resources are released; focused tests, lint, and production build pass.",
+    "depends_on": [],
+    "status_at_generation": "cc:WIP"
+  },
+  "contract": {
+    "checks": [
+      {
+        "id": "dod-primary",
+        "source": "Plans.md.DoD",
+        "description": "iOS can open the rear camera and decode the existing QR payload; Android and manual payload flows remain unchanged; permission/start failures are actionable and retryable; camera resources are released; focused tests, lint, and production build pass."
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "iOS without native BarcodeDetector uses the software decoder and reaches getUserMedia"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "single and grouped QR continue through the existing decode API"
+      },
+      {
+        "id": "reviewer-check",
+        "source": "reviewer",
+        "description": "camera failures release tracks and allow retry"
+      }
+    ],
+    "non_goals": [],
+    "runtime_validation": [
+      {
+        "id": "",
+        "label": "package-test",
+        "command": "CI=true npm test"
+      },
+      {
+        "id": "",
+        "label": "package-lint",
+        "command": "npm run lint"
+      }
+    ],
+    "browser_validation": [
+      {
+        "id": "browser-smoke",
+        "description": "iOS can open the rear camera and decode the existing QR payload; Android and manual payload flows remain unchanged; permission/start failures are actionable and retryable; camera resources are released; focused tests, lint, and production build pass.",
+        "required_artifacts": [
+          "trace",
+          "screenshot",
+          "ui-flow-log"
+        ]
+      }
+    ],
+    "risk_flags": [
+      "security-sensitive",
+      "ux-regression"
+    ],
+    "tdd_required": true,
+    "test_framework": "vitest",
+    "test_todo_list": [
+      "normal",
+      "boundary",
+      "error"
+    ],
+    "skip_tdd_reason": null
+  },
+  "advisor": {
+    "enabled": true,
+    "mode": "on-demand",
+    "max_consults": 3,
+    "retry_threshold": 2,
+    "pre_escalation_consult": true,
+    "triggers": [
+      "security-sensitive"
+    ],
+    "model_policy": {
+      "claude_default": "opus",
+      "codex_default": "gpt-5.4"
+    }
+  },
+  "review": {
+    "status": "approved",
+    "reviewer_profile": "browser",
+    "max_iterations": 5,
+    "browser_mode": "scripted",
+    "reviewer_notes": [],
+    "gaps": [],
+    "followups": [],
+    "approved_at": "2026-08-02T16:24:22Z"
+  }
+}
